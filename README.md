@@ -123,4 +123,3 @@ ref/self-custodial-bitcoin-wallet/
 4. Integrate ckBTC minter and ledger
 5. Update backend to use real ckBTC instead of fake addresses
 6. Test complete user flow
-
