@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "canisters": {
+    "bitcoin_wallet": {
+      "type": "motoko",
+      "main": "backend/main.mo"
+    },
+    "bitcoin_wallet_frontend": {
+      "type": "assets",
+      "source": ["frontend"],
+      "dependencies": ["bitcoin_wallet"]
+    }
+  },
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:4943",
+      "type": "ephemeral"
+    },
+    "ic": {
+      "remote": {
+        "id": {
+          "type": "principal"
+        }
+      },
+      "type": "persistent"
+    }
+  }
+}
+
