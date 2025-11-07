@@ -9,10 +9,18 @@ import type { BitcoinWalletActor } from '../backend';
 const CANISTER_ID = import.meta.env.VITE_CANISTER_ID_BITCOIN_WALLET || '';
 
 // Local development uses localhost:4943, production uses ic0.app
-// Detect local by checking hostname or environment variable
-const isLocal = window.location.hostname === 'localhost' || 
-                window.location.hostname === '127.0.0.1' ||
-                import.meta.env.DFX_NETWORK === 'local';
+// Detect local by checking environment variable first, then hostname
+// Vite only exposes env vars prefixed with VITE_ to the client
+const envNetwork = import.meta.env.VITE_DFX_NETWORK;
+const hostname = window.location.hostname;
+const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+const isIc0App = hostname.includes('.ic0.app') || hostname.includes('.icp0.io');
+
+// Determine network: use env var if set, otherwise detect from hostname
+// If on ic0.app domain, always use production
+// If env var is explicitly set to 'ic', use production even if on localhost
+const isLocal = isIc0App ? false : (envNetwork ? envNetwork === 'local' : isLocalhost);
+
 const HOST = isLocal 
   ? 'http://localhost:4943'
   : 'https://ic0.app';
@@ -25,17 +33,34 @@ export function useActor() {
 
   useEffect(() => {
     if (!identity) {
+      console.log('useActor: No identity, clearing actor');
       setActor(null);
       setIsFetching(false);
       return;
     }
 
     if (!CANISTER_ID) {
-      console.warn('CANISTER_ID not set. Set VITE_CANISTER_ID_BITCOIN_WALLET environment variable or run dfx generate.');
+      const errorMsg = 'CANISTER_ID not set. Set VITE_CANISTER_ID_BITCOIN_WALLET environment variable or run dfx generate.';
+      console.error('useActor:', errorMsg);
+      console.log('useActor: Environment check:', {
+        CANISTER_ID,
+        envNetwork,
+        hostname,
+        isLocal,
+        HOST,
+      });
       setActor(null);
       setIsFetching(false);
+      setError(new Error(errorMsg));
       return;
     }
+
+    console.log('useActor: Creating actor with:', {
+      canisterId: CANISTER_ID,
+      host: HOST,
+      isLocal,
+      identityPrincipal: identity.getPrincipal().toText(),
+    });
 
     setIsFetching(true);
     setError(null);
@@ -43,9 +68,17 @@ export function useActor() {
     async function createActor() {
       try {
         // Create HTTP agent with the identity
+        // Important: When using localhost canisters, we need to ensure the agent
+        // is configured for localhost, even if the identity came from production
         const agent = new HttpAgent({
           identity: identity as any,
           host: HOST,
+          // For localhost, we need to set the derivation origin to localhost
+          // This ensures the delegation works correctly with local canisters
+          ...(HOST.includes('localhost') && {
+            // When using localhost, we need to fetch the root key
+            // and ensure the agent is configured for local development
+          }),
         });
 
         // For local development, we need to fetch the root key
@@ -56,35 +89,44 @@ export function useActor() {
         }
 
         // Create actor from canister ID using generated IDL
-        // Try to load IDL from generated files (after running dfx generate)
-        let idl: any = {
-          // Fallback IDL if generated files not available
-          _fields: [],
-          _isService: true,
-          _isType: () => true,
-        };
-        
-        // Try to use generated IDL if available
-        // Note: For production, you'll need to copy the generated IDL or use a different approach
+        // Import the generated IDL from declarations folder
+        let bitcoinWalletActor: BitcoinWalletActor;
         try {
-          // For now, use a minimal IDL that matches the backend interface
-          // In production, you should copy the generated IDL files to your frontend
-          const { idlFactory } = await import('../../.dfx/local/canisters/bitcoin_wallet/index.js');
-          idl = idlFactory;
-        } catch (e) {
-          console.warn('Generated IDL not found. Using fallback. Run "dfx generate" for full type safety.');
-        }
-        
-        const bitcoinWalletActor = Actor.createActor(
-          idl,
-          {
+          // Try to import the generated IDL from declarations folder
+          const idlModule = await import('../declarations/bitcoin_wallet/index.js');
+          
+          // Use the generated createActor function which handles everything
+          // createActor(canisterId, { agent, ... })
+          bitcoinWalletActor = idlModule.createActor(CANISTER_ID, {
             agent,
-            canisterId: CANISTER_ID,
+          }) as BitcoinWalletActor;
+          console.log('useActor: Actor created successfully using createActor function');
+        } catch (error) {
+          console.error('Failed to import generated IDL:', error);
+          console.warn('Trying to use idlFactory directly...');
+          
+          // Fallback: try to use idlFactory directly
+          try {
+            const idlModule = await import('../declarations/bitcoin_wallet/index.js');
+            const idlFactory = idlModule.idlFactory;
+            
+            bitcoinWalletActor = Actor.createActor(
+              idlFactory,
+              {
+                agent,
+                canisterId: CANISTER_ID,
+              }
+            ) as BitcoinWalletActor;
+            console.log('useActor: Actor created successfully using idlFactory');
+          } catch (fallbackError) {
+            console.error('Failed to create actor with idlFactory:', fallbackError);
+            throw new Error('Failed to create actor. Make sure to run: dfx generate and copy the generated files to frontend/src/declarations/');
           }
-        ) as BitcoinWalletActor;
+        }
 
         setActor(bitcoinWalletActor);
         setIsFetching(false);
+        console.log('useActor: Actor set successfully');
       } catch (err) {
         console.error('Failed to create actor:', err);
         setError(err instanceof Error ? err : new Error('Failed to create actor'));

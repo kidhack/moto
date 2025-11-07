@@ -10,8 +10,24 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    // Enable code splitting to reduce individual chunk sizes
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-dfinity': ['@dfinity/agent', '@dfinity/auth-client', '@dfinity/principal'],
+          'vendor-ui': ['@tanstack/react-query', 'sonner', 'next-themes'],
+        },
+      },
+    },
+    // Reduce chunk size warnings threshold
+    chunkSizeWarningLimit: 1000,
+  },
   server: {
     port: 5173,
+    host: true, // Allow access from network (for Cursor browser)
+    open: false, // Don't auto-open browser
     proxy: {
       '/api': {
         target: 'http://localhost:4943',

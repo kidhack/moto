@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AuthClient } from '@dfinity/auth-client';
 import type { Identity } from '@dfinity/agent';
+import { USE_DUMMY_DATA, DUMMY_IDENTITY } from '../data/dummyData';
 
 interface InternetIdentityContextType {
   identity: Identity | null;
@@ -19,6 +20,14 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
   const [authClient, setAuthClient] = useState<AuthClient | null>(null);
 
   useEffect(() => {
+    // If using dummy data, skip Internet Identity initialization
+    if (USE_DUMMY_DATA) {
+      console.log('useInternetIdentity: Using dummy data mode - skipping Internet Identity initialization');
+      setIsInitializing(false);
+      // Don't set identity yet - user will "login" via the login button
+      return;
+    }
+
     // Initialize auth client
     AuthClient.create()
       .then(async (client) => {
@@ -26,7 +35,24 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
         // Check if user is already authenticated
         const isAuthenticated = await client.isAuthenticated();
         if (isAuthenticated) {
-          setIdentity(client.getIdentity());
+          // Check if we're using the correct Internet Identity for the network
+          const envNetwork = import.meta.env.VITE_DFX_NETWORK;
+          const hostname = window.location.hostname;
+          const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+          const shouldUseLocal = envNetwork === 'local' || (envNetwork !== 'ic' && isLocalhost);
+          
+          // If we should use localhost but user is authenticated with production, clear it
+          if (shouldUseLocal) {
+            // Check if the identity was created with production Internet Identity
+            // If so, we need to clear it and force re-login with localhost
+            const identity = client.getIdentity();
+            // For now, we'll just log a warning - user should log out and log back in
+            console.warn('useInternetIdentity: User authenticated, but ensure you logged in with localhost Internet Identity for local development');
+          }
+          
+          const currentIdentity = client.getIdentity();
+          setIdentity(currentIdentity);
+          console.log('User already authenticated, identity set:', currentIdentity.getPrincipal().toText());
         }
         setIsInitializing(false);
       })
@@ -36,38 +62,162 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
       });
   }, []);
 
-  const login = async () => {
-    if (!authClient) {
-      console.error('Auth client not initialized');
+  // Re-check authentication when window regains focus (e.g., after returning from Internet Identity)
+  useEffect(() => {
+    const handleFocus = async () => {
+      if (authClient && !identity) {
+        // Only check if we don't already have an identity
+        try {
+          const isAuthenticated = await authClient.isAuthenticated();
+          if (isAuthenticated) {
+            const currentIdentity = authClient.getIdentity();
+            setIdentity(currentIdentity);
+            console.log('Authentication detected on focus, identity set:', currentIdentity.getPrincipal().toText());
+          }
+        } catch (error) {
+          console.error('Error checking authentication on focus:', error);
+        }
+      }
+    };
+
+    // Also check immediately when authClient is ready (in case user just returned from II)
+    if (authClient && !identity) {
+      handleFocus();
+    }
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [authClient, identity]);
+
+  // Periodic check for authentication (handles case where user returns from II and page reloads)
+  useEffect(() => {
+    if (!authClient || identity) return;
+
+    const checkAuth = async () => {
+      try {
+        const isAuthenticated = await authClient.isAuthenticated();
+        if (isAuthenticated) {
+          const currentIdentity = authClient.getIdentity();
+          setIdentity(currentIdentity);
+          console.log('Authentication detected on periodic check, identity set:', currentIdentity.getPrincipal().toText());
+        }
+      } catch (error) {
+        console.error('Error checking authentication periodically:', error);
+      }
+    };
+
+    // Check immediately, then every 500ms for the first 5 seconds
+    checkAuth();
+    const interval = setInterval(checkAuth, 500);
+    const timeout = setTimeout(() => clearInterval(interval), 5000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [authClient, identity]);
+
+  const login = async (): Promise<void> => {
+    // If using dummy data, simulate login without Internet Identity
+    if (USE_DUMMY_DATA) {
+      console.log('useInternetIdentity: Simulating login with dummy data');
+      setIsLoggingIn(true);
+      // Simulate a brief login delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setIdentity(DUMMY_IDENTITY);
+      setIsLoggingIn(false);
+      console.log('useInternetIdentity: Dummy login successful');
       return;
     }
 
-    setIsLoggingIn(true);
-    try {
-      // Determine identity provider based on environment
-      // For local development, use localhost Internet Identity canister
-      // For production, use identity.ic0.app
-      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const identityProvider = isLocal
-        ? `http://localhost:4943/?canisterId=${import.meta.env.VITE_CANISTER_ID_INTERNET_IDENTITY || 'rdmx6-jaaaa-aaaah-qcayq-cai'}`
-        : 'https://identity.ic0.app';
+    if (!authClient) {
+      console.error('Auth client not initialized');
+      setIsLoggingIn(false);
+      throw new Error('Auth client not initialized');
+    }
 
-      await authClient.login({
-        identityProvider,
-        onSuccess: () => {
-          const newIdentity = authClient.getIdentity();
-          setIdentity(newIdentity);
-        },
-        onError: (error) => {
-          console.error('Login failed:', error);
-          throw error;
-        },
+    setIsLoggingIn(true);
+    
+    try {
+      // Determine identity provider based on network (following official ICP docs pattern)
+      // Check VITE_DFX_NETWORK environment variable to determine if we're on mainnet or local
+      // Vite only exposes env vars prefixed with VITE_ to the client
+      const envNetwork = import.meta.env.VITE_DFX_NETWORK;
+      const hostname = window.location.hostname;
+      const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+      
+      // Determine network: use env var if set, otherwise detect from hostname
+      // IMPORTANT: If on ic0.app domain, always use production Internet Identity
+      // Production Internet Identity delegations won't work with localhost canisters
+      const isIc0App = hostname.includes('.ic0.app') || hostname.includes('.icp0.io');
+      const network = isIc0App ? 'ic' : (envNetwork ? envNetwork : (isLocalhost ? 'local' : 'ic'));
+      
+      let identityProvider: string;
+      if (network === 'local' || (envNetwork === 'local' && !isIc0App)) {
+        // Local: Use localhost Internet Identity canister with query parameter format
+        // This is more reliable than subdomain format on localhost
+        // Use the actual canister ID from deployment, or fall back to default
+        const iiCanisterId = import.meta.env.VITE_CANISTER_ID_INTERNET_IDENTITY || 'uzt4z-lp777-77774-qaabq-cai';
+        identityProvider = `http://localhost:4943/?canisterId=${iiCanisterId}`;
+        console.log('useInternetIdentity: Using LOCALHOST Internet Identity for local development');
+      } else {
+        // Mainnet: Use ID.AI (Internet Identity)
+        identityProvider = 'https://id.ai/';
+        console.log('useInternetIdentity: Using PRODUCTION Internet Identity (id.ai)');
+      }
+
+      console.log('Login Debug:', {
+        DFX_NETWORK: envNetwork,
+        hostname,
+        detectedNetwork: network,
+        identityProvider
+      });
+
+      // AuthClient.login() uses callbacks, not a Promise
+      // Wrap it in a Promise to handle errors properly
+      return new Promise<void>((resolve, reject) => {
+        try {
+          authClient.login({
+            identityProvider,
+            onSuccess: async () => {
+              console.log('Login successful');
+              // Re-verify authentication to ensure identity is properly set
+              try {
+                const isAuthenticated = await authClient.isAuthenticated();
+                if (isAuthenticated) {
+              const newIdentity = authClient.getIdentity();
+              setIdentity(newIdentity);
+                  console.log('Identity set after login:', newIdentity.getPrincipal().toText());
+                } else {
+                  console.warn('Login callback succeeded but user is not authenticated');
+                }
+              } catch (error) {
+                console.error('Error verifying authentication after login:', error);
+              }
+              setIsLoggingIn(false);
+              resolve();
+            },
+            onError: (error) => {
+              console.error('Login failed:', error);
+              console.error('Error details:', {
+                message: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                identityProvider
+              });
+              setIsLoggingIn(false);
+              reject(error);
+            },
+          });
+        } catch (error) {
+          console.error('Error calling authClient.login:', error);
+          setIsLoggingIn(false);
+          reject(error);
+        }
       });
     } catch (error) {
-      console.error('Login error:', error);
-      throw error;
-    } finally {
+      console.error('Error in login function:', error);
       setIsLoggingIn(false);
+      throw error;
     }
   };
 

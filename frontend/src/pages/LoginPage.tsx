@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
+import { toast } from 'sonner';
 
 interface LoginPageProps {
   showSplashAnimation?: boolean;
@@ -8,6 +9,15 @@ interface LoginPageProps {
 export default function LoginPage({ showSplashAnimation = false }: LoginPageProps) {
   const { login, isLoggingIn } = useInternetIdentity();
   const [animationStarted, setAnimationStarted] = useState(false);
+
+  const handleLogin = async () => {
+    try {
+      await login();
+    } catch (error) {
+      console.error('Login error:', error);
+      toast.error('Failed to sign in. Please try again.');
+    }
+  };
 
   useEffect(() => {
     if (showSplashAnimation) {
@@ -84,7 +94,7 @@ export default function LoginPage({ showSplashAnimation = false }: LoginPageProp
             style={{ letterSpacing: '-0.22px' }}
           >
             <p className="font-medium mb-0">
-              Welcome to Market Town,<br aria-hidden="true" />
+              Welcome to Market.Town,<br aria-hidden="true" />
               your new Bitcoin wallet.{' '}
             </p>
             <p className="mb-0">&nbsp;</p>
@@ -94,18 +104,13 @@ export default function LoginPage({ showSplashAnimation = false }: LoginPageProp
               use this is for everyday transactions,<br aria-hidden="true" />
               not your life savings.
             </p>
-            <p className="mb-0">&nbsp;</p>
-            <p className="mb-0">&nbsp;</p>
-            <p className="font-medium mb-0">Remember: your phone is your wallet.</p>
-            <p className="mb-0">&nbsp;</p>
-            <p className="font-medium text-white">Keep it safe.</p>
           </div>
         </div>
 
         {/* Button - matches Figma: h-[64px], w-[372px], border-2 border-white/80 */}
         <div className="flex items-center justify-center w-full px-5 pb-8">
           <button
-            onClick={login}
+            onClick={handleLogin}
             disabled={isLoggingIn}
             className="h-16 border-2 border-white/80 bg-transparent text-white/80 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ 

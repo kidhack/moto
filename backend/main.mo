@@ -135,15 +135,9 @@ persistent actor BitcoinWallet {
     };
   };
 
-  public shared ({ caller }) func getWalletInfo() : async UserWallet {
-    switch (principalMap.get(userWallets, caller)) {
-      case (?wallet) {
-        wallet;
-      };
-      case null {
-        Debug.trap("Wallet not found");
-      };
-    };
+  public shared ({ caller }) func getWalletInfo() : async ?UserWallet {
+    // Return optional wallet instead of trapping - allows frontend to handle missing wallet gracefully
+    principalMap.get(userWallets, caller);
   };
 
   public shared ({ caller }) func completeOnboarding() : async () {

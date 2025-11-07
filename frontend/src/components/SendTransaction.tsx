@@ -11,9 +11,10 @@ import type { UserWallet } from '../backend';
 
 interface SendTransactionProps {
   wallet: UserWallet;
+  onSuccess?: () => void;
 }
 
-export default function SendTransaction({ wallet }: SendTransactionProps) {
+export default function SendTransaction({ wallet, onSuccess }: SendTransactionProps) {
   const [toAddress, setToAddress] = useState('');
   const [amount, setAmount] = useState('');
   const sendTransaction = useSendTransaction();
@@ -48,6 +49,10 @@ export default function SendTransaction({ wallet }: SendTransactionProps) {
       toast.success('Transaction sent successfully!');
       setToAddress('');
       setAmount('');
+      // Call onSuccess callback if provided
+      if (onSuccess) {
+        setTimeout(() => onSuccess(), 1000); // Small delay to show success message
+      }
     } catch (error) {
       toast.error('Failed to send transaction');
     }

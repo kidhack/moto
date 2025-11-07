@@ -1,0 +1,286 @@
+import { type Transaction } from '../backend';
+import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
+import { useState } from 'react';
+import { toast } from 'sonner';
+
+interface TransactionDetailsProps {
+  transaction: Transaction;
+  walletAddress: string;
+  onClose: () => void;
+}
+
+// Currency display mode: 'BTC' | 'SATS' | preferred currency code
+type CurrencyMode = 'BTC' | 'SATS' | string;
+
+export default function TransactionDetails({ transaction, walletAddress, onClose }: TransactionDetailsProps) {
+  const isSent = transaction.fromAddress === walletAddress;
+  const txType = isSent ? 'sent' : (transaction.toAddress === walletAddress ? 'received' : 'added');
+  const { preferredCurrency } = usePreferredCurrency();
+  const [currencyMode, setCurrencyMode] = useState<CurrencyMode>('BTC');
+
+  // Cycle through: BTC -> SATS -> Preferred Currency -> BTC
+  const cycleCurrency = () => {
+    if (currencyMode === 'BTC') {
+      setCurrencyMode('SATS');
+    } else if (currencyMode === 'SATS') {
+      setCurrencyMode(preferredCurrency);
+    } else {
+      setCurrencyMode('BTC');
+    }
+  };
+
+  const formatBTC = (satoshis: bigint) => {
+    const btc = Number(satoshis) / 100000000;
+    return btc.toFixed(8).replace(/\.?0+$/, '');
+  };
+
+  const formatSats = (satoshis: bigint) => {
+    return satoshis.toString();
+  };
+
+  // Simple USD conversion - in production, this would fetch real-time rates
+  const getUSDValue = (satoshis: bigint, btcPrice: number = 103180.27) => {
+    const btc = Number(satoshis) / 100000000;
+    return (btc * btcPrice).toFixed(2);
+  };
+
+  const formatAmount = (satoshis: bigint) => {
+    if (currencyMode === 'BTC') {
+      return `${formatBTC(satoshis)} BTC`;
+    } else if (currencyMode === 'SATS') {
+      return `${formatSats(satoshis)} sats`;
+    } else {
+      // For now, show USD equivalent - in production, convert to preferred currency
+      const usdValue = getUSDValue(satoshis);
+      return `$${usdValue}`;
+    }
+  };
+
+  const formatAmountWithUSD = (satoshis: bigint) => {
+    const btc = formatBTC(satoshis);
+    const usd = getUSDValue(satoshis);
+    return `${btc} BTC (~$${usd})`;
+  };
+
+  const formatDate = (timestamp: bigint) => {
+    const date = new Date(Number(timestamp));
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}.${month}.${day}·${hours}:${minutes}`;
+  };
+
+  const formatAddress = (address: string) => {
+    return `${address.slice(0, 7)}...${address.slice(-6)}`;
+  };
+
+  const formatTxHash = (id: string) => {
+    return `${id.slice(0, 6)}...${id.slice(-6)}`;
+  };
+
+  const getBlockExplorerUrl = (transactionId: string) => {
+    // For ckBTC transactions, use the Internet Computer dashboard
+    // The transaction ID is used as the index
+    return `https://dashboard.internetcomputer.org/bitcoin/transaction/${transactionId}`;
+  };
+
+  const getStatusDisplay = (status: string) => {
+    if (status === 'confirmed') return 'Complete';
+    if (status === 'pending') return 'Pending';
+    if (status === 'failed') return 'Failed';
+    return status;
+  };
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied to clipboard`);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      toast.error('Failed to copy to clipboard');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
+      {/* Main container matching menu screen: pt-8 (32px) */}
+      <div className="flex flex-col pt-8 flex-1 min-h-0">
+        {/* Header with close button, title, and currency cycle button */}
+        <header className="flex items-center justify-between h-10 mb-8 shrink-0 px-5">
+          <button
+            onClick={onClose}
+            className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
+          >
+            {/* Close icon - 80% opacity, 100% on hover */}
+            <img 
+              src="/assets/close.png" 
+              alt="Close" 
+              className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
+            />
+          </button>
+          <p className="font-medium text-xl text-white tracking-[-0.22px]">
+            Transaction Details
+          </p>
+          <button
+            onClick={cycleCurrency}
+            className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity hover:opacity-100"
+          >
+            {/* Currency cycle button */}
+            <img 
+              src="/assets/cyclecurrency.svg" 
+              alt="Cycle Currency" 
+              className="h-8 w-8" 
+            />
+          </button>
+        </header>
+
+        {/* Content area - scrollable, centered */}
+        <div className="flex flex-col gap-12 flex-1 min-h-0 overflow-y-auto pb-5 justify-center">
+          <div className="px-5 flex flex-col gap-12 items-center">
+            {/* Transaction Icon - 64px × 48px */}
+            <div className="h-16 w-12 flex items-center justify-center">
+              {txType === 'sent' ? (
+                <img src="/assets/sent.svg" alt="Sent" className="h-16 w-12 object-contain" />
+              ) : txType === 'received' ? (
+                <img src="/assets/recieved.svg" alt="Received" className="h-16 w-12 object-contain" />
+              ) : (
+                <img src="/assets/addfunds.svg" alt="Added Funds" className="h-16 w-12 object-contain" />
+              )}
+            </div>
+
+            {/* Amount - IBM Plex Mono Bold, 32px with BTC text */}
+            <div className="flex items-center gap-2">
+              {currencyMode === 'BTC' && (
+                <>
+                  <p className="font-mono text-[32px] font-bold text-white" style={{ letterSpacing: '1.28px' }}>
+                    {formatBTC(transaction.amount)}
+                  </p>
+                  <p className="font-mono text-[32px] font-bold text-white" style={{ letterSpacing: '1.28px' }}>
+                    BTC
+                  </p>
+                </>
+              )}
+              {currencyMode === 'SATS' && (
+                <p className="font-mono text-[32px] font-bold text-white" style={{ letterSpacing: '1.28px' }}>
+                  {formatSats(transaction.amount)} sats
+                </p>
+              )}
+              {currencyMode !== 'BTC' && currencyMode !== 'SATS' && (
+                <p className="font-mono text-[32px] font-bold text-white" style={{ letterSpacing: '1.28px' }}>
+                  {formatAmount(transaction.amount)}
+                </p>
+              )}
+            </div>
+
+            {/* Details section - matching Figma order */}
+            <div className="flex flex-col gap-4 w-full py-4">
+              {/* Date */}
+              <div className="flex items-center gap-[10px]">
+                <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
+                  Date
+                </span>
+                <span className="font-mono text-base text-white text-right flex-1" style={{ letterSpacing: '0.32px' }}>
+                  {formatDate(transaction.timestamp)}
+                </span>
+              </div>
+
+              {/* To Address - clickable to copy */}
+              <div className="flex items-center gap-[10px]">
+                <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
+                  To
+                </span>
+                <button
+                  onClick={() => copyToClipboard(transaction.toAddress, 'Address')}
+                  className="font-mono text-base text-white text-right flex-1 hover:underline cursor-pointer" 
+                  style={{ letterSpacing: '0.32px' }}
+                  title={`Click to copy: ${transaction.toAddress}`}
+                >
+                  {formatAddress(transaction.toAddress)}
+                </button>
+              </div>
+
+              {/* Amount */}
+              <div className="flex items-center gap-[10px]">
+                <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
+                  Amount
+                </span>
+                <span className="font-mono text-base text-white text-right flex-1" style={{ letterSpacing: '0.32px' }}>
+                  {formatAmountWithUSD(transaction.amount)}
+                </span>
+              </div>
+
+              {/* Fee */}
+              <div className="flex items-center gap-[10px]">
+                <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
+                  Fee
+                </span>
+                <span className="font-mono text-base text-white text-right flex-1" style={{ letterSpacing: '0.32px' }}>
+                  {formatAmountWithUSD(transaction.fee)}
+                </span>
+              </div>
+
+              {/* Price */}
+              <div className="flex items-center gap-[10px]">
+                <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
+                  Price
+                </span>
+                <span className="font-mono text-base text-white text-right flex-1" style={{ letterSpacing: '0.32px' }}>
+                  $103,180.27
+                </span>
+              </div>
+
+              {/* Index (for ckBTC/ICRC1) */}
+              <div className="flex items-center gap-[10px]">
+                <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
+                  Index
+                </span>
+                <a
+                  href={getBlockExplorerUrl(transaction.id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-base text-white text-right flex-1 hover:underline" 
+                  style={{ letterSpacing: '0.32px' }}
+                >
+                  {transaction.id}
+                </a>
+              </div>
+
+              {/* Network */}
+              <div className="flex items-center gap-[10px]">
+                <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
+                  Network
+                </span>
+                <span className="font-mono text-base text-white text-right flex-1" style={{ letterSpacing: '0.32px' }}>
+                  ckBTC
+                </span>
+              </div>
+
+              {/* Status */}
+              <div className="flex items-center gap-[10px]">
+                <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
+                  Status
+                </span>
+                <span className="font-mono text-base text-white text-right flex-1 capitalize" style={{ letterSpacing: '0.32px' }}>
+                  {getStatusDisplay(transaction.status)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Close Button - matching Figma */}
+        <div className="px-5 pb-5 shrink-0">
+          <button
+            onClick={onClose}
+            className="w-full h-16 border-2 border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center"
+          >
+            <span className="font-bold text-base text-white/80 tracking-[0.15px]">Close</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

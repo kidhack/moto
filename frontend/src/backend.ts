@@ -34,7 +34,7 @@ export interface BitcoinWalletActor {
   getTransactionHistory: () => Promise<Transaction[]>;
   sendTransaction: (toAddress: BitcoinAddress, amount: bigint) => Promise<TransactionId>;
   getBitcoinAddress: () => Promise<BitcoinAddress>;
-  getWalletInfo: () => Promise<UserWallet>;
+  getWalletInfo: () => Promise<UserWallet | null>;
   completeOnboarding: () => Promise<void>;
   isOnboardingComplete: () => Promise<boolean>;
   resetOnboarding: () => Promise<void>;
