@@ -1,38 +1,96 @@
 import { useState } from 'react';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
+import { useBTCPrice } from '../hooks/useQueries';
 
 interface SetAmountProps {
   address: string;
   onConfirm: (amount: string, currency: string) => void;
   onClose: () => void;
+  initialCurrency?: string;
+  initialAmount?: string;
 }
 
 // Currency display mode: 'BTC' | 'SATS' | preferred currency code
 type CurrencyMode = 'BTC' | 'SATS' | string;
 
-export default function SetAmount({ address, onConfirm, onClose }: SetAmountProps) {
+export default function SetAmount({ address, onConfirm, onClose, initialCurrency, initialAmount }: SetAmountProps) {
   const { preferredCurrency } = usePreferredCurrency();
-  const [currencyMode, setCurrencyMode] = useState<CurrencyMode>('SATS');
-  const [amount, setAmount] = useState<string>('');
+  const { data: btcPriceData } = useBTCPrice();
+  const [currencyMode, setCurrencyMode] = useState<CurrencyMode>(initialCurrency || 'SATS');
+  const [amount, setAmount] = useState<string>(initialAmount || '');
+
+  // Use live BTC price, fallback to default if not loaded yet
+  const BTC_PRICE_USD = btcPriceData?.usd || 101799;
+
+  // Convert amount between currencies
+  const convertAmount = (value: string, fromCurrency: string, toCurrency: string): string => {
+    if (!value || value === '0' || value === '') return '0';
+    
+    const numValue = parseFloat(value.replace(/,/g, ''));
+    if (isNaN(numValue)) return '0';
+
+    let btcValue: number;
+
+    // Convert from source currency to BTC
+    if (fromCurrency === 'BTC') {
+      btcValue = numValue;
+    } else if (fromCurrency === 'SATS') {
+      btcValue = numValue / 100000000;
+    } else {
+      // Fiat currency (USD, etc.) - convert to BTC
+      btcValue = numValue / BTC_PRICE_USD;
+    }
+
+    // Convert from BTC to target currency
+    let result: number;
+    if (toCurrency === 'BTC') {
+      result = btcValue;
+      // Format BTC with up to 8 decimal places, remove trailing zeros
+      return result.toFixed(8).replace(/\.?0+$/, '');
+    } else if (toCurrency === 'SATS') {
+      result = btcValue * 100000000;
+      // SATS should be whole numbers
+      return Math.round(result).toString();
+    } else {
+      // Fiat currency (USD, etc.) - convert from BTC
+      result = btcValue * BTC_PRICE_USD;
+      // Format fiat with 2 decimal places
+      return result.toFixed(2).replace(/\.?0+$/, '');
+    }
+  };
 
   // Cycle through: BTC -> SATS -> Preferred Currency -> BTC
   const cycleCurrency = () => {
+    const currentAmount = amount.replace(/,/g, '');
+    let nextCurrency: CurrencyMode;
+    
     if (currencyMode === 'BTC') {
-      setCurrencyMode('SATS');
+      nextCurrency = 'SATS';
     } else if (currencyMode === 'SATS') {
-      setCurrencyMode(preferredCurrency);
+      nextCurrency = preferredCurrency;
     } else {
-      setCurrencyMode('BTC');
+      nextCurrency = 'BTC';
     }
-    // Clear amount when switching currency to avoid confusion
-    setAmount('');
+
+    // Convert amount to new currency
+    if (currentAmount && currentAmount !== '0') {
+      const convertedAmount = convertAmount(currentAmount, currencyMode, nextCurrency);
+      setAmount(convertedAmount);
+    }
+    
+    setCurrencyMode(nextCurrency);
   };
 
   // Format amount for display
   const formatDisplayAmount = (value: string): string => {
     if (!value) return '0';
-    // Add commas for thousands separator
-    return value.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    // Handle decimal numbers - format integer and decimal parts separately
+    const parts = value.split('.');
+    const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    if (parts.length > 1) {
+      return `${integerPart}.${parts[1]}`;
+    }
+    return integerPart;
   };
 
   // Get currency label
@@ -172,12 +230,11 @@ export default function SetAmount({ address, onConfirm, onClose }: SetAmountProp
                 {/* Backspace button */}
                 <button
                   onClick={handleBackspace}
-                  className="flex-1 h-[46px] rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-between transition-colors px-[22px]"
+                  className="flex-1 h-[46px] rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
                 >
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9.75L14.25 12m0 0l2.25 2.25M14.25 12l2.25-2.25M14.25 12H12m-2.25 0H9.75m-4.5 0H4.5m11.25-9H7.5a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6.75m4.5-9V9.75m0 0V12m0 0v2.25m0 0H18m-2.25 0H14.25" />
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
                   </svg>
-                  <div className="w-6 h-6" /> {/* Spacer for centering */}
                 </button>
 
                 {/* 0 button */}

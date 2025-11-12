@@ -1,5 +1,6 @@
 import { type Transaction } from '../backend';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
+import { useBTCPrice } from '../hooks/useQueries';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -16,7 +17,11 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
   const isSent = transaction.fromAddress === walletAddress;
   const txType = isSent ? 'sent' : (transaction.toAddress === walletAddress ? 'received' : 'added');
   const { preferredCurrency } = usePreferredCurrency();
+  const { data: btcPriceData } = useBTCPrice();
   const [currencyMode, setCurrencyMode] = useState<CurrencyMode>('BTC');
+
+  // Use live BTC price, fallback to default if not loaded yet
+  const BTC_PRICE_USD = btcPriceData?.usd || 101799;
 
   // Cycle through: BTC -> SATS -> Preferred Currency -> BTC
   const cycleCurrency = () => {
@@ -38,10 +43,10 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
     return satoshis.toString();
   };
 
-  // Simple USD conversion - in production, this would fetch real-time rates
-  const getUSDValue = (satoshis: bigint, btcPrice: number = 103180.27) => {
+  // USD conversion using live BTC price
+  const getUSDValue = (satoshis: bigint) => {
     const btc = Number(satoshis) / 100000000;
-    return (btc * btcPrice).toFixed(2);
+    return (btc * BTC_PRICE_USD).toFixed(2);
   };
 
   const formatAmount = (satoshis: bigint) => {

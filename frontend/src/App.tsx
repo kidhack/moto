@@ -67,10 +67,24 @@ export default function App() {
     }
   }, [ensureWallet.isPending]);
 
-  if (!splashComplete) {
+  // Show login page if no identity (with or without splash animation)
+  if (!identity) {
     return (
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-        <LoginPage showSplashAnimation={true} />
+        <LoginPage showSplashAnimation={!splashComplete} />
+      </ThemeProvider>
+    );
+  }
+
+  if (!splashComplete) {
+    // This shouldn't happen if user is logged in, but handle it just in case
+    return (
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+        <div className="flex min-h-screen items-center justify-center bg-black">
+          <div className="flex flex-col items-center gap-4">
+            <img src="/assets/mt-mark.svg" alt="Market Town" className="h-16" />
+          </div>
+        </div>
       </ThemeProvider>
     );
   }
@@ -90,9 +104,7 @@ export default function App() {
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark">
       <div className="min-h-screen bg-black">
-        {!identity ? (
-          <LoginPage showSplashAnimation={false} />
-        ) : isCheckingOnboarding || ensureWallet.isPending ? (
+        {isCheckingOnboarding || ensureWallet.isPending ? (
           <div className="flex min-h-screen items-center justify-center bg-black">
             <div className="flex flex-col items-center gap-4">
               <img src="/assets/mt-mark.svg" alt="Market Town" className="h-16" />

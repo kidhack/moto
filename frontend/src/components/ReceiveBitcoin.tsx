@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import SetAmount from './SetAmount';
+import { useBTCPrice } from '../hooks/useQueries';
 
 interface ReceiveBitcoinProps {
   address: string;
@@ -10,11 +11,15 @@ interface ReceiveBitcoinProps {
 export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps) {
   const [amount, setAmount] = useState<string>('');
   const [showSetAmount, setShowSetAmount] = useState(false);
+  const { data: btcPriceData } = useBTCPrice();
 
   // Store both amount and currency to properly display and convert
   const [amountCurrency, setAmountCurrency] = useState<string>('BTC');
 
-  // Convert amount to BTC for QR code (if amount is in SATS, convert to BTC)
+  // Use live BTC price, fallback to default if not loaded yet
+  const BTC_PRICE_USD = btcPriceData?.usd || 101799;
+
+  // Convert amount to BTC for QR code (if amount is in SATS or fiat, convert to BTC)
   const getBTCAmount = (amountValue: string, currency: string): string => {
     if (!amountValue) return '';
     if (currency === 'BTC') {
@@ -24,9 +29,10 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
       const btc = Number(amountValue) / 100000000;
       return btc.toString();
     } else {
-      // For fiat currencies, we'd need to fetch BTC price and convert
-      // For now, assume 1:1 conversion (this would need proper conversion in production)
-      return amountValue;
+      // For fiat currencies, convert to BTC using live price
+      const fiatAmount = parseFloat(amountValue.replace(/,/g, ''));
+      const btc = fiatAmount / BTC_PRICE_USD;
+      return btc.toString();
     }
   };
 
@@ -41,7 +47,6 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
     setAmount(confirmedAmount);
     setAmountCurrency(currency);
     setShowSetAmount(false);
-    toast.success(`Amount set: ${confirmedAmount} ${currency}`);
   };
 
   // Get currency label for display
@@ -92,6 +97,8 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
         address={address}
         onConfirm={handleAmountConfirm}
         onClose={() => setShowSetAmount(false)}
+        initialCurrency={amountCurrency}
+        initialAmount={amount}
       />
     );
   }
@@ -119,78 +126,89 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
           <div className="h-8 w-8" /> {/* Empty space for symmetry */}
         </header>
 
-        {/* Content area - centered, scrollable */}
-        <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto pb-5 items-center justify-center">
-          <div className="px-5 flex flex-col gap-2 items-center w-full max-w-[372px]">
-            {/* QR Code - 370px × 369px */}
-            <div className="h-[369px] w-[370px] flex items-center justify-center shrink-0">
-              <img 
-                src={qrCodeUrl} 
-                alt="QR Code" 
-                className="h-[369px] w-[370px]"
-                onError={(e) => {
-                  console.error('Failed to load QR code');
-                }}
-              />
+        {/* Content area - flex column with top and bottom alignment */}
+        <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
+          {/* Top section: QR Code and Address block */}
+          <div className="flex flex-col gap-8 shrink-0 pt-2">
+            {/* QR Code - centered and responsive */}
+            <div className="flex items-center justify-center px-5">
+              <div className="w-full max-w-[370px] aspect-square flex items-center justify-center shrink-0">
+                <img 
+                  src={qrCodeUrl} 
+                  alt="QR Code" 
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    console.error('Failed to load QR code');
+                  }}
+                />
+              </div>
             </div>
 
-            {/* Bitcoin Wallet Address box - gap-2 (8px) from QR code */}
-            <div className="bg-white/10 flex items-center justify-center w-[372px] min-h-[48px] px-4 py-3 shrink-0">
-              <p className="font-mono text-base font-bold text-white/80 text-center break-all" style={{ letterSpacing: '0.32px' }}>
-                {address}
-              </p>
+            {/* Bitcoin Wallet Address box - full width with old color styling */}
+            <div className="px-5">
+              <div className="bg-white/10 flex items-center justify-center w-full min-h-16 px-4 py-3">
+                <p className="font-mono text-base font-bold text-white/80 text-center break-all" style={{ letterSpacing: '0.32px' }}>
+                  {address}
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Amount display row (when amount is set) or Set Amount button - gap-2 (8px) from address box */}
-          <div className="px-5 flex items-center justify-between w-full shrink-0">
-            {amount ? (
-              <>
-                {/* Amount display - left side */}
-                <div className="flex items-center gap-2 h-[22px]">
-                  <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>
-                    {formatDisplayAmount(amount)}
-                  </p>
-                  <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>
-                    {getCurrencyLabel()}
-                  </p>
-                </div>
-                {/* Edit button - right side */}
+          {/* Spacer to push bottom content down */}
+          <div className="flex-1 min-h-0" />
+
+          {/* Bottom section: Amount display and buttons */}
+          <div className="flex flex-col gap-2 shrink-0 pb-5">
+            {/* Amount display row (when amount is set) or Set Amount button */}
+            <div className="px-5 flex items-center justify-between w-full shrink-0">
+              {amount ? (
+                <>
+                  {/* Amount display - left side */}
+                  <div className="flex items-center gap-2 h-[22px]">
+                    <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>
+                      {formatDisplayAmount(amount)}
+                    </p>
+                    <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>
+                      {getCurrencyLabel()}
+                    </p>
+                  </div>
+                  {/* Edit button - right side */}
+                  <button
+                    onClick={() => setShowSetAmount(true)}
+                    className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors px-8 shrink-0"
+                  >
+                    <span className="font-bold text-base text-white/80 tracking-[0.15px]">Edit</span>
+                  </button>
+                </>
+              ) : (
+                /* Set Amount button - when no amount is set, full width */
                 <button
                   onClick={() => setShowSetAmount(true)}
-                  className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors px-8 shrink-0"
+                  className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full shrink-0"
                 >
-                  <span className="font-bold text-base text-white/80 tracking-[0.15px]">Edit</span>
+                  <span className="font-bold text-base text-white/80 tracking-[0.15px]">Set Amount</span>
                 </button>
-              </>
-            ) : (
-              /* Set Amount button - when no amount is set, centered */
+              )}
+            </div>
+
+            {/* Buttons container - gap-2 (8px) from amount/set amount */}
+            <div className="px-5 flex flex-col gap-2 w-full shrink-0">
+              {/* Copy Address button */}
               <button
-                onClick={() => setShowSetAmount(true)}
-                className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full shrink-0"
+                onClick={copyAddress}
+                className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full"
               >
-                <span className="font-bold text-base text-white/80 tracking-[0.15px]">Set Amount</span>
+                <span className="font-bold text-base text-white/80 tracking-[0.15px]">Copy Address</span>
               </button>
-            )}
-          </div>
 
-          {/* Buttons container - gap-2 (8px) from amount/set amount */}
-          <div className="px-5 flex flex-col gap-2 w-full shrink-0">
-            {/* Copy Address button */}
-            <button
-              onClick={copyAddress}
-              className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full"
-            >
-              <span className="font-bold text-base text-white/80 tracking-[0.15px]">Copy Address</span>
-            </button>
-
-            {/* Share button */}
-            <button
-              onClick={shareAddress}
-              className="h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors w-full"
-            >
-              <span className="font-bold text-base text-white/80 tracking-[0.15px]">Share</span>
-            </button>
+              {/* Share button */}
+              <button
+                onClick={shareAddress}
+                className="h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors w-full"
+              >
+                <span className="font-bold text-base text-white/80 tracking-[0.15px]">Share</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

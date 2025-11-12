@@ -211,20 +211,20 @@ export default function WalletDashboard() {
                           <img src="/assets/addfunds.svg" alt="Added Funds" className="h-8 w-6 object-contain" />
                         )}
                       </div>
-                      {/* Figma: Amount - IBM Plex Mono Medium, 20px, rgba(255,255,255,0.8), tracking 0.8px */}
+                      {/* Figma: Amount - IBM Plex Mono Medium, 18px (reduced from 20px for mobile), rgba(255,255,255,0.8), tracking 0.8px */}
                       <div className="flex items-center gap-1">
-                        <span className="font-mono text-xl font-medium text-white" style={{ letterSpacing: '0.8px' }}>₿</span>
+                        <span className="font-mono text-[18px] font-medium text-white" style={{ letterSpacing: '0.8px' }}>₿</span>
                         <p 
-                          className="font-mono text-xl font-medium text-white"
+                          className="font-mono text-[18px] font-medium text-white"
                           style={{ letterSpacing: '0.8px' }}
                         >
                           {formatBTC(tx.amount)}
                         </p>
                       </div>
                     </div>
-                    {/* Figma: Date - IBM Plex Mono Medium, 20px, rgba(255,255,255,0.8), tracking 0.8px */}
+                    {/* Figma: Date - IBM Plex Mono Medium, 18px (reduced from 20px for mobile), rgba(255,255,255,0.8), tracking 0.8px */}
                     <p 
-                      className="font-mono text-xl font-medium text-white"
+                      className="font-mono text-[18px] font-medium text-white"
                       style={{ letterSpacing: '0.8px' }}
                     >
                       {formatDate(tx.timestamp)}
@@ -259,24 +259,13 @@ export default function WalletDashboard() {
         </div>
       </div>
 
-      {/* Send Modal */}
+      {/* Send Modal - Full screen */}
       {showSendModal && walletInfo && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-          <div className="bg-black border-2 border-white/20 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-4 border-b border-white/20 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-white">Send Bitcoin</h2>
-              <button onClick={() => setShowSendModal(false)} className="text-white/80 hover:text-white">
-                ✕
-              </button>
-            </div>
-            <div className="p-4">
-              <SendTransaction 
-                wallet={walletInfo} 
-                onSuccess={() => setShowSendModal(false)}
-              />
-            </div>
-          </div>
-        </div>
+        <SendTransaction 
+          wallet={walletInfo} 
+          onSuccess={() => setShowSendModal(false)}
+          onClose={() => setShowSendModal(false)}
+        />
       )}
 
       {/* Receive Modal - Full screen */}

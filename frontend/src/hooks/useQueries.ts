@@ -4,6 +4,11 @@ import { useCkBTCMinter } from './useCkBTCMinter';
 import type { UserWallet, BitcoinAddress, TransactionId } from '../backend';
 import { DUMMY_WALLET, USE_DUMMY_DATA } from '../data/dummyData';
 
+interface BTCPriceData {
+  usd: number;
+  lastUpdated: number;
+}
+
 export function useWalletInfo() {
   const { actor, isFetching } = useActor();
 
@@ -294,5 +299,45 @@ export function useSendTransaction() {
       queryClient.invalidateQueries({ queryKey: ['walletInfo'] });
     },
     retry: 1,
+  });
+}
+
+export function useBTCPrice() {
+  return useQuery<BTCPriceData>({
+    queryKey: ['btcPrice'],
+    queryFn: async () => {
+      try {
+        // Use CoinGecko's free API (no API key required)
+        const response = await fetch(
+          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_last_updated_at=true'
+        );
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch BTC price: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.bitcoin || typeof data.bitcoin.usd !== 'number') {
+          throw new Error('Invalid response format from CoinGecko API');
+        }
+        
+        return {
+          usd: data.bitcoin.usd,
+          lastUpdated: data.bitcoin.last_updated_at || Date.now() / 1000,
+        };
+      } catch (error) {
+        console.error('Error fetching BTC price:', error);
+        // Fallback to a default price if API fails
+        return {
+          usd: 101799, // Default fallback price
+          lastUpdated: Date.now() / 1000,
+        };
+      }
+    },
+    refetchInterval: 10000, // Refetch every 10 seconds
+    staleTime: 0, // Always consider data stale to ensure frequent updates
+    retry: 2,
+    retryDelay: 1000,
   });
 }
