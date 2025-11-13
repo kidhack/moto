@@ -6,14 +6,14 @@
       "candid": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.did",
       "wasm": ".dfx/local/canisters/internet_identity/internet_identity.wasm"
     },
-    "bitcoin_wallet": {
+    "market_town": {
       "type": "motoko",
       "main": "backend/main.mo"
     },
-    "bitcoin_wallet_frontend": {
+    "market_town_frontend": {
       "type": "assets",
-      "source": ["frontend"],
-      "dependencies": ["bitcoin_wallet"]
+      "source": ["frontend/dist"],
+      "dependencies": ["market_town"]
     }
   },
   "networks": {

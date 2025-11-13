@@ -5,8 +5,8 @@ import type { BitcoinWalletActor } from '../backend';
 
 // This should be set to your canister ID after deployment
 // For local development, you can use the dfx canister id command
-// Or set it via environment variable: VITE_CANISTER_ID_BITCOIN_WALLET
-const CANISTER_ID = import.meta.env.VITE_CANISTER_ID_BITCOIN_WALLET || '';
+// Or set it via environment variable: VITE_CANISTER_ID_MARKET_TOWN
+const CANISTER_ID = import.meta.env.VITE_CANISTER_ID_MARKET_TOWN || '';
 
 // Local development uses localhost:4943, production uses ic0.app
 // Detect local by checking environment variable first, then hostname
@@ -40,7 +40,7 @@ export function useActor() {
     }
 
     if (!CANISTER_ID) {
-      const errorMsg = 'CANISTER_ID not set. Set VITE_CANISTER_ID_BITCOIN_WALLET environment variable or run dfx generate.';
+      const errorMsg = 'CANISTER_ID not set. Set VITE_CANISTER_ID_MARKET_TOWN environment variable or run dfx generate.';
       console.error('useActor:', errorMsg);
       console.log('useActor: Environment check:', {
         CANISTER_ID,
@@ -93,7 +93,7 @@ export function useActor() {
         let bitcoinWalletActor: BitcoinWalletActor;
         try {
           // Try to import the generated IDL from declarations folder
-          const idlModule = await import('../declarations/bitcoin_wallet/index.js');
+          const idlModule = await import('../declarations/market_town/index.js');
           
           // Use the generated createActor function which handles everything
           // createActor(canisterId, { agent, ... })
@@ -107,7 +107,7 @@ export function useActor() {
           
           // Fallback: try to use idlFactory directly
           try {
-            const idlModule = await import('../declarations/bitcoin_wallet/index.js');
+            const idlModule = await import('../declarations/market_town/index.js');
             const idlFactory = idlModule.idlFactory;
             
             bitcoinWalletActor = Actor.createActor(
