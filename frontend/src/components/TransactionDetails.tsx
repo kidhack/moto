@@ -36,7 +36,9 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
 
   const formatBTC = (satoshis: bigint) => {
     const btc = Number(satoshis) / 100000000;
-    return btc.toFixed(8).replace(/\.?0+$/, '');
+    // Show up to 6 decimal places
+    const formatted = btc.toFixed(6);
+    return formatted.replace(/\.?0+$/, '') || '0.00';
   };
 
   const formatSats = (satoshis: bigint) => {
@@ -68,7 +70,9 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
   };
 
   const formatDate = (timestamp: bigint) => {
-    const date = new Date(Number(timestamp));
+    if (timestamp === BigInt(0)) return 'Pending';
+    // Timestamp is in seconds, convert to milliseconds for Date constructor
+    const date = new Date(Number(timestamp) * 1000);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -79,10 +83,6 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 7)}...${address.slice(-6)}`;
-  };
-
-  const formatTxHash = (id: string) => {
-    return `${id.slice(0, 6)}...${id.slice(-6)}`;
   };
 
   const getBlockExplorerUrl = (transactionId: string) => {

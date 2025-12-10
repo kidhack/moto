@@ -5,9 +5,39 @@ import path from 'path';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  define: {
+    global: 'globalThis',
+    'process.env.CANISTER_ID_MARKET_TOWN': JSON.stringify(process.env.VITE_CANISTER_ID_MARKET_TOWN || ''),
+    'process.env': JSON.stringify({
+      CANISTER_ID_MARKET_TOWN: process.env.VITE_CANISTER_ID_MARKET_TOWN || '',
+    }),
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+    },
+    // Ensure all @dfinity packages and @icp-sdk use the same Principal instance
+    dedupe: [
+      '@dfinity/principal',
+      '@dfinity/agent',
+      '@dfinity/candid',
+      '@icp-sdk/core',
+    ],
+  },
+  optimizeDeps: {
+    // Force pre-bundling of @dfinity packages to ensure consistent Principal instances
+    include: [
+      '@dfinity/principal',
+      '@dfinity/agent',
+      '@dfinity/candid',
+      '@dfinity/identity',
+      '@dfinity/auth-client',
+      '@dfinity/ledger-icrc',
+      '@icp-sdk/core',
+    ],
+    // Ensure Principal class and its static methods are not tree-shaken
+    esbuildOptions: {
+      preserveSymlinks: true,
     },
   },
   build: {

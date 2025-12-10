@@ -8,7 +8,7 @@ interface InternetIdentityContextType {
   isInitializing: boolean;
   isLoggingIn: boolean;
   login: () => Promise<void>;
-  clear: () => void;
+  clear: () => Promise<void>;
 }
 
 const InternetIdentityContext = createContext<InternetIdentityContextType | undefined>(undefined);
@@ -42,17 +42,23 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
           const shouldUseLocal = envNetwork === 'local' || (envNetwork !== 'ic' && isLocalhost);
           
           // If we should use localhost but user is authenticated with production, clear it
-          if (shouldUseLocal) {
+          if (shouldUseLocal && isAuthenticated) {
             // Check if the identity was created with production Internet Identity
-            // If so, we need to clear it and force re-login with localhost
-            const identity = client.getIdentity();
-            // For now, we'll just log a warning - user should log out and log back in
-            console.warn('useInternetIdentity: User authenticated, but ensure you logged in with localhost Internet Identity for local development');
+            // Production delegations won't work with localhost canisters
+            // Clear the identity and force re-login with localhost Internet Identity
+            console.warn('useInternetIdentity: Clearing production Internet Identity session - must use local Internet Identity for local development');
+            client.logout();
+            setIdentity(null);
+            setIsInitializing(false);
+            return;
           }
           
           const currentIdentity = client.getIdentity();
+          const principalText = currentIdentity.getPrincipal().toText();
           setIdentity(currentIdentity);
-          console.log('User already authenticated, identity set:', currentIdentity.getPrincipal().toText());
+          console.log('User already authenticated, identity set:', principalText);
+          console.log('⚠️ VERIFY: Make sure this principal matches the one with your ckBTC balance!');
+          console.log('   Current principal:', principalText);
         }
         setIsInitializing(false);
       })
@@ -197,7 +203,7 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
               setIsLoggingIn(false);
               resolve();
             },
-            onError: (error) => {
+            onError: (error: unknown) => {
               console.error('Login failed:', error);
               console.error('Error details:', {
                 message: error instanceof Error ? error.message : String(error),
@@ -221,11 +227,23 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
     }
   };
 
-  const clear = () => {
-    if (authClient) {
-      authClient.logout();
+  const clear = async () => {
+    try {
+      if (authClient) {
+        // Logout from Internet Identity
+        await authClient.logout();
+        console.log('useInternetIdentity: Logged out from Internet Identity');
+      }
+      // Clear identity state
+      setIdentity(null);
+      // Clear any cached authentication data
+      // The AuthClient stores data in localStorage, logout() should handle it, but let's be thorough
+      console.log('useInternetIdentity: Identity cleared');
+    } catch (error) {
+      console.error('useInternetIdentity: Error during logout:', error);
+      // Still clear the identity even if logout fails
+      setIdentity(null);
     }
-    setIdentity(null);
   };
 
   return (

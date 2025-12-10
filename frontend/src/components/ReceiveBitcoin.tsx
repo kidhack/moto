@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import SetAmount from './SetAmount';
 import { useBTCPrice } from '../hooks/useQueries';
+import { isValidBitcoinAddress } from '../utils/addressValidation';
 
 interface ReceiveBitcoinProps {
   address: string;
@@ -12,6 +13,33 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
   const [amount, setAmount] = useState<string>('');
   const [showSetAmount, setShowSetAmount] = useState(false);
   const { data: btcPriceData } = useBTCPrice();
+
+  // Validate address is real - NEVER display fake addresses
+  useEffect(() => {
+    if (address && !isValidBitcoinAddress(address)) {
+      console.error('ReceiveBitcoin: Invalid Bitcoin address detected:', address);
+      toast.error('Invalid Bitcoin address. Please try again.');
+      if (onClose) {
+        onClose();
+      }
+    }
+  }, [address, onClose]);
+
+  // Don't render if address is invalid
+  if (!address || !isValidBitcoinAddress(address)) {
+    return (
+      <div className="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center px-5">
+        <p className="text-white text-center text-lg mb-4">Unable to load Bitcoin address</p>
+        <p className="text-white/60 text-center text-sm mb-8">Please try again later</p>
+        <button
+          onClick={onClose}
+          className="h-16 border-2 border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center px-8"
+        >
+          <span className="font-bold text-base text-white/80 tracking-[0.15px]">Close</span>
+        </button>
+      </div>
+    );
+  }
 
   // Store both amount and currency to properly display and convert
   const [amountCurrency, setAmountCurrency] = useState<string>('BTC');
@@ -133,25 +161,25 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
             {/* QR Code - centered and responsive */}
             <div className="flex items-center justify-center px-5">
               <div className="w-full max-w-[370px] aspect-square flex items-center justify-center shrink-0">
-                <img 
-                  src={qrCodeUrl} 
-                  alt="QR Code" 
+              <img 
+                src={qrCodeUrl} 
+                alt="QR Code" 
                   className="w-full h-full object-contain"
-                  onError={(e) => {
-                    console.error('Failed to load QR code');
-                  }}
-                />
+                  onError={() => {
+                  console.error('Failed to load QR code');
+                }}
+              />
               </div>
             </div>
 
             {/* Bitcoin Wallet Address box - full width with old color styling */}
             <div className="px-5">
               <div className="bg-white/10 flex items-center justify-center w-full min-h-16 px-4 py-3">
-                <p className="font-mono text-base font-bold text-white/80 text-center break-all" style={{ letterSpacing: '0.32px' }}>
-                  {address}
-                </p>
-              </div>
+              <p className="font-mono text-base font-bold text-white/80 text-center break-all" style={{ letterSpacing: '0.32px' }}>
+                {address}
+              </p>
             </div>
+          </div>
           </div>
 
           {/* Spacer to push bottom content down */}
@@ -160,54 +188,54 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
           {/* Bottom section: Amount display and buttons */}
           <div className="flex flex-col gap-2 shrink-0 pb-5">
             {/* Amount display row (when amount is set) or Set Amount button */}
-            <div className="px-5 flex items-center justify-between w-full shrink-0">
-              {amount ? (
-                <>
-                  {/* Amount display - left side */}
-                  <div className="flex items-center gap-2 h-[22px]">
-                    <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>
-                      {formatDisplayAmount(amount)}
-                    </p>
-                    <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>
-                      {getCurrencyLabel()}
-                    </p>
-                  </div>
-                  {/* Edit button - right side */}
-                  <button
-                    onClick={() => setShowSetAmount(true)}
-                    className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors px-8 shrink-0"
-                  >
-                    <span className="font-bold text-base text-white/80 tracking-[0.15px]">Edit</span>
-                  </button>
-                </>
-              ) : (
-                /* Set Amount button - when no amount is set, full width */
+          <div className="px-5 flex items-center justify-between w-full shrink-0">
+            {amount ? (
+              <>
+                {/* Amount display - left side */}
+                <div className="flex items-center gap-2 h-[22px]">
+                  <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>
+                    {formatDisplayAmount(amount)}
+                  </p>
+                  <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>
+                    {getCurrencyLabel()}
+                  </p>
+                </div>
+                {/* Edit button - right side */}
                 <button
                   onClick={() => setShowSetAmount(true)}
-                  className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full shrink-0"
+                  className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors px-8 shrink-0"
                 >
-                  <span className="font-bold text-base text-white/80 tracking-[0.15px]">Set Amount</span>
+                  <span className="font-bold text-base text-white/80 tracking-[0.15px]">Edit</span>
                 </button>
-              )}
-            </div>
-
-            {/* Buttons container - gap-2 (8px) from amount/set amount */}
-            <div className="px-5 flex flex-col gap-2 w-full shrink-0">
-              {/* Copy Address button */}
+              </>
+            ) : (
+                /* Set Amount button - when no amount is set, full width */
               <button
-                onClick={copyAddress}
-                className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full"
+                onClick={() => setShowSetAmount(true)}
+                className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full shrink-0"
               >
-                <span className="font-bold text-base text-white/80 tracking-[0.15px]">Copy Address</span>
+                <span className="font-bold text-base text-white/80 tracking-[0.15px]">Set Amount</span>
               </button>
+            )}
+          </div>
 
-              {/* Share button */}
-              <button
-                onClick={shareAddress}
-                className="h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors w-full"
-              >
-                <span className="font-bold text-base text-white/80 tracking-[0.15px]">Share</span>
-              </button>
+          {/* Buttons container - gap-2 (8px) from amount/set amount */}
+          <div className="px-5 flex flex-col gap-2 w-full shrink-0">
+            {/* Copy Address button */}
+            <button
+              onClick={copyAddress}
+              className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full"
+            >
+              <span className="font-bold text-base text-white/80 tracking-[0.15px]">Copy Address</span>
+            </button>
+
+            {/* Share button */}
+            <button
+              onClick={shareAddress}
+              className="h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors w-full"
+            >
+              <span className="font-bold text-base text-white/80 tracking-[0.15px]">Share</span>
+            </button>
             </div>
           </div>
         </div>

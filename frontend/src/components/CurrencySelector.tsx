@@ -1,4 +1,4 @@
-import { CURRENCIES, type Currency } from '../data/currencies';
+import { CURRENCIES } from '../data/currencies';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 
 interface CurrencySelectorProps {

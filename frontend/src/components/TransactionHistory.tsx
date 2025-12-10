@@ -11,7 +11,9 @@ interface TransactionHistoryProps {
 export default function TransactionHistory({ transactions }: TransactionHistoryProps) {
   const formatBTC = (satoshis: bigint) => {
     const btc = Number(satoshis) / 100000000;
-    return btc.toFixed(8);
+    // Show up to 6 decimal places
+    const formatted = btc.toFixed(6);
+    return formatted.replace(/\.?0+$/, '') || '0.00';
   };
 
   const formatDate = (timestamp: bigint) => {

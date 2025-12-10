@@ -99,7 +99,7 @@ export function useActor() {
           // createActor(canisterId, { agent, ... })
           bitcoinWalletActor = idlModule.createActor(CANISTER_ID, {
             agent,
-          }) as BitcoinWalletActor;
+          }) as unknown as BitcoinWalletActor;
           console.log('useActor: Actor created successfully using createActor function');
         } catch (error) {
           console.error('Failed to import generated IDL:', error);

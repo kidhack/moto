@@ -1,4 +1,4 @@
-import { LANGUAGES, type Language } from '../data/languages';
+import { LANGUAGES } from '../data/languages';
 import { usePreferredLanguage } from '../hooks/usePreferredLanguage';
 
 interface LanguageSelectorProps {

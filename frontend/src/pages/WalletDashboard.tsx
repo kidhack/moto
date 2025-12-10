@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
+import { LogOut } from 'lucide-react';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { useWalletInfo, useEnsureWallet, useResetOnboarding, useSignOutAndReset, useWalletAddress } from '../hooks/useQueries';
+import { useCkBTCMinter } from '../hooks/useCkBTCMinter';
+import { useActor } from '../hooks/useActor';
 import type { Transaction } from '../backend';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,10 +24,36 @@ import LanguageSelector from '../components/LanguageSelector';
 import TransactionDetails from '../components/TransactionDetails';
 
 export default function WalletDashboard() {
-  const { clear } = useInternetIdentity();
-  const { data: walletInfo, isLoading } = useWalletInfo();
-  const { data: walletAddress } = useWalletAddress();
+  const { clear, identity } = useInternetIdentity();
+  const { data: walletInfo, isLoading, error: walletInfoError, isFetching: isWalletInfoFetching } = useWalletInfo();
+  const { data: walletAddress, isLoading: isLoadingAddress, error: walletAddressError } = useWalletAddress();
+  const { address: ckbtcAddress, isFetching: isCkbtcFetching } = useCkBTCMinter(); // Check if we have ckBTC address
+  const { actor } = useActor();
   const ensureWallet = useEnsureWallet();
+  
+  // Get current principal for debugging
+  const currentPrincipal = identity ? identity.getPrincipal().toText() : null;
+
+  // Debug logging
+  useEffect(() => {
+    console.log('WalletDashboard: State check', {
+      walletInfo: walletInfo ? {
+        exists: true,
+        balance: walletInfo.balance.toString(),
+        balanceBTC: (Number(walletInfo.balance) / 100000000).toString(),
+        hasAddress: !!walletInfo.bitcoinAddress,
+        transactionsCount: walletInfo.transactions.length,
+      } : 'null',
+      isLoading,
+      isWalletInfoFetching,
+      walletInfoError: walletInfoError?.message,
+      ensureWalletStatus: ensureWallet.isSuccess ? 'success' : ensureWallet.isError ? 'error' : ensureWallet.isPending ? 'pending' : 'idle',
+      ensureWalletError: ensureWallet.error?.message,
+      ckbtcAddress: !!ckbtcAddress,
+      isCkbtcFetching,
+      isLoadingBalance,
+    });
+  }, [walletInfo, isLoading, isWalletInfoFetching, walletInfoError, ensureWallet.isSuccess, ensureWallet.isError, ensureWallet.isPending, ensureWallet.error, ckbtcAddress, isCkbtcFetching]);
   const resetOnboarding = useResetOnboarding();
   const signOutAndReset = useSignOutAndReset();
   const [showResetDialog, setShowResetDialog] = useState(false);
@@ -36,20 +65,42 @@ export default function WalletDashboard() {
   const [showCurrencySelector, setShowCurrencySelector] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-
-  // Automatically ensure wallet exists when component mounts
+  
+  // Debug: Log principal when menu opens
   useEffect(() => {
-    if (!isLoading && !walletInfo && !ensureWallet.isPending) {
+    if (menuOpen && currentPrincipal) {
+      console.log('Menu opened - Current Principal ID:', currentPrincipal);
+    }
+  }, [menuOpen, currentPrincipal]);
+
+  // Ensure wallet exists so we can fetch wallet info (balance, transactions)
+  // Even if we have ckBTC address, we still need to ensure wallet exists in custom canister
+  // to get balance and transaction data
+  useEffect(() => {
+    // Don't do anything if ckBTC is still loading
+    if (isCkbtcFetching) {
+      return;
+    }
+    
+    // Don't try to ensure wallet if actor is not available yet
+    if (!actor) {
+      return;
+    }
+    
+    // Always ensure wallet exists so we can fetch wallet info
+    // This creates/ensures the wallet in the custom canister which stores balance/transactions
+    if (!ensureWallet.isPending && !ensureWallet.isSuccess && !walletInfo) {
+      console.log('WalletDashboard: Ensuring wallet exists to fetch wallet info...');
       ensureWallet.mutate();
     }
-  }, [isLoading, walletInfo, ensureWallet]);
+  }, [ckbtcAddress, isCkbtcFetching, ensureWallet, walletInfo, actor]);
 
   const handleResetOnboarding = async () => {
     try {
       await resetOnboarding.mutateAsync();
       toast.success('Onboarding reset successfully');
-      setTimeout(() => {
-        clear();
+      setTimeout(async () => {
+        await clear();
       }, 1000);
     } catch (error) {
       toast.error('Failed to reset onboarding');
@@ -58,26 +109,50 @@ export default function WalletDashboard() {
 
   const handleSignOutAndReset = async () => {
     try {
-      await signOutAndReset.mutateAsync();
+      // Try to call backend signOutAndReset, but don't fail if it errors
+      // The important part is clearing the local identity
+      try {
+        await signOutAndReset.mutateAsync();
+        console.log('WalletDashboard: Backend signOutAndReset successful');
+      } catch (backendError) {
+        console.warn('WalletDashboard: Backend signOutAndReset failed (continuing with local logout):', backendError);
+        // Continue with local logout even if backend fails
+      }
+      
+      // Clear the identity and reload
+      await clear();
       toast.success('Signed out successfully');
+      
+      // Small delay to ensure state is cleared, then reload
       setTimeout(() => {
-        clear();
-        window.location.reload();
-      }, 500);
+        // Force a hard reload to clear all cached state
+        window.location.href = window.location.origin + window.location.pathname;
+      }, 300);
     } catch (error) {
       console.error('Sign out error:', error);
-      toast.error('Failed to sign out');
+      // Even if there's an error, try to clear and reload
+      try {
+        await clear();
+        window.location.href = window.location.origin + window.location.pathname;
+      } catch (clearError) {
+        console.error('Failed to clear identity:', clearError);
+        toast.error('Failed to sign out completely. Please refresh the page.');
+      }
     }
   };
 
   const formatBTC = (satoshis: bigint) => {
     const btc = Number(satoshis) / 100000000;
+    // Show up to 6 decimal places (minimum 2, maximum 6)
+    const formatted = btc.toFixed(6);
     // Remove trailing zeros but keep at least 2 decimal places
-    return btc.toFixed(8).replace(/\.?0+$/, '');
+    return formatted.replace(/\.?0+$/, '') || '0.00';
   };
 
   const formatDate = (timestamp: bigint) => {
-    const date = new Date(Number(timestamp));
+    if (timestamp === BigInt(0)) return 'Pending';
+    // Timestamp is in seconds, convert to milliseconds for Date constructor
+    const date = new Date(Number(timestamp) * 1000);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -87,8 +162,7 @@ export default function WalletDashboard() {
   };
 
   // Get transaction icon based on type
-  const getTransactionIcon = (tx: typeof walletInfo.transactions[0], walletAddress: string) => {
-    if (!walletInfo) return 'sent';
+  const getTransactionIcon = (tx: Transaction, walletAddress: string) => {
     const isSent = tx.fromAddress === walletAddress;
     const isReceived = tx.toAddress === walletAddress && !isSent;
     // For now, we'll use simple icons - you can replace with actual SVG icons from Figma
@@ -101,57 +175,27 @@ export default function WalletDashboard() {
     }
   };
 
-  if (isLoading || ensureWallet.isPending || (!walletInfo && !ensureWallet.isError)) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-black">
-        <div className="flex flex-col items-center gap-4">
-          <img src="/assets/markettown-logo-w.svg" alt="market.town" className="h-16" />
-          <p className="text-sm text-white/60">
-            {ensureWallet.isPending ? 'Setting up your wallet...' : 'Loading wallet...'}
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // Always show the dashboard - use loading skeletons for balance while data loads
+  // Only use actual walletInfo - don't show fallback data
+  const displayWalletInfo = walletInfo;
 
-  if (ensureWallet.isError) {
-    return (
-      <div className="flex min-h-screen flex-col bg-black text-white">
-        <header className="flex h-16 items-center justify-between px-5">
-          <img src="/assets/mt-mark.svg" alt="market.town" className="h-10 w-10" />
-          <Button variant="ghost" size="sm" onClick={clear}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Sign Out
-          </Button>
-        </header>
-
-        <main className="flex flex-1 items-center justify-center p-4">
-          <div className="text-center">
-            <p className="text-red-400 mb-4">Failed to initialize wallet</p>
-            <Button onClick={() => ensureWallet.mutate()} variant="outline">
-              Retry
-            </Button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  if (!walletInfo) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-black">
-        <div className="flex flex-col items-center gap-4">
-          <img src="/assets/markettown-logo-w.svg" alt="market.town" className="h-16" />
-          <p className="text-sm text-white/60">Loading wallet...</p>
-        </div>
-      </div>
-    );
-  }
+  // Show loading skeleton if we don't have wallet info yet
+  // Keep showing skeleton until wallet is ensured AND wallet info is loaded
+  const isLoadingBalance = !walletInfo && (isLoading || isWalletInfoFetching || isCkbtcFetching || ensureWallet.isPending || !ensureWallet.isSuccess);
 
   return (
     <div className="flex min-h-screen flex-col bg-black text-white">
+      
       {/* Main container matching Figma: pt-8 (32px) px-5 (20px) */}
       <div className="flex flex-col gap-8 pt-8 px-5 pb-5 flex-1 overflow-y-auto">
+        {/* Testnet indicator */}
+        {import.meta.env.VITE_USE_TESTNET === 'true' && (
+          <div className="bg-yellow-500/20 border border-yellow-500/50 rounded px-4 py-2 text-center">
+            <p className="text-yellow-500 text-sm font-medium">
+              ⚠️ TESTNET → Using ckTESTBTC
+            </p>
+          </div>
+        )}
         {/* Figma: Header with logo (40px) on left, balance on right, add funds button (32px) on right */}
         <header className="flex items-center justify-between">
           <button 
@@ -164,12 +208,23 @@ export default function WalletDashboard() {
             {/* Figma: Balance - IBM Plex Mono Bold, 24px, white, tracking 0.96px */}
             <div className="flex items-center gap-1.5">
               <span className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>₿</span>
-              <p 
-                className="font-mono text-2xl font-bold text-white"
-                style={{ letterSpacing: '0.96px' }}
-              >
-                {formatBTC(walletInfo.balance)}
-              </p>
+              {isLoadingBalance ? (
+                <div className="h-8 w-24 bg-white/20 animate-pulse rounded" />
+              ) : displayWalletInfo ? (
+                <p 
+                  className="font-mono text-2xl font-bold text-white"
+                  style={{ letterSpacing: '0.96px' }}
+                >
+                  {formatBTC(displayWalletInfo.balance)}
+                </p>
+              ) : (
+                <p 
+                  className="font-mono text-2xl font-bold text-white"
+                  style={{ letterSpacing: '0.96px' }}
+                >
+                  0
+                </p>
+              )}
             </div>
             {/* Figma: Add funds button - 32px */}
             <button
@@ -183,16 +238,29 @@ export default function WalletDashboard() {
 
         {/* Transactions List - One line per transaction */}
         <div className="flex flex-col gap-6 flex-1">
-          {walletInfo.transactions.length > 0 ? (
+          {isLoadingBalance ? (
+            <div className="flex flex-col gap-4">
+              <div className="h-[1px] w-full bg-white/50" />
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center justify-between py-2 px-5">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-6 bg-white/20 animate-pulse rounded" />
+                    <div className="h-6 w-32 bg-white/20 animate-pulse rounded" />
+                  </div>
+                  <div className="h-6 w-24 bg-white/20 animate-pulse rounded" />
+                </div>
+              ))}
+              <div className="h-[1px] w-full bg-white/50" />
+            </div>
+          ) : displayWalletInfo && displayWalletInfo.transactions.length > 0 ? (
             <>
               {/* Figma: Divider - 1px, rgba(255,255,255,0.5) - constrained to content width */}
               <div className="h-[1px] w-full bg-white/50" />
               
-              {[...walletInfo.transactions]
+              {[...displayWalletInfo.transactions]
                 .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
                 .map((tx) => {
-                const isSent = tx.fromAddress === walletInfo.bitcoinAddress;
-                const txType = getTransactionIcon(tx, walletInfo.bitcoinAddress);
+                  const txType = getTransactionIcon(tx, displayWalletInfo.bitcoinAddress);
                 
                 return (
                   <button
@@ -260,50 +328,106 @@ export default function WalletDashboard() {
       </div>
 
       {/* Send Modal - Full screen */}
-      {showSendModal && walletInfo && (
-        <SendTransaction 
-          wallet={walletInfo} 
+      {showSendModal && displayWalletInfo && (
+        <SendTransaction
+          wallet={displayWalletInfo}
           onSuccess={() => setShowSendModal(false)}
           onClose={() => setShowSendModal(false)}
         />
       )}
 
-      {/* Receive Modal - Full screen */}
-      {showReceiveModal && walletAddress && (
-        <ReceiveBitcoin 
-          address={walletAddress} 
-          onClose={() => setShowReceiveModal(false)} 
-        />
-      )}
-
-      {/* Add Funds Modal (same as Receive) - Full screen */}
-      {showAddFundsModal && walletAddress && (
-        <ReceiveBitcoin 
-          address={walletAddress} 
-          onClose={() => setShowAddFundsModal(false)} 
-        />
-      )}
-
-      {/* Full-screen Menu Modal - Matching home screen spacing */}
-      {menuOpen && (
-        <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-          {/* Main container matching home screen: pt-8 (32px) px-5 (20px) */}
-          <div className="flex flex-col gap-8 pt-8 px-5 pb-5 flex-1 overflow-y-auto">
-            {/* Logo - full logo (mark + type side by side) - left aligned like home screen header, clickable to close */}
-            <button 
-              onClick={() => setMenuOpen(false)}
-              className="flex items-center cursor-pointer"
+      {/* Receive Modal - Full screen - Show modal even if address is loading */}
+      {showReceiveModal && (
+        walletAddress ? (
+          <ReceiveBitcoin 
+            address={walletAddress} 
+            onClose={() => setShowReceiveModal(false)} 
+          />
+        ) : (
+          <div className="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center px-5">
+            {isLoadingAddress ? (
+              <>
+                <p className="text-white text-center text-lg mb-4">Loading Bitcoin address...</p>
+                <p className="text-white/60 text-center text-sm mb-8">Please wait</p>
+              </>
+            ) : walletAddressError ? (
+              <>
+                <p className="text-white text-center text-lg mb-4">Unable to load Bitcoin address</p>
+                <p className="text-white/60 text-center text-sm mb-4">{walletAddressError.message}</p>
+                <p className="text-white/60 text-center text-sm mb-8">Please try again later</p>
+              </>
+            ) : (
+              <>
+                <p className="text-white text-center text-lg mb-4">Unable to load Bitcoin address</p>
+                <p className="text-white/60 text-center text-sm mb-8">Please try again later</p>
+              </>
+            )}
+            <button
+              onClick={() => setShowReceiveModal(false)}
+              className="h-16 border-2 border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center px-8"
             >
-              <div className="relative h-[40px]" style={{ width: '279.844px' }}>
-                {/* Logo mark */}
-                <img src="/assets/mt-mark.svg" alt="market.town" className="h-10 w-10 absolute left-0 top-1/2 -translate-y-1/2" />
-                {/* Logo type - to the right of the mark */}
-                <img src="/assets/mt-type.svg" alt="market.town" className="h-[40px] absolute left-[20.99%] top-0" style={{ width: 'calc(100% - 20.99%)' }} />
-              </div>
+              <span className="font-bold text-base text-white/80 tracking-[0.15px]">Close</span>
             </button>
-            
-            {/* Menu items container - with more spacing between items */}
-            <div className="flex flex-col gap-10 flex-1">
+          </div>
+        )
+      )}
+
+      {/* Add Funds Modal (same as Receive) - Show modal even if address is loading */}
+      {showAddFundsModal && (
+        walletAddress ? (
+          <ReceiveBitcoin 
+            address={walletAddress} 
+            onClose={() => setShowAddFundsModal(false)} 
+          />
+        ) : (
+          <div className="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center px-5">
+            {isLoadingAddress ? (
+              <>
+                <p className="text-white text-center text-lg mb-4">Loading Bitcoin address...</p>
+                <p className="text-white/60 text-center text-sm mb-8">Please wait</p>
+              </>
+            ) : walletAddressError ? (
+              <>
+                <p className="text-white text-center text-lg mb-4">Unable to load Bitcoin address</p>
+                <p className="text-white/60 text-center text-sm mb-4">{walletAddressError.message}</p>
+                <p className="text-white/60 text-center text-sm mb-8">Please try again later</p>
+              </>
+            ) : (
+              <>
+                <p className="text-white text-center text-lg mb-4">Unable to load Bitcoin address</p>
+                <p className="text-white/60 text-center text-sm mb-8">Please try again later</p>
+              </>
+            )}
+            <button
+              onClick={() => setShowAddFundsModal(false)}
+              className="h-16 border-2 border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center px-8"
+            >
+              <span className="font-bold text-base text-white/80 tracking-[0.15px]">Close</span>
+            </button>
+          </div>
+        )
+      )}
+
+             {/* Full-screen Menu Modal - Matching home screen spacing */}
+             {menuOpen && (
+               <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
+                 {/* Main container matching home screen: pt-8 (32px) px-5 (20px) */}
+                 <div className="flex flex-col gap-8 pt-8 px-5 pb-5 flex-1 overflow-y-auto">
+                   {/* Logo - full logo (mark + type side by side) - left aligned like home screen header, clickable to close */}
+                   <button 
+                     onClick={() => setMenuOpen(false)}
+                     className="flex items-center cursor-pointer"
+                   >
+                     <div className="relative h-[40px]" style={{ width: '279.844px' }}>
+                       {/* Logo mark */}
+                       <img src="/assets/mt-mark.svg" alt="market.town" className="h-10 w-10 absolute left-0 top-1/2 -translate-y-1/2" />
+                       {/* Logo type - to the right of the mark */}
+                       <img src="/assets/mt-type.svg" alt="market.town" className="h-[40px] absolute left-[20.99%] top-0" style={{ width: 'calc(100% - 20.99%)' }} />
+                     </div>
+                   </button>
+                   
+                   {/* Menu items container - with more spacing between items */}
+                   <div className="flex flex-col gap-10 flex-1">
               {/* Divider - constrained to content width like home screen */}
               <div className="h-[1px] w-full bg-white/50" />
               
@@ -338,7 +462,32 @@ export default function WalletDashboard() {
               {/* Divider */}
               <div className="h-[1px] w-full bg-white/50" />
               
-              {/* Log out */}
+              {/* Principal info - show above Sign Out */}
+              {currentPrincipal && (
+                <div 
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(currentPrincipal);
+                      toast.success('Principal ID copied to clipboard');
+                    } catch (err) {
+                      console.error('Failed to copy principal ID:', err);
+                      toast.error('Failed to copy principal ID');
+                    }
+                  }}
+                  className="bg-black/90 border border-white/20 rounded p-4 text-xs cursor-pointer hover:bg-black/95 hover:border-white/30 transition-colors active:scale-[0.98]"
+                >
+                  <div className="text-white/60 mb-2 font-bold">Market.Town Principal ID:</div>
+                  <div className="text-white break-all mb-3 font-mono">{currentPrincipal}</div>
+                  <div className="text-white/60 text-[11px] leading-relaxed">
+                    Internet Identity creates a unique principal ID for each app to protect your privacy.
+                  </div>
+                  <div className="text-white/40 text-[10px] mt-2 italic">
+                    Tap to copy
+                  </div>
+                </div>
+              )}
+              
+              {/* Sign Out */}
               <button
                 onClick={() => {
                   setMenuOpen(false);
@@ -346,9 +495,9 @@ export default function WalletDashboard() {
                 }}
                 className="flex gap-4 h-8 items-center opacity-80 hover:opacity-100 transition-opacity"
               >
-                <img src="/assets/logout.svg" alt="Log out" className="size-6" />
+                <img src="/assets/logout.svg" alt="Sign Out" className="size-6" />
                 <div className="flex flex-col font-medium justify-center text-xl text-white tracking-[0.8px]">
-                  <p className="leading-[1.5]">Log out</p>
+                  <p className="leading-[1.5]">Sign Out</p>
                 </div>
               </button>
             </div>

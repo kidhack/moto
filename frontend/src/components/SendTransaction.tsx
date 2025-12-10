@@ -65,7 +65,9 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   // Format wallet balance for display
   const formatBTC = (satoshis: bigint) => {
     const btc = Number(satoshis) / 100000000;
-    return btc.toFixed(8).replace(/\.?0+$/, '');
+    // Show up to 6 decimal places
+    const formatted = btc.toFixed(6);
+    return formatted.replace(/\.?0+$/, '') || '0.00';
   };
 
   const formatSats = (satoshis: bigint) => {
