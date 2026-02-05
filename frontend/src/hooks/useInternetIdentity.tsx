@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AuthClient } from '@dfinity/auth-client';
 import type { Identity } from '@dfinity/agent';
-import { USE_DUMMY_DATA, DUMMY_IDENTITY } from '../data/dummyData';
 
 interface InternetIdentityContextType {
   identity: Identity | null;
@@ -11,6 +10,37 @@ interface InternetIdentityContextType {
   isLoggingIn: boolean;
   login: () => Promise<void>;
   clear: () => Promise<void>;
+}
+
+const STORAGE_KEY_PREFIX = 'ii_display_name_';
+
+function getStoredDisplayName(principalText: string): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY_PREFIX + principalText);
+  } catch {
+    return null;
+  }
+}
+
+function setStoredDisplayName(principalText: string, name: string): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_PREFIX + principalText, name);
+  } catch {
+    // ignore
+  }
+}
+
+function clearStoredDisplayNames(): void {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(STORAGE_KEY_PREFIX)) keys.push(k);
+    }
+    keys.forEach((k) => localStorage.removeItem(k));
+  } catch {
+    // ignore
+  }
 }
 
 const InternetIdentityContext = createContext<InternetIdentityContextType | undefined>(undefined);
@@ -23,14 +53,6 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
   const [authClient, setAuthClient] = useState<AuthClient | null>(null);
 
   useEffect(() => {
-    // If using dummy data, skip Internet Identity initialization
-    if (USE_DUMMY_DATA) {
-      console.log('useInternetIdentity: Using dummy data mode - skipping Internet Identity initialization');
-      setIsInitializing(false);
-      // Don't set identity yet - user will "login" via the login button
-      return;
-    }
-
     // Initialize auth client
     AuthClient.create()
       .then(async (client) => {
@@ -60,7 +82,8 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
           const currentIdentity = client.getIdentity();
           const principalText = currentIdentity.getPrincipal().toText();
           setIdentity(currentIdentity);
-          setDisplayName(null); // II may add principal_name in session later
+          const stored = getStoredDisplayName(principalText);
+          setDisplayName(stored);
           console.log('User already authenticated, identity set:', principalText);
           console.log('⚠️ VERIFY: Make sure this principal matches the one with your ckBTC balance!');
           console.log('   Current principal:', principalText);
@@ -82,8 +105,11 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
           const isAuthenticated = await authClient.isAuthenticated();
           if (isAuthenticated) {
             const currentIdentity = authClient.getIdentity();
+            const principalText = currentIdentity.getPrincipal().toText();
             setIdentity(currentIdentity);
-            console.log('Authentication detected on focus, identity set:', currentIdentity.getPrincipal().toText());
+            const stored = getStoredDisplayName(principalText);
+            if (stored) setDisplayName(stored);
+            console.log('Authentication detected on focus, identity set:', principalText);
           }
         } catch (error) {
           console.error('Error checking authentication on focus:', error);
@@ -109,8 +135,11 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
         const isAuthenticated = await authClient.isAuthenticated();
         if (isAuthenticated) {
           const currentIdentity = authClient.getIdentity();
+          const principalText = currentIdentity.getPrincipal().toText();
           setIdentity(currentIdentity);
-          console.log('Authentication detected on periodic check, identity set:', currentIdentity.getPrincipal().toText());
+          const stored = getStoredDisplayName(principalText);
+          if (stored) setDisplayName(stored);
+          console.log('Authentication detected on periodic check, identity set:', principalText);
         }
       } catch (error) {
         console.error('Error checking authentication periodically:', error);
@@ -129,18 +158,6 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
   }, [authClient, identity]);
 
   const login = async (): Promise<void> => {
-    // If using dummy data, simulate login without Internet Identity
-    if (USE_DUMMY_DATA) {
-      console.log('useInternetIdentity: Simulating login with dummy data');
-      setIsLoggingIn(true);
-      // Simulate a brief login delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setIdentity(DUMMY_IDENTITY);
-      setIsLoggingIn(false);
-      console.log('useInternetIdentity: Dummy login successful');
-      return;
-    }
-
     if (!authClient) {
       console.error('Auth client not initialized');
       setIsLoggingIn(false);
@@ -193,23 +210,21 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
             onSuccess: async (message) => {
               console.log('Login successful');
               try {
-                const msg = message as { principal_name?: string; display_name?: string } | undefined;
-                if (msg && typeof msg.principal_name === 'string' && msg.principal_name) {
-                  setDisplayName(msg.principal_name);
-                } else if (msg && typeof msg.display_name === 'string' && msg.display_name) {
-                  setDisplayName(msg.display_name);
-                } else {
-                  setDisplayName(null);
-                }
-              } catch (_) {
-                setDisplayName(null);
-              }
-              try {
                 const isAuthenticated = await authClient.isAuthenticated();
                 if (isAuthenticated) {
                   const newIdentity = authClient.getIdentity();
+                  const principalText = newIdentity.getPrincipal().toText();
                   setIdentity(newIdentity);
-                  console.log('Identity set after login:', newIdentity.getPrincipal().toText());
+                  const msg = message as { principal_name?: string; display_name?: string } | undefined;
+                  let name: string | null = null;
+                  if (msg && typeof msg.principal_name === 'string' && msg.principal_name) {
+                    name = msg.principal_name;
+                  } else if (msg && typeof msg.display_name === 'string' && msg.display_name) {
+                    name = msg.display_name;
+                  }
+                  setDisplayName(name);
+                  if (name) setStoredDisplayName(principalText, name);
+                  console.log('Identity set after login:', principalText, name ? `display name: ${name}` : '');
                 } else {
                   console.warn('Login callback succeeded but user is not authenticated');
                 }
@@ -253,6 +268,7 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
       // Clear identity and display name
       setIdentity(null);
       setDisplayName(null);
+      clearStoredDisplayNames();
       // Clear any cached authentication data
       // The AuthClient stores data in localStorage, logout() should handle it, but let's be thorough
       console.log('useInternetIdentity: Identity cleared');

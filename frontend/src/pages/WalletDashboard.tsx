@@ -64,7 +64,6 @@ export default function WalletDashboard() {
   const resetOnboarding = useResetOnboarding();
   const signOutAndReset = useSignOutAndReset();
   const [showResetDialog, setShowResetDialog] = useState(false);
-  const [showSignOutDialog, setShowSignOutDialog] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [showAddFundsModal, setShowAddFundsModal] = useState(false);
@@ -541,18 +540,6 @@ export default function WalletDashboard() {
                       ? 'You can set a username in Internet Identity (id.ai). Your principal is unique per app.'
                       : 'Internet Identity can use usernames instead of ID numbers. Your principal is unique per app.'}
                   </div>
-                  <div className="bg-amber-950/50 border border-amber-600/50 text-amber-200 text-[11px] leading-relaxed mt-3 p-3 rounded">
-                    <p className="font-semibold text-amber-100 mb-1">⚠️ Save this principal before changing Internet Identity</p>
-                    <p className="mb-2">
-                      Changing your Internet Identity (e.g. upgrading to a username, adding devices, or switching accounts) can give you a <strong>different principal</strong> in this app. Your balance here is tied to <strong>this</strong> principal only. If you change identity and cannot sign in with the old one again, you will <strong>lose access to that balance</strong> from this app—even though the funds still exist on the old principal.
-                    </p>
-                    <p>
-                      <strong>Recommendation:</strong> Tap below to copy this principal and store it somewhere safe <em>before</em> making any change in Internet Identity. If you ever lose access, recovering the balance would require signing in again with the same identity that had it.
-                    </p>
-                  </div>
-                  <div className="text-white/40 text-[10px] mt-2 italic">
-                    Tap to copy principal
-                  </div>
                 </div>
               )}
               
@@ -560,13 +547,14 @@ export default function WalletDashboard() {
               <button
                 onClick={() => {
                   setMenuOpen(false);
-                  setShowSignOutDialog(true);
+                  handleSignOutAndReset();
                 }}
                 className="flex gap-4 h-8 items-center opacity-80 hover:opacity-100 transition-opacity"
+                disabled={signOutAndReset.isPending}
               >
                 <img src="/assets/logout.svg" alt="Sign Out" className="size-6" />
                 <div className="flex flex-col font-medium justify-center text-xl text-white tracking-[0.8px]">
-                  <p className="leading-[1.5]">Sign Out</p>
+                  <p className="leading-[1.5]">{signOutAndReset.isPending ? 'Signing Out...' : 'Sign Out'}</p>
                 </div>
               </button>
             </div>
@@ -620,22 +608,6 @@ export default function WalletDashboard() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={showSignOutDialog} onOpenChange={setShowSignOutDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Sign Out & Reset?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will sign you out and clear all session data. You'll need to authenticate again to access your wallet. This action will return you to the splash screen as if you were a new user.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleSignOutAndReset} disabled={signOutAndReset.isPending}>
-              {signOutAndReset.isPending ? 'Signing Out...' : 'Sign Out & Reset'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

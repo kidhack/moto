@@ -31,6 +31,7 @@ export interface UserWallet {
 export interface BitcoinWalletActor {
   ensureWalletExists: () => Promise<BitcoinAddress>;
   getBalance: () => Promise<bigint>;
+  syncBalanceFromLedger: (newBalance: bigint) => Promise<void>;
   getTransactionHistory: () => Promise<Transaction[]>;
   sendTransaction: (toAddress: BitcoinAddress, amount: bigint) => Promise<TransactionId>;
   getBitcoinAddress: () => Promise<BitcoinAddress>;

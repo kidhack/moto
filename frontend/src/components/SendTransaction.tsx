@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSendTransaction } from '../hooks/useQueries';
+import { useRetrieveBtc } from '../hooks/useQueries';
 import { useQRScanner } from '../qr-code/useQRScanner';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import { useBTCPrice } from '../hooks/useQueries';
@@ -46,8 +46,11 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   const [amount, setAmount] = useState('');
   const [amountCurrency, setAmountCurrency] = useState<CurrencyMode>('SATS');
   const pasteInputRef = useRef<HTMLInputElement>(null);
+
+  const ESTIMATED_FEE = BigInt(1000); // 0.00001 BTC fee estimate
   
-  const sendTransaction = useSendTransaction();
+  const retrieveBtc = useRetrieveBtc();
+  const isWithdrawPending = retrieveBtc.isPending;
   const { preferredCurrency } = usePreferredCurrency();
   const { data: btcPriceData } = useBTCPrice();
   
@@ -57,32 +60,6 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
 
   // Use live BTC price, fallback to default if not loaded yet
   const BTC_PRICE_USD = btcPriceData?.usd || 101799;
-
-  // Format wallet balance for display
-  const formatBTC = (satoshis: bigint) => {
-    const btc = Number(satoshis) / 100000000;
-    // Show up to 6 decimal places
-    const formatted = btc.toFixed(6);
-    return formatted.replace(/\.?0+$/, '') || '0.00';
-  };
-
-  const formatSats = (satoshis: bigint) => {
-    return satoshis.toString();
-  };
-
-  // Get wallet balance in current currency mode
-  const getWalletBalance = (currency: CurrencyMode): string => {
-    if (currency === 'BTC') {
-      return formatBTC(wallet.balance);
-    } else if (currency === 'SATS') {
-      return formatSats(wallet.balance);
-    } else {
-      // Fiat currency
-      const btc = Number(wallet.balance) / 100000000;
-      const fiat = (btc * BTC_PRICE_USD).toFixed(2);
-      return fiat.replace(/\.?0+$/, '');
-    }
-  };
 
   // Handle QR code scan result
   useEffect(() => {
@@ -326,12 +303,16 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     });
   };
 
-  // Handle max button
+  // Handle max button (balance minus fee so send + fee stays within balance)
   const handleMaxAmount = () => {
-    const maxAmount = getWalletBalance(amountCurrency);
-    const cleanAmount = maxAmount.replace(/,/g, '');
-    setAmount(cleanAmount);
-    // Automatically proceed to confirmation screen
+    const maxSendableSatoshis = wallet.balance - ESTIMATED_FEE;
+    if (maxSendableSatoshis <= 0n) {
+      setAmount('0');
+      setStep('confirm');
+      return;
+    }
+    const maxInCurrency = formatAmountInCurrency(maxSendableSatoshis, amountCurrency);
+    setAmount(maxInCurrency.replace(/,/g, ''));
     setStep('confirm');
   };
 
@@ -344,36 +325,41 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     setStep('confirm');
   };
 
+  // Parse current amount input to satoshis (for remaining balance while typing)
+  const getCurrentAmountSatoshis = (): bigint => {
+    const cleanAmount = (amount || '0').replace(/,/g, '');
+    if (!cleanAmount || cleanAmount === '0') return BigInt(0);
+    if (amountCurrency === 'BTC') {
+      return BigInt(Math.floor(parseFloat(cleanAmount) * 100000000));
+    }
+    if (amountCurrency === 'SATS') {
+      return BigInt(parseInt(cleanAmount, 10) || 0);
+    }
+    const btc = parseFloat(cleanAmount) / BTC_PRICE_USD;
+    return BigInt(Math.floor(btc * 100000000));
+  };
+
+  // Remaining balance after this send (amount + fee); can be negative
+  const getRemainingBalanceSatoshis = (): bigint => {
+    const amountSatoshis = getCurrentAmountSatoshis();
+    return wallet.balance - amountSatoshis - ESTIMATED_FEE;
+  };
+
   // Calculate transaction details
   const getTransactionDetails = () => {
-    const cleanAmount = amount.replace(/,/g, '');
-    let amountSatoshis: bigint;
-    
-    if (amountCurrency === 'BTC') {
-      amountSatoshis = BigInt(Math.floor(parseFloat(cleanAmount) * 100000000));
-    } else if (amountCurrency === 'SATS') {
-      amountSatoshis = BigInt(parseInt(cleanAmount));
-    } else {
-      // Fiat to BTC to SATS
-      const btc = parseFloat(cleanAmount) / BTC_PRICE_USD;
-      amountSatoshis = BigInt(Math.floor(btc * 100000000));
-    }
-
-    // Estimate fee (simplified - in production this would be calculated properly)
-    const estimatedFee = BigInt(1000); // 0.00001 BTC fee estimate
-    
-    const totalAmount = amountSatoshis + estimatedFee;
+    const amountSatoshis = getCurrentAmountSatoshis();
+    const totalAmount = amountSatoshis + ESTIMATED_FEE;
     const recipientAmount = amountSatoshis;
 
     return {
       amountSatoshis,
-      estimatedFee,
+      estimatedFee: ESTIMATED_FEE,
       totalAmount,
       recipientAmount,
     };
   };
 
-  // Handle send confirmation
+  // Handle send confirmation (real ckBTC → BTC withdrawal or dummy send)
   const handleConfirm = async () => {
     const { amountSatoshis } = getTransactionDetails();
 
@@ -383,16 +369,28 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     }
 
     try {
-      await sendTransaction.mutateAsync({
+      await retrieveBtc.mutateAsync({
         toAddress,
         amount: amountSatoshis,
       });
-      toast.success('Transaction sent successfully!');
+      toast.success('Withdrawal submitted. Bitcoin will be sent to the address once the network processes it.');
       if (onSuccess) {
         setTimeout(() => onSuccess(), 1000);
       }
-    } catch (error) {
-      toast.error('Failed to send transaction');
+    } catch (error: unknown) {
+      let message =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'object' && error !== null && 'message' in error
+            ? String((error as { message: unknown }).message)
+            : 'Failed to send transaction';
+      if (message.includes('Insufficient balance')) {
+        message = 'Insufficient balance';
+      } else if (message.length > 80) {
+        const match = message.match(/trap` with message: '([^']+)'/);
+        message = match ? match[1] : message.slice(0, 80) + '…';
+      }
+      toast.error(message);
     }
   };
 
@@ -426,6 +424,13 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
 
   const displayAmount = formatDisplayAmount(amount || '0');
   const transactionDetails = step === 'confirm' ? getTransactionDetails() : null;
+  const remainingSatoshis = getRemainingBalanceSatoshis();
+  const remainingFormatted =
+    formatAmountInCurrency(remainingSatoshis >= 0n ? remainingSatoshis : -remainingSatoshis, amountCurrency);
+  const isInsufficient = remainingSatoshis < 0n;
+  const maxSendableSatoshis = wallet.balance - ESTIMATED_FEE;
+  const maxSendableFormatted =
+    maxSendableSatoshis > 0n ? formatAmountInCurrency(maxSendableSatoshis, amountCurrency) : '0';
 
   // SCAN STEP
   if (step === 'scan') {
@@ -611,22 +616,33 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                   {getCurrencyLabel()}
                 </p>
               </div>
-              
-              {/* Max button */}
-              <button
-                onClick={handleMaxAmount}
-                className="h-8 px-4 bg-white/10 hover:bg-white/15 transition-colors flex items-center justify-center"
+
+              <div className="h-6" />
+
+              {/* Remaining balance - updates as user types */}
+              <p
+                className={`font-normal text-sm text-center ${isInsufficient ? 'text-red-400' : 'text-white/60'}`}
+                style={{ letterSpacing: '0.15px' }}
               >
-                <span className="font-bold text-sm text-white/80 tracking-[0.15px]">
-                  max {formatDisplayAmount(getWalletBalance(amountCurrency))} {getCurrencyLabel()}
-                </span>
-              </button>
+                {`Remaining balance: ${isInsufficient ? '-' : ''}${formatDisplayAmount(remainingFormatted)} ${getCurrencyLabel()}`}
+              </p>
             </div>
 
-            {/* Bottom section: Keyboard and Next button */}
+            {/* Bottom section: Max + Keyboard, then Next button */}
             <div className="flex flex-col gap-8 shrink-0 pb-5 px-5">
-              {/* Numeric Keypad */}
-              <div className="flex flex-col gap-3 py-5">
+              <div className="flex flex-col gap-3">
+                {/* Max button - full width above keyboard */}
+                <button
+                  onClick={handleMaxAmount}
+                  className="w-full h-12 bg-white/10 hover:bg-white/15 transition-colors flex items-center justify-center"
+                >
+                  <span className="font-bold text-sm text-white/80 tracking-[0.15px]">
+                    max {formatDisplayAmount(maxSendableFormatted)} {getCurrencyLabel()}
+                  </span>
+                </button>
+
+                {/* Numeric Keypad */}
+                <div className="flex flex-col gap-3">
                 {/* Row 1: 1, 2, 3 */}
                 <div className="flex gap-2">
                   {[1, 2, 3].map((num) => (
@@ -687,11 +703,12 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                   <div className="flex-1" />
                 </div>
               </div>
+              </div>
 
               {/* Next button */}
               <button
                 onClick={handleNext}
-                disabled={!amount || amount === '0'}
+                disabled={!amount || amount === '0' || isInsufficient}
                 className="h-16 w-full border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="font-bold text-base text-white/80 tracking-[0.15px]">Next</span>
@@ -707,35 +724,43 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   return (
     <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
       <div className="flex flex-col pt-8 flex-1 min-h-0">
-        {/* Header */}
+        {/* Header - hide close and cycle when confirming */}
         <header className="flex items-center justify-between h-10 mb-8 shrink-0 px-5">
-          <button
-            onClick={() => {
-              if (onClose) {
-                onClose();
-              }
-            }}
-            className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
-          >
-            <img 
-              src="/assets/close.png" 
-              alt="Close" 
-              className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
-            />
-          </button>
+          {isWithdrawPending ? (
+            <div className="h-8 w-8" />
+          ) : (
+            <button
+              onClick={() => {
+                if (onClose) {
+                  onClose();
+                }
+              }}
+              className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
+            >
+              <img 
+                src="/assets/close.png" 
+                alt="Close" 
+                className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
+              />
+            </button>
+          )}
           <p className="font-medium text-xl text-white tracking-[-0.22px]">
             Confirm Send
           </p>
-          <button
-            onClick={cycleCurrency}
-            className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity hover:opacity-100"
-          >
-            <img 
-              src="/assets/cyclecurrency.svg" 
-              alt="Cycle Currency" 
-              className="h-8 w-8" 
-            />
-          </button>
+          {isWithdrawPending ? (
+            <div className="h-8 w-8" />
+          ) : (
+            <button
+              onClick={cycleCurrency}
+              className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity hover:opacity-100"
+            >
+              <img 
+                src="/assets/cyclecurrency.svg" 
+                alt="Cycle Currency" 
+                className="h-8 w-8" 
+              />
+            </button>
+          )}
         </header>
 
         {/* Content area */}
@@ -805,6 +830,18 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                   </div>
                 </div>
 
+                {/* Balance after send */}
+                <div className="flex gap-2.5 items-center w-full">
+                  <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
+                    Balance after send
+                  </p>
+                  <div className="flex-1 flex justify-end">
+                    <p className={`font-mono text-base font-medium text-right tracking-[0.32px] ${isInsufficient ? 'text-red-400' : 'text-white'}`}>
+                      {isInsufficient ? '-' : ''}{formatDisplayAmount(remainingFormatted)} {getConfirmationCurrencyLabel()}
+                    </p>
+                  </div>
+                </div>
+
                 {/* Estimated time */}
                 <div className="flex gap-2.5 items-center w-full">
                   <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
@@ -812,35 +849,36 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                   </p>
                   <div className="flex-1 flex justify-end">
                     <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
-                      &lt; 5 seconds
+                      ~30 min (Bitcoin network)
                     </p>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Action buttons - back arrow and confirm side by side */}
+            {/* Action buttons - back arrow and confirm; hide back while confirming */}
             <div className="flex gap-4 items-start w-full">
-              {/* Back arrow button */}
-              <button
-                onClick={() => setStep('amount')}
-                className="h-16 w-20 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors shrink-0"
-              >
-                <img 
-                  src="/assets/back.svg" 
-                  alt="Back" 
-                  className="h-8 w-8" 
-                />
-              </button>
+              {!isWithdrawPending && (
+                <button
+                  onClick={() => setStep('amount')}
+                  className="h-16 w-20 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors shrink-0"
+                >
+                  <img 
+                    src="/assets/back.svg" 
+                    alt="Back" 
+                    className="h-8 w-8" 
+                  />
+                </button>
+              )}
 
-              {/* Confirm button */}
+              {/* Confirm button - full width when confirming */}
               <button
                 onClick={handleConfirm}
-                disabled={sendTransaction.isPending}
-                className="flex-1 h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isWithdrawPending || isInsufficient}
+                className={`h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isWithdrawPending ? 'w-full' : 'flex-1'}`}
               >
                 <span className="font-bold text-base text-white/80 tracking-[0.15px]">
-                  {sendTransaction.isPending ? 'Sending...' : 'Confirm'}
+                  {isWithdrawPending ? 'Sending...' : 'Confirm'}
                 </span>
               </button>
             </div>

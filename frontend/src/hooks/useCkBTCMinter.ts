@@ -18,6 +18,8 @@ const defaultCanisterId = USE_TESTNET
   ? CKBTC_MINTER_CANISTER_ID_TESTNET 
   : CKBTC_MINTER_CANISTER_ID_MAINNET;
 const CKBTC_MINTER_CANISTER_ID = envCanisterId || defaultCanisterId;
+export { CKBTC_MINTER_CANISTER_ID };
+export { createCkBTCMinterIDL };
 
 // Log warning if using environment variable with potentially incorrect ID
 if (envCanisterId) {
@@ -45,14 +47,27 @@ const isLocal = envNetwork ? envNetwork === 'local' : isLocalhost;
 const HOST = 'https://ic0.app';
 
 // ckBTC Minter interface
-// The method returns a text (string) directly, not a record
 // For optional values in Candid IDL.Opt(), the agent requires the field to be present
 // - For None: pass [] (empty array)
 // - For Some(value): pass [value] (wrapped in array)
-interface CkBTCMinter {
+export interface CkBTCMinter {
   get_btc_address: (arg: { owner: [] | [Principal]; subaccount: [] | [Uint8Array] }) => Promise<string>;
   update_balance: (arg: { owner: [] | [Principal]; subaccount: [] | [Uint8Array] }) => Promise<{ Ok?: unknown[]; Err?: unknown }>;
+  get_minter_info: () => Promise<{ retrieve_btc_min_amount: bigint; min_confirmations: number; kyt_fee: bigint; deposit_btc_min_amount?: [] | [bigint] }>;
+  retrieve_btc_with_approval: (arg: { address: string; amount: bigint; from_subaccount: [] | [Uint8Array] }) => Promise<
+    | { Ok: { block_index: bigint } }
+    | { Err: RetrieveBtcWithApprovalError }
+  >;
 }
+
+export type RetrieveBtcWithApprovalError =
+  | { MalformedAddress: string }
+  | { AlreadyProcessing: null }
+  | { AmountTooLow: bigint }
+  | { InsufficientFunds: { balance: bigint } }
+  | { InsufficientAllowance: { allowance: bigint } }
+  | { TemporarilyUnavailable: string }
+  | { GenericError: { error_message: string; error_code: bigint } };
 
 // Create IDL factory for ckBTC minter
 // get_btc_address: UPDATE, returns Text
@@ -96,6 +111,26 @@ const createCkBTCMinterIDL = () => {
       Ok: IDL.Vec(UtxoStatus),
       Err: UpdateBalanceError,
     });
+    const RetrieveBtcOk = IDL.Record({ block_index: IDL.Nat64 });
+    const RetrieveBtcWithApprovalError = IDL.Variant({
+      MalformedAddress: IDL.Text,
+      AlreadyProcessing: IDL.Null,
+      AmountTooLow: IDL.Nat64,
+      InsufficientFunds: IDL.Record({ balance: IDL.Nat64 }),
+      InsufficientAllowance: IDL.Record({ allowance: IDL.Nat64 }),
+      TemporarilyUnavailable: IDL.Text,
+      GenericError: IDL.Record({ error_message: IDL.Text, error_code: IDL.Nat64 }),
+    });
+    const RetrieveBtcWithApprovalResult = IDL.Variant({
+      Ok: RetrieveBtcOk,
+      Err: RetrieveBtcWithApprovalError,
+    });
+    const MinterInfo = IDL.Record({
+      min_confirmations: IDL.Nat32,
+      retrieve_btc_min_amount: IDL.Nat64,
+      kyt_fee: IDL.Nat64,
+      deposit_btc_min_amount: IDL.Opt(IDL.Nat64),
+    });
     return IDL.Service({
       get_btc_address: IDL.Func(
         [IDL.Record({
@@ -111,6 +146,16 @@ const createCkBTCMinterIDL = () => {
           subaccount: IDL.Opt(IDL.Vec(IDL.Nat8)),
         })],
         [UpdateBalanceResult],
+        ['update']
+      ),
+      get_minter_info: IDL.Func([], [MinterInfo], ['query']),
+      retrieve_btc_with_approval: IDL.Func(
+        [IDL.Record({
+          address: IDL.Text,
+          amount: IDL.Nat64,
+          from_subaccount: IDL.Opt(IDL.Vec(IDL.Nat8)),
+        })],
+        [RetrieveBtcWithApprovalResult],
         ['update']
       ),
     });

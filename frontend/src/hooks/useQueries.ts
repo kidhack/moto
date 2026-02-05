@@ -1,13 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { Principal } from '@dfinity/principal';
+import { HttpAgent, Actor } from '@dfinity/agent';
+import { IcrcLedgerCanister } from '@dfinity/ledger-icrc';
 import { useActor } from './useActor';
-import { useCkBTCMinter } from './useCkBTCMinter';
-import { useCkBTCLedger } from './useCkBTCLedger';
+import { useCkBTCMinter, createCkBTCMinterIDL, CKBTC_MINTER_CANISTER_ID, type CkBTCMinter } from './useCkBTCMinter';
+import { useCkBTCLedger, CKBTC_LEDGER_CANISTER_ID } from './useCkBTCLedger';
 import { useCkBTCTransactions } from './useCkBTCTransactions';
 import { useInternetIdentity } from './useInternetIdentity';
 import type { UserWallet, BitcoinAddress, TransactionId, Transaction } from '../backend';
-import { DUMMY_WALLET, USE_DUMMY_DATA } from '../data/dummyData';
 import { isValidBitcoinAddress } from '../utils/addressValidation';
 import { checkPendingDeposits } from '../utils/bitcoinTestnetChecker';
 
@@ -30,7 +31,7 @@ export function useWalletInfo() {
 
   // Enable query when we have an actor and it's ready
   // Don't require ensureWallet.isSuccess - we'll refetch when it succeeds
-  const isEnabled = USE_DUMMY_DATA || (!!actor && !isFetching);
+  const isEnabled = !!actor && !isFetching;
   
   // Refetch wallet info when ensureWallet succeeds
   useEffect(() => {
@@ -60,7 +61,6 @@ export function useWalletInfo() {
   useEffect(() => {
     console.log('useWalletInfo: Query state', {
       enabled: isEnabled,
-      USE_DUMMY_DATA,
       hasActor: !!actor,
       isFetching,
       ensureWalletSuccess: ensureWallet.isSuccess,
@@ -89,12 +89,6 @@ export function useWalletInfo() {
   return useQuery<UserWallet | null>({
     queryKey: ['walletInfo', ckbtcBalance?.toString(), ckbtcAddress, ckbtcTransactions.length],
     queryFn: async () => {
-      // Use dummy data if enabled
-      if (USE_DUMMY_DATA) {
-        console.log('useWalletInfo: Using dummy data');
-        return DUMMY_WALLET;
-      }
-
       if (!actor) {
         console.log('useWalletInfo: No actor available');
         return null;
@@ -145,6 +139,12 @@ export function useWalletInfo() {
           }
           console.log('useWalletInfo: ========================================');
           finalBalance = ckbtcBalance;
+          // Sync canister balance with ledger so sendTransaction (which checks canister balance) succeeds
+          try {
+            await actor.syncBalanceFromLedger(ckbtcBalance);
+          } catch (syncErr) {
+            console.warn('useWalletInfo: syncBalanceFromLedger failed (non-fatal):', syncErr);
+          }
         } else if (wallet?.balance) {
           console.log('useWalletInfo: Using canister balance (ledger not available):', wallet.balance.toString());
           finalBalance = wallet.balance;
@@ -282,12 +282,10 @@ export function useWalletInfo() {
     // 2. We have an actor AND actor is ready
     // We'll refetch when ensureWallet succeeds via useEffect
     enabled: isEnabled,
-    retry: USE_DUMMY_DATA ? 0 : 2, // No retries for dummy data
+    retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    // Refetch when ensureWallet succeeds or balance changes to get fresh wallet data
     refetchOnMount: true,
-    // Poll for updates every 10 seconds to catch new transactions
-    refetchInterval: USE_DUMMY_DATA ? false : 10000, // Refetch every 10 seconds
+    refetchInterval: 10000,
     staleTime: 0, // Always consider data stale to ensure frequent updates
   });
 }
@@ -300,12 +298,6 @@ export function useWalletAddress() {
   return useQuery<BitcoinAddress>({
     queryKey: ['walletAddress', ckbtcAddress],
     queryFn: async () => {
-      // Use dummy data if enabled
-      if (USE_DUMMY_DATA) {
-        console.log('useWalletAddress: Using dummy data');
-        return DUMMY_WALLET.bitcoinAddress;
-      }
-
       // Wait for ckBTC minter to finish loading
       if (isCkbtcFetching) {
         throw new Error('Waiting for ckBTC minter to load address...');
@@ -330,8 +322,8 @@ export function useWalletAddress() {
       // If we get here, ckBTC minter hasn't loaded yet or returned null
       throw new Error('Failed to get wallet address: ckBTC minter did not return an address');
     },
-    enabled: USE_DUMMY_DATA || !isCkbtcFetching, // Only run when ckBTC minter has finished loading
-    retry: USE_DUMMY_DATA ? 0 : 2,
+    enabled: !isCkbtcFetching,
+    retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
@@ -346,12 +338,6 @@ export function useOnboardingStatus() {
   return useQuery<boolean>({
     queryKey: ['onboardingStatus'],
     queryFn: async () => {
-      // Use dummy data if enabled
-      if (USE_DUMMY_DATA) {
-        console.log('useOnboardingStatus: Using dummy data');
-        return DUMMY_WALLET.onboardingComplete;
-      }
-
       if (!actor) return false;
       try {
         return await actor.isOnboardingComplete();
@@ -362,12 +348,8 @@ export function useOnboardingStatus() {
         return false;
       }
     },
-    // Check onboarding status when:
-    // 1. Using dummy data, OR
-    // 2. We have an actor AND ckBTC has finished loading (whether we got an address or not), OR
-    // 3. We have an actor AND ensureWallet has completed (success or error)
-    enabled: Boolean(USE_DUMMY_DATA || (!!actor && !isFetching && (!isCkbtcFetching || !!ckbtcAddress || ensureWallet.isSuccess || ensureWallet.isError))),
-    retry: USE_DUMMY_DATA ? 0 : 2,
+    enabled: Boolean(!!actor && !isFetching && (!isCkbtcFetching || !!ckbtcAddress || ensureWallet.isSuccess || ensureWallet.isError)),
+    retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
     staleTime: 0, // Always refetch to ensure we have the latest status
   });
@@ -389,14 +371,7 @@ export function useEnsureWallet() {
         hasActor: !!actor,
       });
       const startTime = Date.now();
-      
-      // Use dummy data if enabled
-      if (USE_DUMMY_DATA) {
-        console.log('useEnsureWallet: Using dummy data');
-        await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
-        return DUMMY_WALLET.bitcoinAddress;
-      }
-      
+
       try {
         // Always ensure wallet exists in the custom canister (even if we have ckBTC address)
         // This is needed to create the wallet record so we can fetch balance and transactions
@@ -537,6 +512,63 @@ export function useSendTransaction() {
         console.error('Error sending transaction:', error);
         throw error;
       }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['walletInfo'] });
+    },
+    retry: 1,
+  });
+}
+
+/** Real ckBTC → BTC withdrawal: ICRC-2 approve then minter retrieve_btc_with_approval. */
+export function useRetrieveBtc() {
+  const { identity } = useInternetIdentity();
+  const queryClient = useQueryClient();
+
+  return useMutation<{ block_index: bigint }, Error, { toAddress: string; amount: bigint }>({
+    mutationFn: async ({ toAddress, amount }) => {
+      if (!identity) throw new Error('Not authenticated');
+      const host = 'https://ic0.app';
+      const agent = new HttpAgent({ identity: identity as any, host });
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (isLocal) {
+        try {
+          await agent.fetchRootKey();
+        } catch {
+          // ignore
+        }
+      }
+      const ledger = IcrcLedgerCanister.create({
+        agent,
+        canisterId: Principal.fromText(CKBTC_LEDGER_CANISTER_ID),
+      });
+      const minterPrincipal = Principal.fromText(CKBTC_MINTER_CANISTER_ID);
+      await ledger.approve({
+        amount,
+        spender: { owner: minterPrincipal, subaccount: [] },
+      });
+      const minterIDLFactory = createCkBTCMinterIDL();
+      const minterActor = Actor.createActor(minterIDLFactory, {
+        agent,
+        canisterId: CKBTC_MINTER_CANISTER_ID,
+      }) as unknown as CkBTCMinter;
+      const result = await minterActor.retrieve_btc_with_approval({
+        address: toAddress,
+        amount,
+        from_subaccount: [],
+      });
+      if ('Err' in result) {
+        const err = result.Err as import('./useCkBTCMinter').RetrieveBtcWithApprovalError;
+        if ('MalformedAddress' in err) throw new Error(`Invalid address: ${err.MalformedAddress}`);
+        if ('AlreadyProcessing' in err) throw new Error('A withdrawal is already in progress. Please wait.');
+        if ('AmountTooLow' in err) throw new Error(`Amount below minimum: ${err.AmountTooLow} satoshis`);
+        if ('InsufficientFunds' in err) throw new Error(`Insufficient balance. Available: ${err.InsufficientFunds.balance} satoshis`);
+        if ('InsufficientAllowance' in err) throw new Error('Approval failed or expired. Please try again.');
+        if ('TemporarilyUnavailable' in err) throw new Error(err.TemporarilyUnavailable);
+        if ('GenericError' in err) throw new Error(err.GenericError.error_message);
+        throw new Error('Withdrawal failed');
+      }
+      return { block_index: result.Ok.block_index };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['walletInfo'] });

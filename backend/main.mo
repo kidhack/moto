@@ -75,6 +75,27 @@ persistent actor BitcoinWallet {
     };
   };
 
+  // Sync the canister's stored balance with the ckBTC ledger balance so sendTransaction can succeed.
+  // The UI displays ledger balance but sendTransaction checks this canister's balance; call this when ledger balance is known.
+  public shared ({ caller }) func syncBalanceFromLedger(newBalance : Int) : async () {
+    switch (principalMap.get(userWallets, caller)) {
+      case (?wallet) {
+        if (newBalance < 0) { return };
+        let updatedWallet : UserWallet = {
+          principal = wallet.principal;
+          bitcoinAddress = wallet.bitcoinAddress;
+          transactions = wallet.transactions;
+          balance = newBalance;
+          onboardingComplete = wallet.onboardingComplete;
+          createdAt = wallet.createdAt;
+          lastUpdated = Time.now();
+        };
+        userWallets := principalMap.put(userWallets, caller, updatedWallet);
+      };
+      case null {};
+    };
+  };
+
   public shared ({ caller }) func getTransactionHistory() : async [Transaction] {
     switch (principalMap.get(userWallets, caller)) {
       case (?wallet) {

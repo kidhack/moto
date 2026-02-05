@@ -20,6 +20,7 @@ const defaultLedgerCanisterId = USE_TESTNET
   ? CKBTC_LEDGER_CANISTER_ID_TESTNET 
   : CKBTC_LEDGER_CANISTER_ID_MAINNET;
 const CKBTC_LEDGER_CANISTER_ID = envLedgerCanisterId || defaultLedgerCanisterId;
+export { CKBTC_LEDGER_CANISTER_ID };
 
 // Log warning if using environment variable with potentially incorrect ID
 if (envLedgerCanisterId) {
