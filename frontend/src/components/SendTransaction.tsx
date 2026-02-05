@@ -4,6 +4,7 @@ import { useQRScanner } from '../qr-code/useQRScanner';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import { useBTCPrice } from '../hooks/useQueries';
 import { toast } from 'sonner';
+import { isValidBitcoinAddress } from '../utils/addressValidation';
 import type { UserWallet } from '../backend';
 
 interface SendTransactionProps {
@@ -31,17 +32,12 @@ const parseBitcoinAddress = (data: string): string | null => {
     }
   }
   
-  // Check if it's a plain address (starts with bc1, 1, or 3)
-  if (/^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}$/.test(trimmed)) {
+  // Check if it's a plain address (mainnet: bc1, 1, 3; testnet: tb1, m, n, 2)
+  if (trimmed.length >= 26 && trimmed.length <= 62 && /^(bc1|tb1|[13mn2])/.test(trimmed)) {
     return trimmed;
   }
   
   return null;
-};
-
-// Validate Bitcoin address format
-const isValidBitcoinAddress = (address: string): boolean => {
-  return /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}$/.test(address.trim());
 };
 
 export default function SendTransaction({ wallet, onSuccess, onClose }: SendTransactionProps) {

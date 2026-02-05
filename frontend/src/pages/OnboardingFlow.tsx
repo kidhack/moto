@@ -21,13 +21,7 @@ export default function OnboardingFlow() {
     try {
       await navigator.clipboard.writeText(walletAddress);
       setCopySuccess(true);
-      toast.success('Address copied to clipboard!', {
-        duration: 2000,
-      });
-      // Reset success state after 2 seconds
-      setTimeout(() => {
-        setCopySuccess(false);
-      }, 2000);
+      setTimeout(() => setCopySuccess(false), 2000);
     } catch (error) {
       console.error('Failed to copy address:', error);
       toast.error('Failed to copy address. Please try again.');

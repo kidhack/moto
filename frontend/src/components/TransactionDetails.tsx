@@ -70,8 +70,7 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
   };
 
   const formatDate = (timestamp: bigint) => {
-    if (timestamp === BigInt(0)) return 'Pending';
-    // Timestamp is in seconds, convert to milliseconds for Date constructor
+    // Transaction timestamps are in seconds (Unix time); Date expects milliseconds
     const date = new Date(Number(timestamp) * 1000);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -98,10 +97,12 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
     return status;
   };
 
-  const copyToClipboard = async (text: string, label: string) => {
+  const [copiedField, setCopiedField] = useState<'to' | null>(null);
+  const copyToClipboard = async (text: string, label: string, field: 'to') => {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success(`${label} copied to clipboard`);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
     } catch (error) {
       console.error('Failed to copy:', error);
       toast.error('Failed to copy to clipboard');
@@ -186,7 +187,7 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
                 <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
                   Date
                 </span>
-                <span className="font-mono text-base text-white text-right flex-1" style={{ letterSpacing: '0.32px' }}>
+                <span className="font-mono text-base font-normal text-white text-right flex-1" style={{ letterSpacing: '0.32px' }}>
                   {formatDate(transaction.timestamp)}
                 </span>
               </div>
@@ -197,12 +198,12 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
                   To
                 </span>
                 <button
-                  onClick={() => copyToClipboard(transaction.toAddress, 'Address')}
-                  className="font-mono text-base text-white text-right flex-1 hover:underline cursor-pointer" 
+                  onClick={() => copyToClipboard(transaction.toAddress, 'Address', 'to')}
+                  className="font-mono text-base text-white text-right flex-1 cursor-pointer no-underline"
                   style={{ letterSpacing: '0.32px' }}
                   title={`Click to copy: ${transaction.toAddress}`}
                 >
-                  {formatAddress(transaction.toAddress)}
+                  {copiedField === 'to' ? 'Copied!' : formatAddress(transaction.toAddress)}
                 </button>
               </div>
 

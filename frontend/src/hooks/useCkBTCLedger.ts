@@ -3,6 +3,7 @@ import { Principal } from '@dfinity/principal';
 import { HttpAgent } from '@dfinity/agent';
 import { IcrcLedgerCanister } from '@dfinity/ledger-icrc';
 import { useInternetIdentity } from './useInternetIdentity';
+import { useCkBTCMinter } from './useCkBTCMinter';
 
 // Check if we should use testnet
 const USE_TESTNET = import.meta.env.VITE_USE_TESTNET === 'true';
@@ -40,6 +41,7 @@ const HOST = 'https://ic0.app';
 
 export function useCkBTCLedger() {
   const { identity } = useInternetIdentity();
+  const { updateBalance } = useCkBTCMinter();
   const [balance, setBalance] = useState<bigint | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -58,6 +60,9 @@ export function useCkBTCLedger() {
       setError(null);
 
       try {
+        // Ask minter to mint any new Bitcoin deposits to ckBTC before reading balance
+        await updateBalance();
+
         // Create agent using HttpAgent directly
         const agent = new HttpAgent({
           identity: identity as any,

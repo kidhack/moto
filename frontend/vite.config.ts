@@ -16,29 +16,6 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
-    // Ensure all @dfinity packages and @icp-sdk use the same Principal instance
-    dedupe: [
-      '@dfinity/principal',
-      '@dfinity/agent',
-      '@dfinity/candid',
-      '@icp-sdk/core',
-    ],
-  },
-  optimizeDeps: {
-    // Force pre-bundling of @dfinity packages to ensure consistent Principal instances
-    include: [
-      '@dfinity/principal',
-      '@dfinity/agent',
-      '@dfinity/candid',
-      '@dfinity/identity',
-      '@dfinity/auth-client',
-      '@dfinity/ledger-icrc',
-      '@icp-sdk/core',
-    ],
-    // Ensure Principal class and its static methods are not tree-shaken
-    esbuildOptions: {
-      preserveSymlinks: true,
-    },
   },
   build: {
     // Enable code splitting to reduce individual chunk sizes

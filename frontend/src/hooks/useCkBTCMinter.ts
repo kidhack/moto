@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { HttpAgent, Actor } from '@dfinity/agent';
 import { Principal } from '@dfinity/principal';
 import { useInternetIdentity } from './useInternetIdentity';
@@ -51,19 +51,66 @@ const HOST = 'https://ic0.app';
 // - For Some(value): pass [value] (wrapped in array)
 interface CkBTCMinter {
   get_btc_address: (arg: { owner: [] | [Principal]; subaccount: [] | [Uint8Array] }) => Promise<string>;
+  update_balance: (arg: { owner: [] | [Principal]; subaccount: [] | [Uint8Array] }) => Promise<{ Ok?: unknown[]; Err?: unknown }>;
 }
 
 // Create IDL factory for ckBTC minter
-// The method is an UPDATE method and returns IDL.Text directly (not a record)
+// get_btc_address: UPDATE, returns Text
+// update_balance: UPDATE, returns variant { Ok = vec UtxoStatus; Err = UpdateBalanceError }
 const createCkBTCMinterIDL = () => {
   return ({ IDL }: any) => {
+    const Utxo = IDL.Record({
+      outpoint: IDL.Record({ txid: IDL.Vec(IDL.Nat8), vout: IDL.Nat32 }),
+      value: IDL.Nat64,
+      height: IDL.Nat32,
+    });
+    const UtxoStatus = IDL.Variant({
+      ValueTooSmall: Utxo,
+      Tainted: Utxo,
+      Checked: Utxo,
+      Minted: IDL.Record({ block_index: IDL.Nat64, minted_amount: IDL.Nat64, utxo: Utxo }),
+    });
+    const PendingUtxo = IDL.Record({
+      outpoint: IDL.Record({ txid: IDL.Vec(IDL.Nat8), vout: IDL.Nat32 }),
+      value: IDL.Nat64,
+      confirmations: IDL.Nat32,
+    });
+    const SuspendedReason = IDL.Variant({ ValueTooSmall: IDL.Null, Quarantined: IDL.Null });
+    const SuspendedUtxo = IDL.Record({
+      utxo: Utxo,
+      reason: SuspendedReason,
+      earliest_retry: IDL.Nat64,
+    });
+    const UpdateBalanceError = IDL.Variant({
+      NoNewUtxos: IDL.Record({
+        current_confirmations: IDL.Opt(IDL.Nat32),
+        required_confirmations: IDL.Nat32,
+        pending_utxos: IDL.Opt(IDL.Vec(PendingUtxo)),
+        suspended_utxos: IDL.Opt(IDL.Vec(SuspendedUtxo)),
+      }),
+      AlreadyProcessing: IDL.Null,
+      TemporarilyUnavailable: IDL.Text,
+      GenericError: IDL.Record({ error_message: IDL.Text, error_code: IDL.Nat64 }),
+    });
+    const UpdateBalanceResult = IDL.Variant({
+      Ok: IDL.Vec(UtxoStatus),
+      Err: UpdateBalanceError,
+    });
     return IDL.Service({
       get_btc_address: IDL.Func(
         [IDL.Record({
           owner: IDL.Opt(IDL.Principal),
           subaccount: IDL.Opt(IDL.Vec(IDL.Nat8)),
         })],
-        [IDL.Text], // Returns text directly, not a record
+        [IDL.Text],
+        ['update']
+      ),
+      update_balance: IDL.Func(
+        [IDL.Record({
+          owner: IDL.Opt(IDL.Principal),
+          subaccount: IDL.Opt(IDL.Vec(IDL.Nat8)),
+        })],
+        [UpdateBalanceResult],
         ['update']
       ),
     });
@@ -206,11 +253,54 @@ export function useCkBTCMinter() {
     getBtcAddress();
   }, [identity, isLocal]);
 
+  // Call minter update_balance so any new Bitcoin deposits get minted to ckBTC.
+  // Safe to call before loading balance; NoNewUtxos is expected when there are no new deposits.
+  const updateBalance = useCallback(async () => {
+    if (!identity) return;
+    try {
+      const agent = new HttpAgent({
+        identity: identity as any,
+        host: HOST,
+      });
+      if (isLocal) {
+        try {
+          await agent.fetchRootKey();
+        } catch {
+          // ignore
+        }
+      }
+      const minterIDLFactory = createCkBTCMinterIDL();
+      const minterActor = Actor.createActor(minterIDLFactory, {
+        agent,
+        canisterId: CKBTC_MINTER_CANISTER_ID,
+      }) as any as CkBTCMinter;
+      const result = await minterActor.update_balance({
+        owner: [],
+        subaccount: [],
+      });
+      if (result?.Ok && Array.isArray(result.Ok) && result.Ok.length > 0) {
+        console.log('useCkBTCMinter: update_balance minted', result.Ok.length, 'UTXO(s) to ckBTC');
+      }
+      if (result?.Err) {
+        // NoNewUtxos is normal when there are no new deposits
+        const err = result.Err as { NoNewUtxos?: unknown; _?: unknown };
+        if (err.NoNewUtxos !== undefined) {
+          // Nothing to do - no new UTXOs to process
+          return;
+        }
+        console.warn('useCkBTCMinter: update_balance error', result.Err);
+      }
+    } catch (err) {
+      console.warn('useCkBTCMinter: update_balance failed (non-fatal):', err);
+    }
+  }, [identity, isLocal]);
+
   return {
     address,
     isFetching,
     error,
-    principalUsed, // Return the principal that was used to generate the address
+    principalUsed,
+    updateBalance,
   };
 }
 

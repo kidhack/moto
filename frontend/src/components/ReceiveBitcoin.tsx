@@ -91,10 +91,13 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
     return value.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   };
 
+  const [addressCopied, setAddressCopied] = useState(false);
+
   const copyAddress = async () => {
     try {
       await navigator.clipboard.writeText(address);
-      toast.success('Address copied to clipboard');
+      setAddressCopied(true);
+      setTimeout(() => setAddressCopied(false), 2000);
     } catch (error) {
       console.error('Failed to copy:', error);
       toast.error('Failed to copy to clipboard');
@@ -172,14 +175,18 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
               </div>
             </div>
 
-            {/* Bitcoin Wallet Address box - full width with old color styling */}
+            {/* Bitcoin Wallet Address box - tap to copy */}
             <div className="px-5">
-              <div className="bg-white/10 flex items-center justify-center w-full min-h-16 px-4 py-3">
-              <p className="font-mono text-base font-bold text-white/80 text-center break-all" style={{ letterSpacing: '0.32px' }}>
-                {address}
-              </p>
+              <button
+                type="button"
+                onClick={copyAddress}
+                className="bg-white/10 flex items-center justify-center w-full min-h-16 px-4 py-3 cursor-pointer active:bg-white/15 transition-colors rounded-none border-0 text-left"
+              >
+                <p className="font-mono text-base font-bold text-white/80 text-center break-all" style={{ letterSpacing: '0.32px', textWrap: 'balance' }}>
+                  {addressCopied ? 'Copied!' : address}
+                </p>
+              </button>
             </div>
-          </div>
           </div>
 
           {/* Spacer to push bottom content down */}

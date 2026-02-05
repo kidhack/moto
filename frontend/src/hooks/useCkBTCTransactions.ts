@@ -18,83 +18,122 @@ const CKBTC_INDEX_CANISTER_ID = USE_TESTNET
 
 const HOST = 'https://ic0.app';
 
-// Create IDL factory for ckBTC index canister - matches actual canister interface
-// Return type is: variant { Ok: GetTransactions, Err: GetTransactionsErr }
-// GetTransactions = record { balance: Tokens, transactions: vec TransactionWithId, oldest_tx_id: opt BlockIndex }
+// ICRC-1 Transaction types
+interface ICRC1Account {
+  owner: Principal;
+  subaccount: [] | [Uint8Array];
+}
+
+interface ICRC1Transfer {
+  from: ICRC1Account;
+  to: ICRC1Account;
+  amount: bigint;
+  fee: [] | [bigint];
+  memo: [] | [Uint8Array];
+  created_at_time: [] | [bigint];
+}
+
+interface ICRC1Mint {
+  to: ICRC1Account;
+  amount: bigint;
+  memo: [] | [Uint8Array];
+  created_at_time: [] | [bigint];
+}
+
+interface ICRC1Burn {
+  from: ICRC1Account;
+  amount: bigint;
+  from_subaccount: [] | [Uint8Array];
+  memo: [] | [Uint8Array];
+  created_at_time: [] | [bigint];
+}
+
+// ICRC-1 Transaction is a Variant (tagged union)
+type ICRC1Transaction = 
+  | { Transfer: ICRC1Transfer }
+  | { Mint: ICRC1Mint }
+  | { Burn: ICRC1Burn }
+  | { Approve: any };
+
+interface ICRC1TransactionWithId {
+  id: bigint;
+  transaction: ICRC1Transaction;
+}
+
+
+// Create IDL factory matching index-ng canister (Transaction is record with opt mint/transfer/burn, not variant)
+// Return type is variant { Ok = { balance, transactions, oldest_tx_id } ; Err = { message } }
 const createCkBTCIndexIDL = () => {
   return ({ IDL }: any) => {
-    const BlockIndex = IDL.Nat;
-    const SubAccount = IDL.Vec(IDL.Nat8);
+    const Subaccount = IDL.Vec(IDL.Nat8);
     const Account = IDL.Record({
       owner: IDL.Principal,
-      subaccount: IDL.Opt(SubAccount),
+      subaccount: IDL.Opt(Subaccount),
     });
-    const GetAccountTransactionsArgs = IDL.Record({
-      max_results: IDL.Nat,
-      start: IDL.Opt(BlockIndex),
-      account: Account,
-    });
-    const Tokens = IDL.Nat;
-    const Burn = IDL.Record({
-      fee: IDL.Opt(IDL.Nat),
+    const Transfer = IDL.Record({
       from: Account,
+      to: Account,
+      amount: IDL.Nat,
+      fee: IDL.Opt(IDL.Nat),
       memo: IDL.Opt(IDL.Vec(IDL.Nat8)),
       created_at_time: IDL.Opt(IDL.Nat64),
-      amount: Tokens,
       spender: IDL.Opt(Account),
     });
     const Mint = IDL.Record({
       to: Account,
-      fee: IDL.Opt(IDL.Nat),
+      amount: IDL.Nat,
       memo: IDL.Opt(IDL.Vec(IDL.Nat8)),
       created_at_time: IDL.Opt(IDL.Nat64),
-      amount: Tokens,
+    });
+    const Burn = IDL.Record({
+      from: Account,
+      amount: IDL.Nat,
+      memo: IDL.Opt(IDL.Vec(IDL.Nat8)),
+      created_at_time: IDL.Opt(IDL.Nat64),
+      spender: IDL.Opt(Account),
+      fee: IDL.Opt(IDL.Nat),
     });
     const Approve = IDL.Record({
-      fee: IDL.Opt(Tokens),
       from: Account,
-      memo: IDL.Opt(IDL.Vec(IDL.Nat8)),
-      created_at_time: IDL.Opt(IDL.Nat64),
-      amount: Tokens,
-      expected_allowance: IDL.Opt(Tokens),
+      amount: IDL.Int,
+      expected_allowance: IDL.Opt(IDL.Nat),
       expires_at: IDL.Opt(IDL.Nat64),
-      spender: Account,
-    });
-    const Transfer = IDL.Record({
-      to: Account,
-      fee: IDL.Opt(Tokens),
-      from: Account,
+      fee: IDL.Opt(IDL.Nat),
+      from_subaccount: IDL.Opt(Subaccount),
       memo: IDL.Opt(IDL.Vec(IDL.Nat8)),
+      spender: Account,
       created_at_time: IDL.Opt(IDL.Nat64),
-      amount: Tokens,
-      spender: IDL.Opt(Account),
     });
+    // index-ng: Transaction is a record with kind, timestamp, and optional mint/transfer/burn/approve
     const Transaction = IDL.Record({
-      burn: IDL.Opt(Burn),
       kind: IDL.Text,
-      mint: IDL.Opt(Mint),
-      approve: IDL.Opt(Approve),
       timestamp: IDL.Nat64,
+      mint: IDL.Opt(Mint),
       transfer: IDL.Opt(Transfer),
+      burn: IDL.Opt(Burn),
+      approve: IDL.Opt(Approve),
     });
     const TransactionWithId = IDL.Record({
-      id: BlockIndex,
+      id: IDL.Nat,
       transaction: Transaction,
     });
     const GetTransactions = IDL.Record({
-      balance: Tokens,
+      balance: IDL.Nat,
       transactions: IDL.Vec(TransactionWithId),
-      oldest_tx_id: IDL.Opt(BlockIndex),
+      oldest_tx_id: IDL.Opt(IDL.Nat),
     });
     const GetTransactionsErr = IDL.Record({ message: IDL.Text });
     const GetTransactionsResult = IDL.Variant({
       Ok: GetTransactions,
       Err: GetTransactionsErr,
     });
-
     return IDL.Service({
       get_account_transactions: IDL.Func(
-        [GetAccountTransactionsArgs],
+        [IDL.Record({
+          account: Account,
+          start: IDL.Opt(IDL.Nat),
+          max_results: IDL.Nat,
+        })],
         [GetTransactionsResult],
         ['query']
       ),
@@ -102,221 +141,90 @@ const createCkBTCIndexIDL = () => {
   };
 };
 
-// ICRC-1 Transaction types based on ACTUAL index canister structure
-// Transaction is a RECORD with optional fields, NOT a variant
-interface ICRC1Account {
-  owner: Principal;
-  subaccount: [] | [Uint8Array];
+// Helper: get optional Candid value (opt T can be [] or [value] or undefined or the value itself)
+function optVal<T>(v: [] | [T] | T | undefined | null): T | undefined {
+  if (v == null) return undefined;
+  if (Array.isArray(v)) return v.length > 0 ? v[0] : undefined;
+  return v as T;
 }
 
-interface ICRC1TransferRecord {
-  from: ICRC1Account;
-  to: ICRC1Account;
-  amount: bigint;
-  fee?: bigint;
-  memo?: Uint8Array;
-  created_at_time?: bigint;
-  spender?: ICRC1Account;
+// Helper: get optional record (index-ng returns mint/transfer/burn as opt = undefined | record)
+function optRecord<T extends object>(v: [] | [T] | T | undefined | null, hasKeys: (x: T) => boolean): T | undefined {
+  const val = optVal(v);
+  if (val == null || typeof val !== 'object') return undefined;
+  return hasKeys(val as T) ? (val as T) : undefined;
 }
 
-interface ICRC1MintRecord {
-  to: ICRC1Account;
-  amount: bigint;
-  fee?: bigint;
-  memo?: Uint8Array;
-  created_at_time?: bigint;
-}
-
-interface ICRC1BurnRecord {
-  from: ICRC1Account;
-  amount: bigint;
-  fee?: bigint;
-  memo?: Uint8Array;
-  created_at_time?: bigint;
-  spender?: ICRC1Account;
-}
-
-interface ICRC1TransactionRecord {
-  burn?: ICRC1BurnRecord;
-  mint?: ICRC1MintRecord;
-  transfer?: ICRC1TransferRecord;
-  approve?: any;
-  kind: string;
-  timestamp: bigint;
-}
-
-interface ICRC1TransactionWithId {
-  id: bigint;
-  transaction: ICRC1TransactionRecord;
-}
-
-// Helper to extract Principal from various formats (Principal object, {__principal__: string}, or string)
-function extractPrincipal(owner: any): Principal {
-  if (owner instanceof Principal) {
-    return owner;
-  }
-  if (owner && typeof owner === 'object' && '__principal__' in owner) {
-    return Principal.fromText(owner.__principal__);
-  }
-  if (typeof owner === 'string') {
-    return Principal.fromText(owner);
-  }
-  if (owner && typeof owner === 'object' && 'toText' in owner) {
-    return owner;
-  }
-  throw new Error(`Invalid owner format: ${JSON.stringify(owner)}`);
-}
-
-// Helper to extract value from optional array format [value] or []
-function extractOptional<T>(value: T | T[] | [] | undefined): T | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (Array.isArray(value)) {
-    return value.length > 0 ? value[0] : undefined;
-  }
-  return value;
-}
-
-// Convert ICRC-1 transaction to app's Transaction format
+// Convert ICRC-1 transaction to app's Transaction format.
+// index-ng: transaction is record { kind, timestamp, mint?, transfer?, burn?, approve? }.
+// Also supports legacy variant style { Transfer: {...} } and opt-as-array tx.transfer?.[0].
 function convertICRC1TransactionToAppTransaction(
   txWithId: ICRC1TransactionWithId,
   userPrincipal: Principal,
   userBitcoinAddress: string
 ): Transaction | null {
-  const tx = txWithId.transaction;
-  const userPrincipalText = userPrincipal.toText();
-  
-  // Handle transfer transaction
-  // In Candid, optional fields are decoded as arrays: Some(value) -> [value], None -> []
-  const transferData = extractOptional(tx.transfer);
-  if (transferData) {
-    const transfer = transferData;
-    const fromOwner = extractPrincipal(transfer.from?.owner);
-    const toOwner = extractPrincipal(transfer.to?.owner);
-    const fromOwnerText = fromOwner.toText();
-    const toOwnerText = toOwner.toText();
-    
-    const isSent = fromOwnerText === userPrincipalText;
-    const isReceived = toOwnerText === userPrincipalText;
-    
-    if (!isSent && !isReceived) {
-      return null; // Not related to this user
-    }
-    
-    // Extract optional fields (they come as arrays from Candid)
-    const fee = extractOptional(transfer.fee);
-    const created_at_time = extractOptional(transfer.created_at_time);
-    
-    // Use created_at_time if available, otherwise use timestamp field, otherwise use current time
-    // Note: tx.timestamp is nat64 (nanoseconds), created_at_time is also opt nat64 (nanoseconds)
-    let timestamp: bigint;
-    if (created_at_time) {
-      // created_at_time is in nanoseconds (nat64)
-      const nanos = typeof created_at_time === 'string' ? BigInt(created_at_time) : BigInt(created_at_time);
-      timestamp = nanos / BigInt(1_000_000_000); // Convert nanoseconds to seconds
-      console.log('useCkBTCTransactions: Using created_at_time:', {
-        nanos: nanos.toString(),
-        seconds: timestamp.toString(),
-        date: new Date(Number(timestamp) * 1000).toISOString(),
-      });
-    } else if (tx.timestamp) {
-      // tx.timestamp is nat64 (nanoseconds) - handle both string and number/bigint
-      const nanos = typeof tx.timestamp === 'string' ? BigInt(tx.timestamp) : BigInt(tx.timestamp);
-      timestamp = nanos / BigInt(1_000_000_000); // Convert nanoseconds to seconds
-      console.log('useCkBTCTransactions: Using tx.timestamp:', {
-        raw: tx.timestamp,
-        type: typeof tx.timestamp,
-        nanos: nanos.toString(),
-        seconds: timestamp.toString(),
-        date: new Date(Number(timestamp) * 1000).toISOString(),
-      });
-    } else {
-      // Fallback to current time
-      timestamp = BigInt(Math.floor(Date.now() / 1000));
-      console.log('useCkBTCTransactions: Using current time as fallback:', timestamp.toString());
-    }
-    
+  const tx = txWithId.transaction as any;
+  const principalText = userPrincipal.toText();
+
+  const transfer =
+    tx.Transfer ??
+    optRecord(tx.transfer, (x: any) => x && (x.from != null || x.to != null));
+  const mint =
+    tx.Mint ?? optRecord(tx.mint, (x: any) => x && (x.to != null || x.amount != null));
+  const burn =
+    tx.Burn ?? optRecord(tx.burn, (x: any) => x && (x.from != null || x.amount != null));
+
+  const getTimestamp = (createdAt?: [] | [bigint] | bigint) => {
+    const first = optVal(createdAt);
+    if (first !== undefined && typeof first === 'bigint') return first / BigInt(1_000_000_000);
+    if (typeof tx.timestamp === 'bigint') return tx.timestamp / BigInt(1_000_000_000);
+    return BigInt(Math.floor(Date.now() / 1000));
+  };
+
+  if (transfer) {
+    const isSent = transfer.from?.owner?.toText?.() === principalText;
+    const isReceived = transfer.to?.owner?.toText?.() === principalText;
+    if (!isSent && !isReceived) return null;
+    const fromOwner = transfer.from?.owner;
+    const toOwner = transfer.to?.owner;
     return {
       id: `icrc1-${txWithId.id.toString()}`,
-      amount: BigInt(transfer.amount),
-      timestamp,
+      amount: transfer.amount ?? BigInt(0),
+      timestamp: getTimestamp(transfer.created_at_time),
       status: 'confirmed' as const,
-      fromAddress: isSent ? userBitcoinAddress : fromOwnerText,
-      toAddress: isReceived ? userBitcoinAddress : toOwnerText,
-      fee: fee ? BigInt(fee) : BigInt(0),
+      fromAddress: isSent ? userBitcoinAddress : (typeof fromOwner?.toText === 'function' ? fromOwner.toText() : String(fromOwner)),
+      toAddress: isReceived ? userBitcoinAddress : (typeof toOwner?.toText === 'function' ? toOwner.toText() : String(toOwner)),
+      fee: transfer.fee != null && Array.isArray(transfer.fee) && transfer.fee.length > 0 ? transfer.fee[0] : (transfer.fee ?? BigInt(0)),
     };
   }
-  
-  // Handle mint transaction
-  const mintData = extractOptional(tx.mint);
-  if (mintData) {
-    const mint = mintData;
-    const toOwner = extractPrincipal(mint.to?.owner);
-    const toOwnerText = toOwner.toText();
-    
-    if (toOwnerText !== userPrincipalText) {
-      return null;
-    }
-    
-    const created_at_time = extractOptional(mint.created_at_time);
-    // Note: tx.timestamp is nat64 (nanoseconds), created_at_time is also opt nat64 (nanoseconds)
-    let timestamp: bigint;
-    if (created_at_time) {
-      const nanos = typeof created_at_time === 'string' ? BigInt(created_at_time) : BigInt(created_at_time);
-      timestamp = nanos / BigInt(1_000_000_000);
-    } else if (tx.timestamp) {
-      const nanos = typeof tx.timestamp === 'string' ? BigInt(tx.timestamp) : BigInt(tx.timestamp);
-      timestamp = nanos / BigInt(1_000_000_000);
-    } else {
-      timestamp = BigInt(Math.floor(Date.now() / 1000));
-    }
-    
+  if (mint) {
+    const toOwner = mint.to?.owner;
+    if (typeof toOwner?.toText === 'function' && toOwner.toText() !== principalText) return null;
+    if (typeof toOwner === 'string' && toOwner !== principalText) return null;
     return {
       id: `icrc1-mint-${txWithId.id.toString()}`,
-      amount: BigInt(mint.amount),
-      timestamp,
+      amount: mint.amount ?? BigInt(0),
+      timestamp: getTimestamp(mint.created_at_time),
       status: 'confirmed' as const,
       fromAddress: 'ckBTC Minter',
       toAddress: userBitcoinAddress,
       fee: BigInt(0),
     };
   }
-  
-  // Handle burn transaction
-  const burnData = extractOptional(tx.burn);
-  if (burnData) {
-    const burn = burnData;
-    const fromOwner = extractPrincipal(burn.from?.owner);
-    const fromOwnerText = fromOwner.toText();
-    
-    if (fromOwnerText !== userPrincipalText) {
-      return null;
-    }
-    
-    const fee = extractOptional(burn.fee);
-    const created_at_time = extractOptional(burn.created_at_time);
-    // Note: tx.timestamp is nat64 (nanoseconds), created_at_time is also opt nat64 (nanoseconds)
-    let timestamp: bigint;
-    if (created_at_time) {
-      const nanos = typeof created_at_time === 'string' ? BigInt(created_at_time) : BigInt(created_at_time);
-      timestamp = nanos / BigInt(1_000_000_000);
-    } else if (tx.timestamp) {
-      const nanos = typeof tx.timestamp === 'string' ? BigInt(tx.timestamp) : BigInt(tx.timestamp);
-      timestamp = nanos / BigInt(1_000_000_000);
-    } else {
-      timestamp = BigInt(Math.floor(Date.now() / 1000));
-    }
-    
+  if (burn) {
+    const fromOwner = burn.from?.owner;
+    if (typeof fromOwner?.toText === 'function' && fromOwner.toText() !== principalText) return null;
+    if (typeof fromOwner === 'string' && fromOwner !== principalText) return null;
     return {
       id: `icrc1-burn-${txWithId.id.toString()}`,
-      amount: BigInt(burn.amount),
-      timestamp,
+      amount: burn.amount ?? BigInt(0),
+      timestamp: getTimestamp(burn.created_at_time),
       status: 'confirmed' as const,
       fromAddress: userBitcoinAddress,
       toAddress: 'Bitcoin Network',
-      fee: fee ? BigInt(fee) : BigInt(0),
+      fee: BigInt(0),
     };
   }
-  
   return null;
 }
 
@@ -380,7 +288,7 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
           await agent.fetchRootKey();
         }
 
-        // Create index canister Actor using proper IDL - matches actual canister interface
+        // Create index canister Actor using proper IDL
         const indexIDLFactory = createCkBTCIndexIDL();
         const indexActor = Actor.createActor(indexIDLFactory, {
           agent,
@@ -388,101 +296,46 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
         }) as any;
 
         // Call get_account_transactions with proper parameters
-        // Based on actual Candid interface: { account, start: opt nat, max_results: nat }
         console.log('useCkBTCTransactions: Calling get_account_transactions...');
-        console.log('useCkBTCTransactions: Call parameters:', {
+        const result = await indexActor.get_account_transactions({
           account: {
-            owner: principal.toText(),
+            owner: principal,
             subaccount: [],
           },
-          start: [], // Empty array [] means None (start from most recent)
-          max_results: 100n,
+          start: [],
+          max_results: BigInt(100),
         });
-        
-        let result;
-        try {
-          result = await indexActor.get_account_transactions({
-            account: {
-              owner: principal,
-              subaccount: [], // Empty array means None (default subaccount)
-            },
-            start: [], // Empty array [] means None (start from most recent)
-            max_results: BigInt(100), // Required field: get up to 100 transactions
-          });
-        } catch (decodeError: any) {
-          console.error('useCkBTCTransactions: Decode error:', decodeError);
-          console.error('useCkBTCTransactions: Error message:', decodeError?.message);
-          console.error('useCkBTCTransactions: Error stack:', decodeError?.stack);
-          // Re-throw to be caught by outer catch
-          throw decodeError;
-        }
 
-        console.log('useCkBTCTransactions: ✅ Successfully got response from index canister!');
+        console.log('useCkBTCTransactions: ✅ Successfully got transactions from index canister!');
         console.log('useCkBTCTransactions: Result type:', typeof result);
         console.log('useCkBTCTransactions: Result is array?', Array.isArray(result));
-        console.log('useCkBTCTransactions: Result constructor:', result?.constructor?.name);
-        console.log('useCkBTCTransactions: Result keys:', result && typeof result === 'object' ? Object.keys(result) : 'N/A');
         console.log('useCkBTCTransactions: Result:', JSON.stringify(result, (_key, value) => 
           typeof value === 'bigint' ? value.toString() : value instanceof Uint8Array ? `Uint8Array(${value.length})` : value
         ));
         
-        // The IDL defines the return type as a Result variant: variant { Ok: GetTransactions, Err: GetTransactionsErr }
-        // GetTransactions = record { balance: Tokens, transactions: vec TransactionWithId, oldest_tx_id: opt BlockIndex }
+        // index-ng returns variant { Ok = { balance, transactions, oldest_tx_id } } or { Err = { message } }
         let transactions: ICRC1TransactionWithId[] = [];
-        
-        // Handle Result variant: { Ok: {...} } or { Err: {...} }
-        if (result && typeof result === 'object') {
-          if ('Ok' in result) {
-            // Result is Ok variant: { Ok: { transactions: [...], balance: Nat, oldest_tx_id: Opt(Nat) } }
-            const okResult = result.Ok;
-            transactions = okResult.transactions || [];
-            console.log('useCkBTCTransactions: ✅ Received Ok result');
-            console.log('useCkBTCTransactions: Transactions count:', transactions.length);
-            console.log('useCkBTCTransactions: Balance:', okResult.balance?.toString());
-            console.log('useCkBTCTransactions: Oldest tx ID:', okResult.oldest_tx_id);
-          } else if ('Err' in result) {
-            // Result is Err variant: { Err: { message: string } }
-            const errMessage = result.Err?.message || 'Unknown error from index canister';
-            console.error('useCkBTCTransactions: ❌ Received Err result:', errMessage);
-            throw new Error(`Index canister error: ${errMessage}`);
-          } else if ('transactions' in result) {
-            // Fallback: direct record format (shouldn't happen but handle it)
-            console.warn('useCkBTCTransactions: Received direct record format (unexpected)');
-            transactions = result.transactions || [];
-            console.log('useCkBTCTransactions: Transactions (direct record):', transactions.length);
-          } else {
-            console.warn('useCkBTCTransactions: Unexpected result format:', result);
-            console.warn('useCkBTCTransactions: Result structure:', {
-              isArray: Array.isArray(result),
-              keys: Object.keys(result),
-              constructor: result?.constructor?.name,
-            });
-            throw new Error('Unexpected result format from index canister');
-          }
+        const raw = result && typeof result === 'object' ? (result as any) : null;
+        if (raw?.Err) {
+          console.log('useCkBTCTransactions: Index returned Err:', raw.Err?.message ?? raw.Err);
+          setTransactions([]);
+          return;
+        }
+        if (raw?.Ok && typeof raw.Ok === 'object') {
+          const ok = raw.Ok;
+          transactions = Array.isArray(ok.transactions) ? ok.transactions : [];
+          console.log('useCkBTCTransactions: Result format: Ok', { transactions: transactions.length, oldest_tx_id: ok.oldest_tx_id, balance: ok.balance?.toString?.() });
         } else {
-          console.warn('useCkBTCTransactions: Result is not an object:', result);
-          throw new Error('Invalid result type from index canister');
+          console.warn('useCkBTCTransactions: Unexpected result shape. Keys:', raw ? Object.keys(raw) : 'null');
         }
         
         if (!transactions || transactions.length === 0) {
           console.log('useCkBTCTransactions: No transactions found (this is OK if account has no transactions yet)');
           setTransactions([]);
-          setIsFetching(false);
           return;
         }
         
         console.log('useCkBTCTransactions: Final transaction count:', transactions.length);
-        
-        // Log raw transaction data for debugging
-        if (transactions.length > 0) {
-          console.log('useCkBTCTransactions: Sample raw transaction:', {
-            id: transactions[0].id?.toString(),
-            timestamp: transactions[0].transaction?.timestamp,
-            timestampType: typeof transactions[0].transaction?.timestamp,
-            created_at_time: transactions[0].transaction?.transfer?.[0]?.created_at_time,
-            kind: transactions[0].transaction?.kind,
-          });
-        }
         
         // Convert ICRC-1 transactions to app format
         const convertedTransactions = transactions

@@ -3,7 +3,9 @@ import { LogOut } from 'lucide-react';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { useWalletInfo, useEnsureWallet, useResetOnboarding, useSignOutAndReset, useWalletAddress } from '../hooks/useQueries';
 import { useCkBTCMinter } from '../hooks/useCkBTCMinter';
-import { useActor } from '../hooks/useActor';
+import { useCkBTCLedger } from '../hooks/useCkBTCLedger';
+import { useCkBTCTransactions } from '../hooks/useCkBTCTransactions';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import type { Transaction } from '../backend';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,12 +26,16 @@ import LanguageSelector from '../components/LanguageSelector';
 import TransactionDetails from '../components/TransactionDetails';
 
 export default function WalletDashboard() {
-  const { clear, identity } = useInternetIdentity();
-  const { data: walletInfo, isLoading, error: walletInfoError, isFetching: isWalletInfoFetching } = useWalletInfo();
+  const { clear, identity, displayName } = useInternetIdentity();
+  const { data: walletInfo, isLoading, error: walletInfoError, isFetching: isWalletInfoFetching, refetch: refetchWalletInfo } = useWalletInfo();
   const { data: walletAddress, isLoading: isLoadingAddress, error: walletAddressError } = useWalletAddress();
   const { address: ckbtcAddress, isFetching: isCkbtcFetching } = useCkBTCMinter(); // Check if we have ckBTC address
-  const { actor } = useActor();
+  const { balance: ledgerBalance } = useCkBTCLedger();
   const ensureWallet = useEnsureWallet();
+  const walletAddressForTx = walletInfo?.bitcoinAddress || ckbtcAddress || '';
+  const { transactions: ckbtcTransactions } = useCkBTCTransactions(walletAddressForTx);
+  // Prefer merged list from walletInfo; fall back to ckBTC hook so history shows even if query hasn't merged yet
+  const displayTransactions = (walletInfo?.transactions?.length ? walletInfo.transactions : ckbtcTransactions) ?? [];
   
   // Get current principal for debugging
   const currentPrincipal = identity ? identity.getPrincipal().toText() : null;
@@ -46,14 +52,15 @@ export default function WalletDashboard() {
       } : 'null',
       isLoading,
       isWalletInfoFetching,
+      ledgerBalance: ledgerBalance?.toString() ?? 'null',
       walletInfoError: walletInfoError?.message,
       ensureWalletStatus: ensureWallet.isSuccess ? 'success' : ensureWallet.isError ? 'error' : ensureWallet.isPending ? 'pending' : 'idle',
       ensureWalletError: ensureWallet.error?.message,
       ckbtcAddress: !!ckbtcAddress,
       isCkbtcFetching,
-      isLoadingBalance,
+      displayTransactionsCount: displayTransactions.length,
     });
-  }, [walletInfo, isLoading, isWalletInfoFetching, walletInfoError, ensureWallet.isSuccess, ensureWallet.isError, ensureWallet.isPending, ensureWallet.error, ckbtcAddress, isCkbtcFetching]);
+  }, [walletInfo, isLoading, isWalletInfoFetching, ledgerBalance, walletInfoError, ensureWallet.isSuccess, ensureWallet.isError, ensureWallet.isPending, ensureWallet.error, ckbtcAddress, isCkbtcFetching, displayTransactions.length]);
   const resetOnboarding = useResetOnboarding();
   const signOutAndReset = useSignOutAndReset();
   const [showResetDialog, setShowResetDialog] = useState(false);
@@ -64,6 +71,7 @@ export default function WalletDashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showCurrencySelector, setShowCurrencySelector] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
+  const [principalCopied, setPrincipalCopied] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   
   // Debug: Log principal when menu opens
@@ -82,18 +90,13 @@ export default function WalletDashboard() {
       return;
     }
     
-    // Don't try to ensure wallet if actor is not available yet
-    if (!actor) {
-      return;
-    }
-    
     // Always ensure wallet exists so we can fetch wallet info
     // This creates/ensures the wallet in the custom canister which stores balance/transactions
     if (!ensureWallet.isPending && !ensureWallet.isSuccess && !walletInfo) {
       console.log('WalletDashboard: Ensuring wallet exists to fetch wallet info...');
       ensureWallet.mutate();
     }
-  }, [ckbtcAddress, isCkbtcFetching, ensureWallet, walletInfo, actor]);
+  }, [ckbtcAddress, isCkbtcFetching, ensureWallet, walletInfo]);
 
   const handleResetOnboarding = async () => {
     try {
@@ -150,8 +153,7 @@ export default function WalletDashboard() {
   };
 
   const formatDate = (timestamp: bigint) => {
-    if (timestamp === BigInt(0)) return 'Pending';
-    // Timestamp is in seconds, convert to milliseconds for Date constructor
+    // Transaction timestamps are in seconds (Unix time); Date expects milliseconds
     const date = new Date(Number(timestamp) * 1000);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -179,25 +181,70 @@ export default function WalletDashboard() {
   // Only use actual walletInfo - don't show fallback data
   const displayWalletInfo = walletInfo;
 
-  // Show loading skeleton if we don't have wallet info yet
-  // Keep showing skeleton until wallet is ensured AND wallet info is loaded
-  const isLoadingBalance = !walletInfo && (isLoading || isWalletInfoFetching || isCkbtcFetching || ensureWallet.isPending || !ensureWallet.isSuccess);
+  // Shimmer only on first load before we have a confirmed balance from the ledger; once we have one (including 0), keep showing it and don’t shimmer on poll
+  const hasConfirmedBalance = ledgerBalance !== null;
+  const isLoadingBalance = !hasConfirmedBalance;
+
+  const {
+    scrollRef,
+    pullDistance,
+    isRefreshing,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+    pullProgress,
+  } = usePullToRefresh(async () => {
+    await refetchWalletInfo();
+  });
 
   return (
     <div className="flex min-h-screen flex-col bg-black text-white">
       
-      {/* Main container matching Figma: pt-8 (32px) px-5 (20px) */}
-      <div className="flex flex-col gap-8 pt-8 px-5 pb-5 flex-1 overflow-y-auto">
-        {/* Testnet indicator */}
-        {import.meta.env.VITE_USE_TESTNET === 'true' && (
-          <div className="bg-yellow-500/20 border border-yellow-500/50 rounded px-4 py-2 text-center">
-            <p className="text-yellow-500 text-sm font-medium">
-              ⚠️ TESTNET → Using ckTESTBTC
-            </p>
+      {/* Scrollable area: whole page content pulls down; bottom buttons stay fixed below */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto overscroll-contain relative min-h-0"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Pull-to-refresh: indicator in the gap that appears when content is pulled down. Text/icon only after 20px pull. */}
+        <div
+          className="absolute left-0 right-0 top-0 flex items-center justify-center bg-black z-10 transition-[height] duration-75 ease-out"
+          style={{ height: Math.max(0, pullDistance) }}
+        >
+          <div className="flex flex-col items-center justify-end gap-1 pb-2">
+            {isRefreshing ? (
+              <>
+                <div className="h-6 w-6 rounded-full border-2 border-white/60 border-t-white animate-spin" />
+                <span className="text-xs text-white/70">Refreshing…</span>
+              </>
+            ) : pullDistance >= 20 ? (
+              <>
+                <svg className="h-5 w-5 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: `rotate(${-90 + pullProgress * 180}deg)` }}>
+                  <path d="M23 4v6h-6M1 20v-6h6" />
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
+                <span className="text-xs text-white/70">{pullProgress >= 1 ? 'Release to refresh' : 'Pull to refresh'}</span>
+              </>
+            ) : null}
           </div>
-        )}
-        {/* Figma: Header with logo (40px) on left, balance on right, add funds button (32px) on right */}
-        <header className="flex items-center justify-between">
+        </div>
+        {/* Page content: translates down with pull so the whole page moves */}
+        <div
+          className="flex flex-col gap-8 pt-8 px-5 pb-5 transition-[transform] duration-75 ease-out"
+          style={{ transform: `translateY(${pullDistance}px)` }}
+        >
+          {/* Testnet indicator */}
+          {import.meta.env.VITE_USE_TESTNET === 'true' && (
+            <div className="bg-yellow-500/20 border border-yellow-500/50 rounded px-4 py-2 text-center">
+              <p className="text-yellow-500 text-sm font-medium">
+                ⚠️ TESTNET → Using ckTESTBTC
+              </p>
+            </div>
+          )}
+          {/* Figma: Header with logo (40px) on left, balance on right, add funds button (32px) on right */}
+          <header className="flex items-center justify-between">
           <button 
             onClick={() => setMenuOpen(true)}
             className="cursor-pointer"
@@ -209,7 +256,7 @@ export default function WalletDashboard() {
             <div className="flex items-center gap-1.5">
               <span className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>₿</span>
               {isLoadingBalance ? (
-                <div className="h-8 w-24 bg-white/20 animate-pulse rounded" />
+                <div className="h-8 w-24 rounded animate-shimmer" aria-hidden />
               ) : displayWalletInfo ? (
                 <p 
                   className="font-mono text-2xl font-bold text-white"
@@ -252,15 +299,15 @@ export default function WalletDashboard() {
               ))}
               <div className="h-[1px] w-full bg-white/50" />
             </div>
-          ) : displayWalletInfo && displayWalletInfo.transactions.length > 0 ? (
+          ) : displayTransactions.length > 0 ? (
             <>
               {/* Figma: Divider - 1px, rgba(255,255,255,0.5) - constrained to content width */}
               <div className="h-[1px] w-full bg-white/50" />
               
-              {[...displayWalletInfo.transactions]
+              {[...displayTransactions]
                 .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
                 .map((tx) => {
-                  const txType = getTransactionIcon(tx, displayWalletInfo.bitcoinAddress);
+                  const txType = getTransactionIcon(tx, walletAddressForTx);
                 
                 return (
                   <button
@@ -290,9 +337,9 @@ export default function WalletDashboard() {
                         </p>
                       </div>
                     </div>
-                    {/* Figma: Date - IBM Plex Mono Medium, 18px (reduced from 20px for mobile), rgba(255,255,255,0.8), tracking 0.8px */}
+                    {/* Figma: Date - IBM Plex Mono, 18px, font-weight 400, rgba(255,255,255,0.8), tracking 0.8px */}
                     <p 
-                      className="font-mono text-[18px] font-medium text-white"
+                      className="font-mono text-[18px] font-normal text-white"
                       style={{ letterSpacing: '0.8px' }}
                     >
                       {formatDate(tx.timestamp)}
@@ -300,31 +347,35 @@ export default function WalletDashboard() {
                   </button>
                 );
               })}
+              <div className="h-[1px] w-full bg-white/50" />
             </>
           ) : (
-            <div className="flex flex-1 items-center justify-center">
-              <p className="text-center text-lg text-white/60">No transactions yet</p>
-            </div>
+            <>
+              <div className="h-[1px] w-full bg-white/50" />
+              <div className="flex flex-1 items-center justify-center">
+                <p className="text-center text-lg text-white/60">No transactions yet</p>
+              </div>
+              <div className="h-[1px] w-full bg-white/50" />
+            </>
           )}
         </div>
-
-        {/* Figma: Bottom buttons - Send and Receive side-by-side as icon buttons - no divider above */}
-        <div className="flex gap-4 shrink-0">
-          <button
-            onClick={() => setShowSendModal(true)}
-            className="flex-1 h-16 border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center opacity-80 hover:opacity-100"
-          >
-            {/* Send icon */}
-            <img src="/assets/sent.svg" alt="Send" className="h-8 w-8" />
-          </button>
-          <button
-            onClick={() => setShowReceiveModal(true)}
-            className="flex-1 h-16 border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center opacity-80 hover:opacity-100"
-          >
-            {/* Receive icon */}
-            <img src="/assets/recieved.svg" alt="Receive" className="h-8 w-8" />
-          </button>
         </div>
+      </div>
+
+      {/* Fixed bottom action buttons - do not move with pull-to-refresh */}
+      <div className="flex gap-4 shrink-0 px-5 pb-5">
+        <button
+          onClick={() => setShowSendModal(true)}
+          className="flex-1 h-16 border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center opacity-80 hover:opacity-100"
+        >
+          <img src="/assets/sent.svg" alt="Send" className="h-8 w-8" />
+        </button>
+        <button
+          onClick={() => setShowReceiveModal(true)}
+          className="flex-1 h-16 border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center opacity-80 hover:opacity-100"
+        >
+          <img src="/assets/recieved.svg" alt="Receive" className="h-8 w-8" />
+        </button>
       </div>
 
       {/* Send Modal - Full screen */}
@@ -462,27 +513,45 @@ export default function WalletDashboard() {
               {/* Divider */}
               <div className="h-[1px] w-full bg-white/50" />
               
-              {/* Principal info - show above Sign Out */}
+              {/* Account info - show above Sign Out (principal; display name when II provides one) */}
               {currentPrincipal && (
                 <div 
                   onClick={async () => {
                     try {
                       await navigator.clipboard.writeText(currentPrincipal);
-                      toast.success('Principal ID copied to clipboard');
+                      setPrincipalCopied(true);
+                      setTimeout(() => setPrincipalCopied(false), 2000);
                     } catch (err) {
-                      console.error('Failed to copy principal ID:', err);
-                      toast.error('Failed to copy principal ID');
+                      console.error('Failed to copy principal:', err);
+                      toast.error('Failed to copy');
                     }
                   }}
                   className="bg-black/90 border border-white/20 rounded p-4 text-xs cursor-pointer hover:bg-black/95 hover:border-white/30 transition-colors active:scale-[0.98]"
                 >
-                  <div className="text-white/60 mb-2 font-bold">Market.Town Principal ID:</div>
-                  <div className="text-white break-all mb-3 font-mono">{currentPrincipal}</div>
+                  <div className="text-white/60 mb-2 font-bold">
+                    {displayName ? 'Signed in as' : 'Market.Town account'}
+                  </div>
+                  {displayName ? (
+                    <div className="text-white mb-2 font-medium">{displayName}</div>
+                  ) : null}
+                  <div className="text-white/60 text-[11px] leading-relaxed mb-1">Principal (this app):</div>
+                  <div className="text-white break-all mb-3 font-mono">{principalCopied ? 'Copied!' : currentPrincipal}</div>
                   <div className="text-white/60 text-[11px] leading-relaxed">
-                    Internet Identity creates a unique principal ID for each app to protect your privacy.
+                    {displayName
+                      ? 'You can set a username in Internet Identity (id.ai). Your principal is unique per app.'
+                      : 'Internet Identity can use usernames instead of ID numbers. Your principal is unique per app.'}
+                  </div>
+                  <div className="bg-amber-950/50 border border-amber-600/50 text-amber-200 text-[11px] leading-relaxed mt-3 p-3 rounded">
+                    <p className="font-semibold text-amber-100 mb-1">⚠️ Save this principal before changing Internet Identity</p>
+                    <p className="mb-2">
+                      Changing your Internet Identity (e.g. upgrading to a username, adding devices, or switching accounts) can give you a <strong>different principal</strong> in this app. Your balance here is tied to <strong>this</strong> principal only. If you change identity and cannot sign in with the old one again, you will <strong>lose access to that balance</strong> from this app—even though the funds still exist on the old principal.
+                    </p>
+                    <p>
+                      <strong>Recommendation:</strong> Tap below to copy this principal and store it somewhere safe <em>before</em> making any change in Internet Identity. If you ever lose access, recovering the balance would require signing in again with the same identity that had it.
+                    </p>
                   </div>
                   <div className="text-white/40 text-[10px] mt-2 italic">
-                    Tap to copy
+                    Tap to copy principal
                   </div>
                 </div>
               )}
@@ -526,10 +595,10 @@ export default function WalletDashboard() {
       )}
 
       {/* Transaction Details Modal */}
-      {selectedTransaction && walletAddress && (
+      {selectedTransaction && (walletAddress || walletAddressForTx) && (
         <TransactionDetails 
           transaction={selectedTransaction} 
-          walletAddress={walletAddress}
+          walletAddress={walletAddress ?? walletAddressForTx}
           onClose={() => setSelectedTransaction(null)} 
         />
       )}

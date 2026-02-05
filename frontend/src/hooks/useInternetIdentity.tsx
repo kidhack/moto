@@ -5,6 +5,8 @@ import { USE_DUMMY_DATA, DUMMY_IDENTITY } from '../data/dummyData';
 
 interface InternetIdentityContextType {
   identity: Identity | null;
+  /** Optional display name / username when Internet Identity provides one (e.g. id.ai usernames). */
+  displayName: string | null;
   isInitializing: boolean;
   isLoggingIn: boolean;
   login: () => Promise<void>;
@@ -15,6 +17,7 @@ const InternetIdentityContext = createContext<InternetIdentityContextType | unde
 
 export function InternetIdentityProvider({ children }: { children: ReactNode }) {
   const [identity, setIdentity] = useState<Identity | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authClient, setAuthClient] = useState<AuthClient | null>(null);
@@ -49,6 +52,7 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
             console.warn('useInternetIdentity: Clearing production Internet Identity session - must use local Internet Identity for local development');
             client.logout();
             setIdentity(null);
+            setDisplayName(null);
             setIsInitializing(false);
             return;
           }
@@ -56,6 +60,7 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
           const currentIdentity = client.getIdentity();
           const principalText = currentIdentity.getPrincipal().toText();
           setIdentity(currentIdentity);
+          setDisplayName(null); // II may add principal_name in session later
           console.log('User already authenticated, identity set:', principalText);
           console.log('⚠️ VERIFY: Make sure this principal matches the one with your ckBTC balance!');
           console.log('   Current principal:', principalText);
@@ -168,8 +173,8 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
         console.log('useInternetIdentity: Using LOCALHOST Internet Identity for local development');
       } else {
         // Mainnet: Use ID.AI (Internet Identity)
-        identityProvider = 'https://id.ai/';
-        console.log('useInternetIdentity: Using PRODUCTION Internet Identity (id.ai)');
+        identityProvider = 'https://id.ai/?feature_flag_guided_upgrade=true';
+        console.log('useInternetIdentity: Using PRODUCTION Internet Identity (id.ai) with guided upgrade');
       }
 
       console.log('Login Debug:', {
@@ -185,14 +190,25 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
         try {
           authClient.login({
             identityProvider,
-            onSuccess: async () => {
+            onSuccess: async (message) => {
               console.log('Login successful');
-              // Re-verify authentication to ensure identity is properly set
+              try {
+                const msg = message as { principal_name?: string; display_name?: string } | undefined;
+                if (msg && typeof msg.principal_name === 'string' && msg.principal_name) {
+                  setDisplayName(msg.principal_name);
+                } else if (msg && typeof msg.display_name === 'string' && msg.display_name) {
+                  setDisplayName(msg.display_name);
+                } else {
+                  setDisplayName(null);
+                }
+              } catch (_) {
+                setDisplayName(null);
+              }
               try {
                 const isAuthenticated = await authClient.isAuthenticated();
                 if (isAuthenticated) {
-              const newIdentity = authClient.getIdentity();
-              setIdentity(newIdentity);
+                  const newIdentity = authClient.getIdentity();
+                  setIdentity(newIdentity);
                   console.log('Identity set after login:', newIdentity.getPrincipal().toText());
                 } else {
                   console.warn('Login callback succeeded but user is not authenticated');
@@ -234,8 +250,9 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
         await authClient.logout();
         console.log('useInternetIdentity: Logged out from Internet Identity');
       }
-      // Clear identity state
+      // Clear identity and display name
       setIdentity(null);
+      setDisplayName(null);
       // Clear any cached authentication data
       // The AuthClient stores data in localStorage, logout() should handle it, but let's be thorough
       console.log('useInternetIdentity: Identity cleared');
@@ -250,6 +267,7 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
     <InternetIdentityContext.Provider
       value={{
         identity,
+        displayName,
         isInitializing,
         isLoggingIn,
         login,

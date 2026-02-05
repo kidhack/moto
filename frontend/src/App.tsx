@@ -79,7 +79,7 @@ export default function App() {
     <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark">
       <div className="min-h-screen bg-black">
         <WalletDashboard />
-        <Toaster />
+        <Toaster position="top-center" />
       </div>
     </ThemeProvider>
   );
