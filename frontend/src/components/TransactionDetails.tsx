@@ -127,7 +127,7 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
             />
           </button>
           <p className="font-medium text-xl text-white tracking-[-0.22px]">
-            Transaction Details
+            {txType === 'received' ? 'Received Bitcoin' : 'Transaction Details'}
           </p>
           <button
             onClick={cycleCurrency}
@@ -148,9 +148,9 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
             {/* Transaction Icon - 64px × 48px */}
             <div className="h-16 w-12 flex items-center justify-center">
               {txType === 'sent' ? (
-                <img src="/assets/sent.svg" alt="Sent" className="h-16 w-12 object-contain" />
+                <img src="/assets/tx-sent.svg" alt="Sent" className="h-16 w-12 object-contain" />
               ) : txType === 'received' ? (
-                <img src="/assets/recieved.svg" alt="Received" className="h-16 w-12 object-contain" />
+                <img src="/assets/tx-recieve.svg" alt="Received" className="h-16 w-12 object-contain" />
               ) : (
                 <img src="/assets/addfunds.svg" alt="Added Funds" className="h-16 w-12 object-contain" />
               )}
@@ -192,18 +192,22 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
                 </span>
               </div>
 
-              {/* To Address - clickable to copy */}
+              {/* From (received: wallet that sent the Bitcoin) or To (sent) - clickable to copy */}
               <div className="flex items-center gap-[10px]">
                 <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
-                  To
+                  {txType === 'received' ? 'From' : 'To'}
                 </span>
                 <button
-                  onClick={() => copyToClipboard(transaction.toAddress, 'Address', 'to')}
+                  onClick={() => copyToClipboard(
+                    txType === 'received' ? (transaction.sourceBitcoinAddress ?? transaction.fromAddress) : transaction.toAddress,
+                    'Address',
+                    'to'
+                  )}
                   className="font-mono text-base text-white text-right flex-1 cursor-pointer no-underline"
                   style={{ letterSpacing: '0.32px' }}
-                  title={`Click to copy: ${transaction.toAddress}`}
+                  title={`Click to copy: ${txType === 'received' ? (transaction.sourceBitcoinAddress ?? transaction.fromAddress) : transaction.toAddress}`}
                 >
-                  {copiedField === 'to' ? 'Copied!' : formatAddress(transaction.toAddress)}
+                  {copiedField === 'to' ? 'Copied!' : formatAddress(txType === 'received' ? (transaction.sourceBitcoinAddress ?? transaction.fromAddress) : transaction.toAddress)}
                 </button>
               </div>
 
@@ -217,39 +221,29 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
                 </span>
               </div>
 
-              {/* Fee */}
+              {/* Market Price */}
               <div className="flex items-center gap-[10px]">
                 <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
-                  Fee
-                </span>
-                <span className="font-mono text-base text-white text-right flex-1" style={{ letterSpacing: '0.32px' }}>
-                  {formatAmountWithUSD(transaction.fee)}
-                </span>
-              </div>
-
-              {/* Price */}
-              <div className="flex items-center gap-[10px]">
-                <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
-                  Price
+                  Market Price
                 </span>
                 <span className="font-mono text-base text-white text-right flex-1" style={{ letterSpacing: '0.32px' }}>
                   $103,180.27
                 </span>
               </div>
 
-              {/* Index (for ckBTC/ICRC1) */}
+              {/* Transaction - link to chain */}
               <div className="flex items-center gap-[10px]">
                 <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
-                  Index
+                  Transaction
                 </span>
                 <a
                   href={getBlockExplorerUrl(transaction.id)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-mono text-base text-white text-right flex-1 hover:underline" 
+                  className="font-mono text-base text-white text-right flex-1 hover:underline"
                   style={{ letterSpacing: '0.32px' }}
                 >
-                  {transaction.id}
+                  {formatAddress(transaction.id)}
                 </a>
               </div>
 

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { LogOut } from 'lucide-react';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { useWalletInfo, useEnsureWallet, useResetOnboarding, useSignOutAndReset, useWalletAddress } from '../hooks/useQueries';
 import { useCkBTCMinter } from '../hooks/useCkBTCMinter';
@@ -7,7 +6,6 @@ import { useCkBTCLedger } from '../hooks/useCkBTCLedger';
 import { useCkBTCTransactions } from '../hooks/useCkBTCTransactions';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import type { Transaction } from '../backend';
-import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,7 +24,7 @@ import LanguageSelector from '../components/LanguageSelector';
 import TransactionDetails from '../components/TransactionDetails';
 
 export default function WalletDashboard() {
-  const { clear, identity, displayName } = useInternetIdentity();
+  const { clear, identity } = useInternetIdentity();
   const { data: walletInfo, isLoading, error: walletInfoError, isFetching: isWalletInfoFetching, refetch: refetchWalletInfo } = useWalletInfo();
   const { data: walletAddress, isLoading: isLoadingAddress, error: walletAddressError } = useWalletAddress();
   const { address: ckbtcAddress, isFetching: isCkbtcFetching } = useCkBTCMinter(); // Check if we have ckBTC address
@@ -61,6 +59,7 @@ export default function WalletDashboard() {
       displayTransactionsCount: displayTransactions.length,
     });
   }, [walletInfo, isLoading, isWalletInfoFetching, ledgerBalance, walletInfoError, ensureWallet.isSuccess, ensureWallet.isError, ensureWallet.isPending, ensureWallet.error, ckbtcAddress, isCkbtcFetching, displayTransactions.length]);
+
   const resetOnboarding = useResetOnboarding();
   const signOutAndReset = useSignOutAndReset();
   const [showResetDialog, setShowResetDialog] = useState(false);
@@ -72,6 +71,43 @@ export default function WalletDashboard() {
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [principalCopied, setPrincipalCopied] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+
+  const WALLET_NAME_KEY_PREFIX = 'market_town_wallet_name_';
+  const DEFAULT_WALLET_NAME = 'My Wallet';
+  const getStoredWalletName = (principal: string) => {
+    try {
+      const s = localStorage.getItem(WALLET_NAME_KEY_PREFIX + principal);
+      return s?.trim() || DEFAULT_WALLET_NAME;
+    } catch {
+      return DEFAULT_WALLET_NAME;
+    }
+  };
+  const setStoredWalletName = (principal: string, name: string) => {
+    try {
+      const trimmed = name?.trim() || DEFAULT_WALLET_NAME;
+      localStorage.setItem(WALLET_NAME_KEY_PREFIX + principal, trimmed);
+    } catch {
+      // ignore
+    }
+  };
+  const clearStoredWalletName = (principal: string) => {
+    try {
+      localStorage.removeItem(WALLET_NAME_KEY_PREFIX + principal);
+    } catch {
+      // ignore
+    }
+  };
+
+  const [walletName, setWalletName] = useState(DEFAULT_WALLET_NAME);
+  const [editingWalletName, setEditingWalletName] = useState(false);
+  const [walletNameInput, setWalletNameInput] = useState(DEFAULT_WALLET_NAME);
+
+  useEffect(() => {
+    if (currentPrincipal) {
+      setWalletName(getStoredWalletName(currentPrincipal));
+      setWalletNameInput(getStoredWalletName(currentPrincipal));
+    }
+  }, [currentPrincipal]);
   
   // Debug: Log principal when menu opens
   useEffect(() => {
@@ -109,38 +145,53 @@ export default function WalletDashboard() {
     }
   };
 
-  const handleSignOutAndReset = async () => {
+  const handleLogOut = async () => {
+    setMenuOpen(false);
     try {
-      // Try to call backend signOutAndReset, but don't fail if it errors
-      // The important part is clearing the local identity
+      await clear();
+      toast.success('Signed out');
+      setTimeout(() => {
+        window.location.href = window.location.origin + window.location.pathname;
+      }, 300);
+    } catch (error) {
+      console.error('Sign out error:', error);
+      toast.error('Failed to sign out. Please refresh the page.');
+    }
+  };
+
+  const handleWipeCanisterAndSignOut = async () => {
+    setMenuOpen(false);
+    if (currentPrincipal) clearStoredWalletName(currentPrincipal);
+    try {
       try {
         await signOutAndReset.mutateAsync();
         console.log('WalletDashboard: Backend signOutAndReset successful');
       } catch (backendError) {
         console.warn('WalletDashboard: Backend signOutAndReset failed (continuing with local logout):', backendError);
-        // Continue with local logout even if backend fails
       }
-      
-      // Clear the identity and reload
       await clear();
-      toast.success('Signed out successfully');
-      
-      // Small delay to ensure state is cleared, then reload
+      toast.success('Canister wiped and signed out');
       setTimeout(() => {
-        // Force a hard reload to clear all cached state
         window.location.href = window.location.origin + window.location.pathname;
       }, 300);
     } catch (error) {
-      console.error('Sign out error:', error);
-      // Even if there's an error, try to clear and reload
+      console.error('Wipe and sign out error:', error);
       try {
         await clear();
         window.location.href = window.location.origin + window.location.pathname;
       } catch (clearError) {
         console.error('Failed to clear identity:', clearError);
-        toast.error('Failed to sign out completely. Please refresh the page.');
+        toast.error('Failed to complete. Please refresh the page.');
       }
     }
+  };
+
+  const handleSaveWalletName = () => {
+    if (!currentPrincipal) return;
+    const name = walletNameInput?.trim() || DEFAULT_WALLET_NAME;
+    setWalletName(name);
+    setStoredWalletName(currentPrincipal, name);
+    setEditingWalletName(false);
   };
 
   const formatBTC = (satoshis: bigint) => {
@@ -272,13 +323,15 @@ export default function WalletDashboard() {
                 </p>
               )}
             </div>
-            {/* Figma: Add funds button - 32px */}
-            <button
-              onClick={() => setShowAddFundsModal(true)}
-              className="h-8 w-8 flex items-center justify-center hover:bg-white/10 transition-colors"
-            >
-              <img src="/assets/addfunds.svg" alt="Add Funds" className="h-8 w-8" />
-            </button>
+            {/* Figma: Add funds button - 32px; hide when balance > 0 */}
+            {(!displayWalletInfo || displayWalletInfo.balance <= BigInt(0)) && (
+              <button
+                onClick={() => setShowAddFundsModal(true)}
+                className="h-8 w-8 flex items-center justify-center hover:bg-white/10 transition-colors"
+              >
+                <img src="/assets/addfunds.svg" alt="Add Funds" className="h-8 w-8" />
+              </button>
+            )}
           </div>
         </header>
 
@@ -307,45 +360,35 @@ export default function WalletDashboard() {
                 .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
                 .map((tx) => {
                   const txType = getTransactionIcon(tx, walletAddressForTx);
-                
-                return (
-                  <button
-                    key={tx.id}
-                    onClick={() => setSelectedTransaction(tx)}
-                    className="flex w-full items-center justify-between h-8 opacity-80 hover:opacity-100 transition-opacity"
-                  >
-                    <div className="flex items-center gap-2">
-                      {/* Transaction Icon - 32px x 24px */}
-                      <div className="h-8 w-6 flex items-center justify-center">
-                        {txType === 'sent' ? (
-                          <img src="/assets/sent.svg" alt="Sent" className="h-8 w-6 object-contain" />
-                        ) : txType === 'received' ? (
-                          <img src="/assets/recieved.svg" alt="Received" className="h-8 w-6 object-contain" />
-                        ) : (
-                          <img src="/assets/addfunds.svg" alt="Added Funds" className="h-8 w-6 object-contain" />
-                        )}
-                      </div>
-                      {/* Figma: Amount - IBM Plex Mono Medium, 18px (reduced from 20px for mobile), rgba(255,255,255,0.8), tracking 0.8px */}
-                      <div className="flex items-center gap-1">
-                        <span className="font-mono text-[18px] font-medium text-white" style={{ letterSpacing: '0.8px' }}>₿</span>
-                        <p 
-                          className="font-mono text-[18px] font-medium text-white"
-                          style={{ letterSpacing: '0.8px' }}
-                        >
-                          {formatBTC(tx.amount)}
-                        </p>
-                      </div>
-                    </div>
-                    {/* Figma: Date - IBM Plex Mono, 18px, font-weight 400, rgba(255,255,255,0.8), tracking 0.8px */}
-                    <p 
-                      className="font-mono text-[18px] font-normal text-white"
-                      style={{ letterSpacing: '0.8px' }}
+                  return (
+                    <button
+                      key={tx.id}
+                      onClick={() => setSelectedTransaction(tx)}
+                      className="flex w-full items-center justify-between h-8 opacity-80 hover:opacity-100 transition-opacity"
                     >
-                      {formatDate(tx.timestamp)}
-                    </p>
-                  </button>
-                );
-              })}
+                      <div className="flex items-center gap-[8px]">
+                        <div className="h-8 w-6 flex items-center justify-center shrink-0">
+                          {txType === 'sent' ? (
+                            <img src="/assets/tx-sent.svg" alt="Sent" className="h-8 w-6 object-contain opacity-60" />
+                          ) : txType === 'received' ? (
+                            <img src="/assets/tx-recieve.svg" alt="Received" className="h-8 w-6 object-contain opacity-60" />
+                          ) : (
+                            <img src="/assets/addfunds.svg" alt="Added Funds" className="h-8 w-6 object-contain" />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono text-[18px] font-medium text-white/80" style={{ letterSpacing: '0.8px' }}>₿</span>
+                          <p className="font-mono text-[18px] font-medium text-white/80" style={{ letterSpacing: '0.8px' }}>
+                            {formatBTC(tx.amount)}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="font-mono text-[18px] font-normal text-white/50" style={{ letterSpacing: '0.8px' }}>
+                        {formatDate(tx.timestamp)}
+                      </p>
+                    </button>
+                  );
+                })}
               <div className="h-[1px] w-full bg-white/50" />
             </>
           ) : (
@@ -458,128 +501,159 @@ export default function WalletDashboard() {
         )
       )}
 
-             {/* Full-screen Menu Modal - Matching home screen spacing */}
+             {/* Full-screen Menu Modal - Figma layout: logo, dividers, sections, Close at bottom */}
              {menuOpen && (
                <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-                 {/* Main container matching home screen: pt-8 (32px) px-5 (20px) */}
-                 <div className="flex flex-col gap-8 pt-8 px-5 pb-5 flex-1 overflow-y-auto">
-                   {/* Logo - full logo (mark + type side by side) - left aligned like home screen header, clickable to close */}
-                   <button 
+                 <div className="flex flex-col flex-1 min-h-0 pt-8 px-5 pb-5">
+                   {/* Logo */}
+                   <button
                      onClick={() => setMenuOpen(false)}
-                     className="flex items-center cursor-pointer"
+                     className="flex items-center cursor-pointer shrink-0"
                    >
                      <div className="relative h-[40px]" style={{ width: '279.844px' }}>
-                       {/* Logo mark */}
                        <img src="/assets/mt-mark.svg" alt="market.town" className="h-10 w-10 absolute left-0 top-1/2 -translate-y-1/2" />
-                       {/* Logo type - to the right of the mark */}
                        <img src="/assets/mt-type.svg" alt="market.town" className="h-[40px] absolute left-[20.99%] top-0" style={{ width: 'calc(100% - 20.99%)' }} />
                      </div>
                    </button>
-                   
-                   {/* Menu items container - with more spacing between items */}
-                   <div className="flex flex-col gap-10 flex-1">
-              {/* Divider - constrained to content width like home screen */}
-              <div className="h-[1px] w-full bg-white/50" />
-              
-              {/* Currency */}
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  setShowCurrencySelector(true);
-                }}
-                className="flex gap-4 h-8 items-center opacity-80 hover:opacity-100 transition-opacity"
-              >
-                <img src="/assets/currency.svg" alt="Currency" className="size-6" />
-                <div className="flex flex-col font-medium justify-center text-xl text-white tracking-[0.8px]">
-                  <p className="leading-[1.5]">Currency</p>
-                </div>
-              </button>
-              
-              {/* Language */}
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  setShowLanguageSelector(true);
-                }}
-                className="flex gap-4 h-8 items-center opacity-80 hover:opacity-100 transition-opacity"
-              >
-                <img src="/assets/language.svg" alt="Language" className="size-6" />
-                <div className="flex flex-col font-medium justify-center text-xl text-white tracking-[0.8px]">
-                  <p className="leading-[1.5]">Language</p>
-                </div>
-              </button>
-              
-              {/* Divider */}
-              <div className="h-[1px] w-full bg-white/50" />
-              
-              {/* Account info - show above Sign Out (principal; display name when II provides one) */}
-              {currentPrincipal && (
-                <div 
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(currentPrincipal);
-                      setPrincipalCopied(true);
-                      setTimeout(() => setPrincipalCopied(false), 2000);
-                    } catch (err) {
-                      console.error('Failed to copy principal:', err);
-                      toast.error('Failed to copy');
-                    }
-                  }}
-                  className="bg-black/90 border border-white/20 rounded p-4 text-xs cursor-pointer hover:bg-black/95 hover:border-white/30 transition-colors active:scale-[0.98]"
-                >
-                  <div className="text-white/60 mb-2 font-bold">
-                    {displayName ? 'Signed in as' : 'Market.Town account'}
-                  </div>
-                  {displayName ? (
-                    <div className="text-white mb-2 font-medium">{displayName}</div>
-                  ) : null}
-                  <div className="text-white/60 text-[11px] leading-relaxed mb-1">Principal (this app):</div>
-                  <div className="text-white break-all mb-3 font-mono">{principalCopied ? 'Copied!' : currentPrincipal}</div>
-                  <div className="text-white/60 text-[11px] leading-relaxed">
-                    {displayName
-                      ? 'You can set a username in Internet Identity (id.ai). Your principal is unique per app.'
-                      : 'Internet Identity can use usernames instead of ID numbers. Your principal is unique per app.'}
-                  </div>
-                </div>
-              )}
-              
-              {/* Sign Out */}
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  handleSignOutAndReset();
-                }}
-                className="flex gap-4 h-8 items-center opacity-80 hover:opacity-100 transition-opacity"
-                disabled={signOutAndReset.isPending}
-              >
-                <img src="/assets/logout.svg" alt="Sign Out" className="size-6" />
-                <div className="flex flex-col font-medium justify-center text-xl text-white tracking-[0.8px]">
-                  <p className="leading-[1.5]">{signOutAndReset.isPending ? 'Signing Out...' : 'Sign Out'}</p>
-                </div>
-              </button>
-            </div>
-            
-            {/* Close Button - matching buttons section (gap-4, shrink-0) */}
-            <div className="flex gap-4 shrink-0">
-              <button
-                onClick={() => setMenuOpen(false)}
-                className="flex-1 h-16 border-2 border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center"
-              >
-                <span className="font-bold text-base text-white/80 tracking-[0.15px]">Close</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
+                   {/* Divider under logo */}
+                   <div className="h-px w-full bg-white/50 shrink-0 mt-6" />
+
+                   {/* Scrollable content: My Wallet, Currency, Language, Principal ID, Sign Out, Wipe */}
+                   <div className="flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto pt-6">
+                     {/* My Wallet - equal space above and below the name */}
+                     {currentPrincipal && (
+                       <div className="flex flex-col gap-6">
+                         <div className="flex items-center min-h-[2rem]">
+                           {editingWalletName ? (
+                             <input
+                               type="text"
+                               value={walletNameInput}
+                               onChange={(e) => setWalletNameInput(e.target.value)}
+                               onBlur={handleSaveWalletName}
+                               onKeyDown={(e) => e.key === 'Enter' && handleSaveWalletName()}
+                               className="w-full bg-transparent border-0 rounded-none px-0 py-0 text-white/80 font-mono font-medium text-xl tracking-[0.8px] outline-none placeholder:text-white/50"
+                               placeholder={DEFAULT_WALLET_NAME}
+                               autoFocus
+                             />
+                           ) : (
+                             <button
+                               onClick={() => { setWalletNameInput(walletName); setEditingWalletName(true); }}
+                               className="w-full flex items-center justify-between min-h-[2rem] opacity-80 hover:opacity-100 transition-opacity text-left"
+                             >
+                               <span className="font-mono font-medium text-xl text-white/80 tracking-[0.8px]">{walletName}</span>
+                               <svg className="size-5 text-white/70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                               </svg>
+                             </button>
+                           )}
+                         </div>
+                         <div className="h-px w-full bg-white/20" />
+                       </div>
+                     )}
+
+                     {/* Currency */}
+                     <button
+                       onClick={() => { setMenuOpen(false); setShowCurrencySelector(true); }}
+                       className="flex gap-4 h-10 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
+                     >
+                       <img src="/assets/currency.svg" alt="" className="size-6 shrink-0 opacity-80" />
+                       <span className="font-medium text-xl text-white/80 tracking-[0.8px]">Currency</span>
+                     </button>
+
+                     {/* Language */}
+                     <button
+                       onClick={() => { setMenuOpen(false); setShowLanguageSelector(true); }}
+                       className="flex gap-4 h-10 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
+                     >
+                       <img src="/assets/language.svg" alt="" className="size-6 shrink-0 opacity-80" />
+                       <span className="font-medium text-xl text-white/80 tracking-[0.8px]">Language</span>
+                     </button>
+
+                     <div className="h-px w-full bg-white/20" />
+
+                     {/* Sign Out */}
+                     <button
+                       onClick={handleLogOut}
+                       className="flex gap-4 h-10 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
+                     >
+                       <img src="/assets/logout.svg" alt="" className="size-6 shrink-0 opacity-80" />
+                       <span className="font-medium text-xl text-white/80 tracking-[0.8px]">Sign Out</span>
+                     </button>
+
+                     <div className="h-px w-full bg-white/20" />
+
+                     {/* Principal ID + blurb */}
+                     {currentPrincipal && (
+                       <div className="flex flex-col gap-3">
+                         <p className="text-white/60 text-[14px] font-medium">Principal ID</p>
+                         <div
+                           onClick={async () => {
+                             try {
+                               await navigator.clipboard.writeText(currentPrincipal);
+                               setPrincipalCopied(true);
+                               setTimeout(() => setPrincipalCopied(false), 2000);
+                             } catch {
+                               toast.error('Failed to copy');
+                             }
+                           }}
+                           className="bg-zinc-900/90 p-3 cursor-pointer flex items-center justify-center relative"
+                         >
+                           <p className="text-white/80 font-mono text-[16px] font-medium text-center break-all leading-relaxed" style={{ letterSpacing: '0.32px', textWrap: 'balance' }}>
+                             {currentPrincipal}
+                           </p>
+                           {principalCopied && (
+                             <p className="absolute inset-0 flex items-center justify-center bg-zinc-900/90 text-white/80 font-sans text-[16px] font-medium">
+                               Copied!
+                             </p>
+                           )}
+                         </div>
+<p className="text-white/50 text-[14px] leading-relaxed">
+                          market.town is 100% decentralized and on-chain. App settings are stored in your private canister and all financial data is stored on ledger.
+                        </p>
+                       </div>
+                     )}
+
+                     {/* Wipe Canister & Sign Out */}
+                     <button
+                       onClick={handleWipeCanisterAndSignOut}
+                       disabled={signOutAndReset.isPending}
+                       className="flex gap-4 h-10 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
+                     >
+                       <img
+                         src="/assets/wipeout.svg"
+                         alt=""
+                         className="size-6 shrink-0"
+                         style={{ filter: 'brightness(0) saturate(100%) invert(27%) sepia(98%) saturate(1000%) hue-rotate(346deg) brightness(104%) contrast(97%)' }}
+                       />
+                       <span className="font-medium text-xl text-red-500 tracking-[0.8px]">
+                         {signOutAndReset.isPending ? 'Wiping...' : 'Wipe Canister & Sign Out'}
+                       </span>
+                     </button>
+
+                     {/* Divider below Wipe Canister & Sign Out */}
+                     <div className="h-px w-full bg-white/20" />
+                   </div>
+
+                   {/* Close button - bottom, full width */}
+                   <button
+                     onClick={() => setMenuOpen(false)}
+                     className="w-full h-14 mt-6 border border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center shrink-0"
+                   >
+                     <span className="font-bold text-base text-white/80 tracking-[0.15px]">Close</span>
+                   </button>
+                 </div>
+               </div>
+             )}
 
       {/* Currency Selector Modal */}
       {showCurrencySelector && (
-        <CurrencySelector onClose={() => setShowCurrencySelector(false)} />
+        <CurrencySelector onClose={() => { setShowCurrencySelector(false); setMenuOpen(true); }} />
       )}
 
       {/* Language Selector Modal */}
       {showLanguageSelector && (
-        <LanguageSelector onClose={() => setShowLanguageSelector(false)} />
+        <LanguageSelector onClose={() => { setShowLanguageSelector(false); setMenuOpen(true); }} />
       )}
 
       {/* Transaction Details Modal */}

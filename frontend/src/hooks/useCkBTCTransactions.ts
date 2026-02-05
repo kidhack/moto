@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Principal } from '@dfinity/principal';
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { useInternetIdentity } from './useInternetIdentity';
+import { createCkBTCMinterIDL, CKBTC_MINTER_CANISTER_ID } from './useCkBTCMinter';
 import type { Transaction } from '../backend';
 
 // Check if we should use testnet
@@ -201,14 +202,19 @@ function convertICRC1TransactionToAppTransaction(
     const toOwner = mint.to?.owner;
     if (typeof toOwner?.toText === 'function' && toOwner.toText() !== principalText) return null;
     if (typeof toOwner === 'string' && toOwner !== principalText) return null;
+    const rawMemo = mint.memo;
+    const memoBytes = rawMemo != null && Array.isArray(rawMemo) && rawMemo.length > 0
+      ? Array.from(rawMemo as Iterable<number> | ArrayLike<number>)
+      : undefined;
     return {
       id: `icrc1-mint-${txWithId.id.toString()}`,
       amount: mint.amount ?? BigInt(0),
       timestamp: getTimestamp(mint.created_at_time),
       status: 'confirmed' as const,
-      fromAddress: 'ckBTC Minter',
+      fromAddress: 'Bitcoin Network',
       toAddress: userBitcoinAddress,
       fee: BigInt(0),
+      mintMemo: memoBytes,
     };
   }
   if (burn) {
@@ -228,18 +234,81 @@ function convertICRC1TransactionToAppTransaction(
   return null;
 }
 
+const BLOCKSTREAM_API = USE_TESTNET ? 'https://blockstream.info/testnet/api' : 'https://blockstream.info/api';
+
 export function useCkBTCTransactions(userBitcoinAddress: string) {
   const { identity } = useInternetIdentity();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [sourceAddressByTxId, setSourceAddressByTxId] = useState<Record<string, string>>({});
+  const resolvedTxIdsRef = useRef<Set<string>>(new Set());
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
+  // Resolve Bitcoin source address for mint transactions (decode memo -> get txid -> fetch tx -> first input address)
+  useEffect(() => {
+    if (!identity || transactions.length === 0) return;
+    const agent = new HttpAgent({ identity: identity as any, host: HOST });
+    if (HOST.includes('localhost') || HOST.includes('127.0.0.1')) agent.fetchRootKey().catch(() => {});
+    const minterIDL = createCkBTCMinterIDL();
+    const minterActor = Actor.createActor(minterIDL, {
+      agent,
+      canisterId: Principal.fromText(CKBTC_MINTER_CANISTER_ID),
+    }) as any;
+
+    let cancelled = false;
+    (async () => {
+      for (const tx of transactions) {
+        if (cancelled) break;
+        if (!tx.id.startsWith('icrc1-mint-') || !tx.mintMemo?.length || resolvedTxIdsRef.current.has(tx.id)) continue;
+        try {
+          const decoded = await minterActor.decode_ledger_memo({
+            memo_type: { Mint: null },
+            encoded_memo: tx.mintMemo,
+          });
+          const decodedMemo = Array.isArray(decoded?.Ok) ? decoded.Ok[0] : decoded?.Ok;
+          const mintVariant = decodedMemo?.Mint;
+          const convert = (Array.isArray(mintVariant) ? mintVariant[0] : mintVariant)?.Convert ?? (Array.isArray(mintVariant) ? mintVariant[0] : null);
+          const txidOpt = convert?.txid;
+          const txidBytes = (Array.isArray(txidOpt) ? txidOpt[0] : txidOpt) as Uint8Array | number[] | undefined;
+          if (!txidBytes || !ArrayBuffer.isView(txidBytes) && !Array.isArray(txidBytes)) continue;
+          const arr = Array.from(txidBytes as Uint8Array);
+          if (arr.length !== 32) continue;
+          const txidHex = arr.reverse().map(b => b.toString(16).padStart(2, '0')).join('');
+          const res = await fetch(`${BLOCKSTREAM_API}/tx/${txidHex}`);
+          if (!res.ok) continue;
+          const data = await res.json();
+          const firstVin = data.vin?.[0];
+          const addr = firstVin?.prevout?.scriptpubkey_address;
+          if (addr && !cancelled) {
+            resolvedTxIdsRef.current.add(tx.id);
+            setSourceAddressByTxId(prev => ({ ...prev, [tx.id]: addr }));
+          }
+        } catch (_) {
+          // ignore decode/fetch errors per tx
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [identity, transactions]);
+
+  const transactionsWithSource = useMemo(
+    () => transactions.map(tx => ({
+      ...tx,
+      sourceBitcoinAddress: sourceAddressByTxId[tx.id] ?? tx.sourceBitcoinAddress,
+    })),
+    [transactions, sourceAddressByTxId]
+  );
 
   useEffect(() => {
     if (!identity || !userBitcoinAddress) {
       setTransactions([]);
+      setSourceAddressByTxId({});
+      resolvedTxIdsRef.current = new Set();
       setIsFetching(false);
       return;
     }
+    resolvedTxIdsRef.current = new Set();
+    setSourceAddressByTxId({});
 
     async function getTransactions() {
       setIsFetching(true);
@@ -378,7 +447,7 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
   }, [identity, userBitcoinAddress]);
 
   return {
-    transactions,
+    transactions: transactionsWithSource,
     isFetching,
     error,
   };

@@ -21,7 +21,7 @@ export default function CurrencySelector({ onClose }: CurrencySelectorProps) {
       {/* Main container matching menu screen: pt-8 (32px) */}
       <div className="flex flex-col pt-8 flex-1 min-h-0">
         {/* Header with close button, title, and empty space - matching menu header height (40px logo) - fixed at top */}
-        <header className="flex items-center justify-between h-10 mb-8 shrink-0 px-5">
+        <header className="flex items-center justify-between h-10 mb-6 shrink-0 px-5">
           <button
             onClick={onClose}
             className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
@@ -39,15 +39,15 @@ export default function CurrencySelector({ onClose }: CurrencySelectorProps) {
           <div className="h-8 w-8" /> {/* Empty space for symmetry */}
         </header>
 
-        {/* Divider - fixed above scrollable content, matching menu location */}
+        {/* Divider - matches main menu top divider (mt-6 below header) */}
         <div className="px-5 shrink-0">
-          <div className="bg-[rgba(255,255,255,0.5)] h-[1px] w-full" />
+          <div className="h-px w-full bg-white/50 shrink-0" />
         </div>
 
         {/* Currency list container - scrollable, matching menu items container structure - extends to edge for scrollbar */}
         <div className="flex flex-col gap-10 flex-1 min-h-0 overflow-y-auto pb-5">
-          {/* Content wrapper with padding - scrollbar stays at edge */}
-          <div className="px-5 pt-8 flex flex-col gap-10">
+          {/* Content wrapper with padding - scrollbar stays at edge, pt-6 matches menu */}
+          <div className="px-5 pt-6 flex flex-col gap-10">
             {/* Currency items - matching menu structure */}
             {CURRENCIES.map((currency) => {
               const isSelected = currency.code === preferredCurrency;
@@ -57,7 +57,7 @@ export default function CurrencySelector({ onClose }: CurrencySelectorProps) {
                   onClick={() => handleSelectCurrency(currency.code)}
                   className="flex items-center gap-8 h-6 w-full justify-between shrink-0"
                 >
-                  <div className="flex items-center gap-10 text-xl text-white tracking-[0.8px] text-left">
+                  <div className={`flex items-center gap-10 text-xl tracking-[0.8px] text-left ${isSelected ? 'text-white' : 'text-white/80'}`}>
                     <span className="font-mono font-bold">{currency.code}</span>
                     <span className="font-medium">{currency.name}</span>
                   </div>

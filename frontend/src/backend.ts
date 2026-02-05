@@ -15,6 +15,10 @@ export interface Transaction {
   fromAddress: BitcoinAddress;
   toAddress: BitcoinAddress;
   fee: bigint;
+  /** Optional: for received (mint) tx, the Bitcoin wallet address that sent the funds (from memo + chain lookup). */
+  sourceBitcoinAddress?: BitcoinAddress;
+  /** Optional: raw mint memo bytes from index, used to decode Bitcoin txid. */
+  mintMemo?: number[];
 }
 
 export interface UserWallet {

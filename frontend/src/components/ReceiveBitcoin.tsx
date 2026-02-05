@@ -180,11 +180,16 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
               <button
                 type="button"
                 onClick={copyAddress}
-                className="bg-white/10 flex items-center justify-center w-full min-h-16 px-4 py-3 cursor-pointer active:bg-white/15 transition-colors rounded-none border-0 text-left"
+                className="bg-white/10 flex items-center justify-center w-full min-h-16 px-4 py-3 cursor-pointer active:bg-white/15 transition-colors rounded-none border-0 text-left relative"
               >
-                <p className="font-mono text-base font-bold text-white/80 text-center break-all" style={{ letterSpacing: '0.32px', textWrap: 'balance' }}>
-                  {addressCopied ? 'Copied!' : address}
+                <p className="text-white/80 font-mono text-[16px] font-medium text-center break-all leading-relaxed" style={{ letterSpacing: '0.32px', textWrap: 'balance' }}>
+                  {address}
                 </p>
+                {addressCopied && (
+                  <p className="absolute inset-0 flex items-center justify-center bg-zinc-900/90 text-white/80 font-sans text-base font-medium" style={{ letterSpacing: '0.32px' }}>
+                    Copied!
+                  </p>
+                )}
               </button>
             </div>
           </div>

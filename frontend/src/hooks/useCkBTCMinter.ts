@@ -131,6 +131,30 @@ const createCkBTCMinterIDL = () => {
       kyt_fee: IDL.Nat64,
       deposit_btc_min_amount: IDL.Opt(IDL.Nat64),
     });
+    const MemoType = IDL.Variant({ Burn: IDL.Null, Mint: IDL.Null });
+    const DecodeLedgerMemoArgs = IDL.Record({
+      memo_type: MemoType,
+      encoded_memo: IDL.Vec(IDL.Nat8),
+    });
+    const MintMemoConvert = IDL.Record({
+      txid: IDL.Opt(IDL.Vec(IDL.Nat8)),
+      vout: IDL.Opt(IDL.Nat32),
+      kyt_fee: IDL.Opt(IDL.Nat64),
+    });
+    const MintMemo = IDL.Variant({
+      Convert: MintMemoConvert,
+      Kyt: IDL.Null,
+      KytFail: IDL.Record({ kyt_fee: IDL.Opt(IDL.Nat64), status: IDL.Opt(IDL.Text), associated_burn_index: IDL.Opt(IDL.Nat64) }),
+      ReimburseWithdrawal: IDL.Record({ withdrawal_id: IDL.Nat64 }),
+    });
+    const DecodedMemo = IDL.Record({
+      Mint: IDL.Opt(MintMemo),
+      Burn: IDL.Opt(IDL.Variant({ Convert: IDL.Record({ address: IDL.Opt(IDL.Text), kyt_fee: IDL.Opt(IDL.Nat64), status: IDL.Opt(IDL.Text) }), Consolidate: IDL.Record({ value: IDL.Nat64, inputs: IDL.Nat64 }) })),
+    });
+    const DecodeLedgerMemoResult = IDL.Variant({
+      Ok: IDL.Opt(DecodedMemo),
+      Err: IDL.Opt(IDL.Record({ InvalidMemo: IDL.Text })),
+    });
     return IDL.Service({
       get_btc_address: IDL.Func(
         [IDL.Record({
@@ -158,6 +182,7 @@ const createCkBTCMinterIDL = () => {
         [RetrieveBtcWithApprovalResult],
         ['update']
       ),
+      decode_ledger_memo: IDL.Func([DecodeLedgerMemoArgs], [DecodeLedgerMemoResult], ['query']),
     });
   };
 };
