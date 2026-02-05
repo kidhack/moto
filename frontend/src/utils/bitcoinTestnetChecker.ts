@@ -204,7 +204,7 @@ export async function checkPendingDeposits(
       throw new Error(`API error: ${addressResponse.status} ${addressResponse.statusText}`);
     }
     
-    const addressData: AddressTransactions = await addressResponse.json();
+    await addressResponse.json() as AddressTransactions;
     
     // Get transactions
     const txsUrl = `${apiBase}/address/${address}/txs`;

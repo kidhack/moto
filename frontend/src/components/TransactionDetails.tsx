@@ -98,7 +98,7 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
   };
 
   const [copiedField, setCopiedField] = useState<'to' | null>(null);
-  const copyToClipboard = async (text: string, label: string, field: 'to') => {
+  const copyToClipboard = async (text: string, _label: string, field: 'to') => {
     try {
       await navigator.clipboard.writeText(text);
       setCopiedField(field);
