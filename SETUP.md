@@ -10,7 +10,7 @@
 
 In Terminal 1:
 ```bash
-cd "/Users/kidhack/Documents/Work/Market Town/MT App"
+cd "/Users/kidhack/Documents/Work/MOTO"
 dfx start
 ```
 
@@ -23,7 +23,7 @@ This will:
 
 In Terminal 2 (after dfx start is running):
 ```bash
-cd "/Users/kidhack/Documents/Work/Market Town/MT App"
+cd "/Users/kidhack/Documents/Work/MOTO"
 dfx deploy
 ```
 
@@ -50,20 +50,20 @@ dfx canister id bitcoin_wallet
 Then create a `.env` file in the `frontend/` directory:
 ```bash
 cd frontend
-echo "VITE_CANISTER_ID_BITCOIN_WALLET=$(dfx canister id bitcoin_wallet)" > .env
+echo "VITE_CANISTER_ID_MOTO=$(dfx canister id moto)" > .env
 ```
 
 Or set it manually:
 ```bash
 cd frontend
-echo "VITE_CANISTER_ID_BITCOIN_WALLET=YOUR_CANISTER_ID_HERE" > .env
+echo "VITE_CANISTER_ID_MOTO=YOUR_CANISTER_ID_HERE" > .env
 ```
 
 ### 5. Start Frontend Dev Server
 
 In Terminal 3:
 ```bash
-cd "/Users/kidhack/Documents/Work/Market Town/MT App/frontend"
+cd "/Users/kidhack/Documents/Work/MOTO/frontend"
 npm run dev
 ```
 

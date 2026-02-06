@@ -34,22 +34,22 @@ A successful connection will return:
 ### Step 2: Build the Canisters
 
 ```bash
-cd "/Users/kidhack/Documents/Work/Market Town/MT App"
+cd "/Users/kidhack/Documents/Work/MOTO"
 dfx build --network ic
 ```
 
-This builds both `market_town` (backend) and `market_town_frontend` (frontend).
+This builds both `moto` (backend) and `moto_frontend` (frontend).
 
 ### Step 3: Deploy Canisters
 
-Deploy **only** the Market Town canisters, one at a time (do not deploy `internet_identity` — it's a shared system canister on mainnet):
+Deploy **only** the MOTO canisters, one at a time (do not deploy `internet_identity` — it's a shared system canister on mainnet):
 
 ```bash
 # Deploy backend first
-dfx deploy market_town --network ic
+dfx deploy moto --network ic
 
 # Then deploy frontend
-dfx deploy market_town_frontend --network ic
+dfx deploy moto_frontend --network ic
 ```
 
 **Note:** Some `dfx` versions accept only one canister per `dfx deploy`; if you get "unexpected argument", run the two commands above separately.
@@ -60,10 +60,10 @@ After deployment, get the canister IDs:
 
 ```bash
 # Backend canister ID
-dfx canister id market_town --network ic
+dfx canister id moto --network ic
 
 # Frontend canister ID
-dfx canister id market_town_frontend --network ic
+dfx canister id moto_frontend --network ic
 ```
 
 ### Step 5: Update Frontend Environment Variables
@@ -73,7 +73,7 @@ The frontend needs the backend canister ID. Create or update `frontend/.env.prod
 ```bash
 cd frontend
 cat > .env.production << EOF
-VITE_CANISTER_ID_MARKET_TOWN=<backend-canister-id-from-step-4>
+VITE_CANISTER_ID_MOTO=<backend-canister-id-from-step-4>
 VITE_DFX_NETWORK=ic
 # Optional: principal that receives app fees (ckBTC). Defaults to the app owner principal if unset.
 # VITE_FEE_TREASURY_PRINCIPAL=c65im-m2qxx-7nvqc-fl62p-4xqmt-emdce-tmtqf-fggqq-3zh4d-yhdre-2qe
@@ -91,7 +91,7 @@ If you updated environment variables, rebuild and redeploy the frontend:
 
 ```bash
 cd ..
-dfx deploy market_town_frontend --network ic
+dfx deploy moto_frontend --network ic
 ```
 
 ### Step 7: Access Your App
@@ -101,9 +101,9 @@ After deployment, you'll see URLs in the output:
 ```
 URLs:
   Frontend canister via browser:
-    market_town_frontend: https://<canister-id>.icp0.io/
+    moto_frontend: https://<canister-id>.icp0.io/
   Backend canister via Candid interface:
-    market_town: https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id=<canister-id>
+    moto: https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id=<canister-id>
 ```
 
 Open the frontend URL in your browser to use your app!
@@ -121,7 +121,7 @@ Open the frontend URL in your browser to use your app!
 
 4. **Cycles**: Make sure your canisters have enough cycles to run. Check with:
    ```bash
-   dfx canister status market_town --network ic
+   dfx canister status moto --network ic
    ```
    App fees are collected in ckBTC to your treasury principal; you fund canister cycles separately (e.g. convert ICP to cycles and top up the canister).
 
@@ -129,15 +129,15 @@ Open the frontend URL in your browser to use your app!
 
 6. **Stopping Canisters**: To avoid burning cycles when not in use:
    ```bash
-   dfx canister stop market_town --network ic
-   dfx canister stop market_town_frontend --network ic
+   dfx canister stop moto --network ic
+   dfx canister stop moto_frontend --network ic
    ```
 
 ## Troubleshooting
 
 **503 Errors:**
 - Make sure the backend is deployed with the latest changes
-- Check canister cycles: `dfx canister status market_town --network ic`
+- Check canister cycles: `dfx canister status moto --network ic`
 - Check canister logs for errors
 
 **Canister Not Found:**

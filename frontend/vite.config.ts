@@ -7,9 +7,9 @@ export default defineConfig({
   plugins: [react()],
   define: {
     global: 'globalThis',
-    'process.env.CANISTER_ID_MARKET_TOWN': JSON.stringify(process.env.VITE_CANISTER_ID_MARKET_TOWN || ''),
+    'process.env.CANISTER_ID_MOTO': JSON.stringify(process.env.VITE_CANISTER_ID_MOTO || ''),
     'process.env': JSON.stringify({
-      CANISTER_ID_MARKET_TOWN: process.env.VITE_CANISTER_ID_MARKET_TOWN || '',
+      CANISTER_ID_MOTO: process.env.VITE_CANISTER_ID_MOTO || '',
     }),
   },
   resolve: {

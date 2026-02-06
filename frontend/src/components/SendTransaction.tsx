@@ -391,7 +391,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     };
   };
 
-  // Handle send confirmation: instant ckBTC to market.town user or withdraw to Bitcoin
+  // Handle send confirmation: instant ckBTC to MOTO user or withdraw to Bitcoin
   const handleConfirm = async () => {
     const { amountSatoshis } = getTransactionDetails();
 
@@ -416,7 +416,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
           amount: amountSatoshis,
           btcPriceUsd: BTC_PRICE_USD,
         });
-        toast.success('Sent! Instant transfer to market.town user.');
+        toast.success('Sent! Instant transfer to MOTO user.');
         if (onSuccess) {
           setTimeout(() => onSuccess(), 1000);
         }
@@ -882,7 +882,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                       <p className="font-mono text-base font-medium text-white/60 tracking-[0.32px]">Looking up...</p>
                     ) : sendMode === 'ckbtc' && recipientPrincipal ? (
                       <p className="font-mono text-base font-medium text-white tracking-[0.32px]">
-                        market.town user (instant)
+                        MOTO user (instant)
                         <span className="block text-white/70 text-sm mt-0.5">{shortenPrincipal(recipientPrincipal)}</span>
                       </p>
                     ) : (

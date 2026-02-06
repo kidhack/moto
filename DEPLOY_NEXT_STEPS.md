@@ -8,7 +8,7 @@ Once you receive the ICP from Coinbase to your principal:
 ### Step 1: Convert ICP to Cycles
 
 ```bash
-cd "/Users/kidhack/Documents/Work/Market Town/MT App"
+cd "/Users/kidhack/Documents/Work/MOTO"
 export DFX_WARNING=-mainnet_plaintext_identity
 dfx cycles convert --amount=1.0 --network ic
 ```
@@ -49,7 +49,7 @@ If the frontend needs the backend canister ID, create `frontend/.env.production`
 
 ```bash
 cd frontend
-echo "VITE_CANISTER_ID_BITCOIN_WALLET=<backend-canister-id>" > .env.production
+echo "VITE_CANISTER_ID_MOTO=<backend-canister-id>" > .env.production
 echo "VITE_DFX_NETWORK=ic" >> .env.production
 cd ..
 ```

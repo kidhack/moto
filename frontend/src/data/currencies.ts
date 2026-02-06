@@ -50,7 +50,7 @@ export const CURRENCIES: Currency[] = [
   { code: 'TTD', name: 'Trinidad and Tobago Dollar' },
 ];
 
-const PREFERRED_CURRENCY_KEY = 'market-town-preferred-currency';
+const PREFERRED_CURRENCY_KEY = 'moto-preferred-currency';
 const DEFAULT_CURRENCY = 'USD';
 
 export function getPreferredCurrency(): string {

@@ -18,7 +18,7 @@ export interface BTCPriceData {
   lastUpdated: number;
 }
 
-const BTC_PRICE_STORAGE_KEY = 'market_town_btc_price';
+const BTC_PRICE_STORAGE_KEY = 'moto_btc_price';
 const STALE_PRICE_THRESHOLD_SEC = 5 * 60; // 5 min
 
 function getStoredBtcPrice(): BTCPriceData | null {
@@ -570,7 +570,7 @@ export function usePrincipalByBitcoinAddress(address: string | null) {
               ? (principal as Principal).toText()
               : null;
         if (principalText) {
-          console.log('getPrincipalByBitcoinAddress: found market.town user', { address: normalized.slice(0, 12) + '...', principal: principalText });
+          console.log('getPrincipalByBitcoinAddress: found MOTO user', { address: normalized.slice(0, 12) + '...', principal: principalText });
           return principalText;
         }
         return null;

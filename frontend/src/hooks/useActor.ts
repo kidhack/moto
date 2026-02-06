@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import { HttpAgent } from '@dfinity/agent';
 import { useInternetIdentity } from './useInternetIdentity';
 import type { BitcoinWalletActor } from '../backend';
-import { createActor as createMarketTownActor } from '../declarations/market_town/index.js';
+import { createActor as createMotoActor } from '../declarations/moto/index.js';
 
 // This should be set to your canister ID after deployment
 // For local development, you can use the dfx canister id command
-// Or set it via environment variable: VITE_CANISTER_ID_MARKET_TOWN
-const CANISTER_ID = import.meta.env.VITE_CANISTER_ID_MARKET_TOWN || '';
+// Or set it via environment variable: VITE_CANISTER_ID_MOTO
+const CANISTER_ID = import.meta.env.VITE_CANISTER_ID_MOTO || '';
 
 // Local development uses localhost:4943, production uses ic0.app
 // Detect local by checking environment variable first, then hostname
@@ -26,6 +26,8 @@ const HOST = isLocal
   ? 'http://localhost:4943'
   : 'https://ic0.app';
 
+const canisterIdLoggedRef = { current: false };
+
 export function useActor() {
   const { identity } = useInternetIdentity();
   const [actor, setActor] = useState<BitcoinWalletActor | null>(null);
@@ -34,22 +36,17 @@ export function useActor() {
 
   useEffect(() => {
     if (!identity) {
-      console.log('useActor: No identity, clearing actor');
       setActor(null);
       setIsFetching(false);
       return;
     }
 
     if (!CANISTER_ID) {
-      const errorMsg = 'CANISTER_ID not set. Set VITE_CANISTER_ID_MARKET_TOWN environment variable or run dfx generate.';
-      console.error('useActor:', errorMsg);
-      console.log('useActor: Environment check:', {
-        CANISTER_ID,
-        envNetwork,
-        hostname,
-        isLocal,
-        HOST,
-      });
+      const errorMsg = 'CANISTER_ID not set. Set VITE_CANISTER_ID_MOTO environment variable or run dfx generate.';
+      if (!canisterIdLoggedRef.current) {
+        canisterIdLoggedRef.current = true;
+        console.warn('useActor:', errorMsg);
+      }
       setActor(null);
       setIsFetching(false);
       setError(new Error(errorMsg));
@@ -89,8 +86,8 @@ export function useActor() {
           });
         }
 
-        // Create actor using bundled declarations (frontend/src/declarations/market_town)
-        const bitcoinWalletActor = createMarketTownActor(CANISTER_ID, {
+        // Create actor using bundled declarations (frontend/src/declarations/moto)
+        const bitcoinWalletActor = createMotoActor(CANISTER_ID, {
           agent,
         }) as unknown as BitcoinWalletActor;
 

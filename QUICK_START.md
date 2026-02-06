@@ -9,7 +9,7 @@
 ### 1. Open Terminal and Navigate to Project
 
 ```bash
-cd "/Users/kidhack/Documents/Work/Market Town/MT App"
+cd "/Users/kidhack/Documents/Work/MOTO"
 ```
 
 ### 2. Make sure dfx is in your PATH
@@ -37,7 +37,7 @@ Keep this running. This starts:
 
 In Terminal 2 (new terminal):
 ```bash
-cd "/Users/kidhack/Documents/Work/Market Town/MT App"
+cd "/Users/kidhack/Documents/Work/MOTO"
 dfx deploy
 ```
 
@@ -60,14 +60,14 @@ dfx canister id bitcoin_wallet
 Create `.env` file in frontend:
 ```bash
 cd frontend
-echo "VITE_CANISTER_ID_BITCOIN_WALLET=$(cd .. && dfx canister id bitcoin_wallet)" > .env
+echo "VITE_CANISTER_ID_MOTO=$(cd .. && dfx canister id moto)" > .env
 ```
 
 ### 7. Start Frontend Dev Server
 
 In Terminal 3:
 ```bash
-cd "/Users/kidhack/Documents/Work/Market Town/MT App/frontend"
+cd "/Users/kidhack/Documents/Work/MOTO/frontend"
 npm run dev
 ```
 

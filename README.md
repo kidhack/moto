@@ -32,7 +32,7 @@ A decentralized Bitcoin wallet application using ICP's chain-key technology for 
 
 4. **Set environment variables:**
    - After `dfx generate`, check the generated canister ID
-   - Set `VITE_CANISTER_ID_BITCOIN_WALLET` in your `.env` file
+   - Set `VITE_CANISTER_ID_MOTO` in your `.env` file
 
 5. **Start local development:**
    ```bash
@@ -65,9 +65,8 @@ A decentralized Bitcoin wallet application using ICP's chain-key technology for 
    - `src/components/ui/sonner.tsx` (toaster wrapper)
 
 2. **Assets** - Missing logo files:
-   - `/assets/mt mark.svg`
-   - `/assets/mt type.svg`
-   - `/assets/markettown-logo-w.svg` (or similar)
+   - `/assets/moto-logo-mark.svg`
+   - `/assets/moto-logo.svg`
 
 3. **IDL Generation** - Need to run `dfx generate` to create TypeScript bindings
 

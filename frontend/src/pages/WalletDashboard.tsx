@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
+import { useActor } from '../hooks/useActor';
 import { useWalletInfo, useEnsureWallet, useResetOnboarding, useSignOutAndReset, useWalletAddress } from '../hooks/useQueries';
 import { useCkBTCMinter } from '../hooks/useCkBTCMinter';
 import { useCkBTCLedger } from '../hooks/useCkBTCLedger';
@@ -25,6 +26,7 @@ import TransactionDetails from '../components/TransactionDetails';
 
 export default function WalletDashboard() {
   const { clear, identity } = useInternetIdentity();
+  const { actor } = useActor();
   const { data: walletInfo, isLoading, error: walletInfoError, isFetching: isWalletInfoFetching, refetch: refetchWalletInfo } = useWalletInfo();
   const { data: walletAddress, isLoading: isLoadingAddress, error: walletAddressError } = useWalletAddress();
   const { address: ckbtcAddress, isFetching: isCkbtcFetching } = useCkBTCMinter(); // Check if we have ckBTC address
@@ -72,8 +74,8 @@ export default function WalletDashboard() {
   const [principalCopied, setPrincipalCopied] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
-  const WALLET_NAME_KEY_PREFIX = 'market_town_wallet_name_';
-  const DEFAULT_WALLET_NAME = 'My Wallet';
+  const WALLET_NAME_KEY_PREFIX = 'moto_wallet_name_';
+  const DEFAULT_WALLET_NAME = "Nakamoto's Wallet";
   const getStoredWalletName = (principal: string) => {
     try {
       const s = localStorage.getItem(WALLET_NAME_KEY_PREFIX + principal);
@@ -117,21 +119,13 @@ export default function WalletDashboard() {
   }, [menuOpen, currentPrincipal]);
 
   // Ensure wallet exists so we can fetch wallet info (balance, transactions)
-  // Even if we have ckBTC address, we still need to ensure wallet exists in custom canister
-  // to get balance and transaction data
+  // Only when actor is available (canister ID set); otherwise ensureWallet would throw
   useEffect(() => {
-    // Don't do anything if ckBTC is still loading
-    if (isCkbtcFetching) {
-      return;
-    }
-    
-    // Always ensure wallet exists so we can fetch wallet info
-    // This creates/ensures the wallet in the custom canister which stores balance/transactions
+    if (!actor || isCkbtcFetching) return;
     if (!ensureWallet.isPending && !ensureWallet.isSuccess && !walletInfo) {
-      console.log('WalletDashboard: Ensuring wallet exists to fetch wallet info...');
       ensureWallet.mutate();
     }
-  }, [ckbtcAddress, isCkbtcFetching, ensureWallet, walletInfo]);
+  }, [actor, ckbtcAddress, isCkbtcFetching, ensureWallet, walletInfo]);
 
   const handleResetOnboarding = async () => {
     try {
@@ -149,6 +143,9 @@ export default function WalletDashboard() {
     setMenuOpen(false);
     try {
       await clear();
+      try {
+        sessionStorage.setItem('moto_skip_splash', '1');
+      } catch {}
       toast.success('Signed out');
       setTimeout(() => {
         window.location.href = window.location.origin + window.location.pathname;
@@ -170,6 +167,9 @@ export default function WalletDashboard() {
         console.warn('WalletDashboard: Backend signOutAndReset failed (continuing with local logout):', backendError);
       }
       await clear();
+      try {
+        sessionStorage.setItem('moto_skip_splash', '1');
+      } catch {}
       toast.success('Canister wiped and signed out');
       setTimeout(() => {
         window.location.href = window.location.origin + window.location.pathname;
@@ -178,6 +178,9 @@ export default function WalletDashboard() {
       console.error('Wipe and sign out error:', error);
       try {
         await clear();
+        try {
+          sessionStorage.setItem('moto_skip_splash', '1');
+        } catch {}
         window.location.href = window.location.origin + window.location.pathname;
       } catch (clearError) {
         console.error('Failed to clear identity:', clearError);
@@ -231,6 +234,22 @@ export default function WalletDashboard() {
   // Only use actual walletInfo - don't show fallback data
   const displayWalletInfo = walletInfo;
 
+  // Fallback wallet for Send modal when displayWalletInfo is null (e.g. custom canister actor unavailable)
+  // Uses ledger balance + ckBTC address so user can still send via ckBTC ledger
+  const sendWallet =
+    displayWalletInfo ??
+    (ledgerBalance !== null && ckbtcAddress && identity
+      ? {
+          principal: identity.getPrincipal(),
+          bitcoinAddress: ckbtcAddress,
+          transactions: [] as Transaction[],
+          balance: ledgerBalance,
+          onboardingComplete: true,
+          createdAt: BigInt(0),
+          lastUpdated: BigInt(0),
+        }
+      : null);
+
   // Shimmer only on first load before we have a confirmed balance from the ledger; once we have one (including 0), keep showing it and don’t shimmer on poll
   const hasConfirmedBalance = ledgerBalance !== null;
   const isLoadingBalance = !hasConfirmedBalance;
@@ -254,20 +273,22 @@ export default function WalletDashboard() {
       <div className="flex flex-col shrink-0 pt-8 px-5">
         <header className="flex items-center justify-between">
           <button onClick={() => setMenuOpen(true)} className="cursor-pointer">
-            <img src="/assets/mt-mark.svg" alt="market.town" className="h-10 w-10" />
+            <img src="/assets/moto-logo-mark.svg" alt="MOTO" className="h-10 w-10" />
           </button>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
               <span className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>₿</span>
               {isLoadingBalance ? (
                 <div className="h-8 w-24 rounded animate-shimmer" aria-hidden />
+              ) : ledgerBalance !== null ? (
+                <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>{formatBTC(ledgerBalance)}</p>
               ) : displayWalletInfo ? (
                 <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>{formatBTC(displayWalletInfo.balance)}</p>
               ) : (
                 <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>0</p>
               )}
             </div>
-            {(!displayWalletInfo || displayWalletInfo.balance <= BigInt(0)) && (
+            {(ledgerBalance === null || ledgerBalance <= BigInt(0)) && (
               <button onClick={() => setShowAddFundsModal(true)} className="h-8 w-8 flex items-center justify-center hover:bg-white/10 transition-colors">
                 <img src="/assets/addfunds.svg" alt="Add Funds" className="h-8 w-8" />
               </button>
@@ -396,9 +417,9 @@ export default function WalletDashboard() {
       </div>
 
       {/* Send Modal - Full screen */}
-      {showSendModal && displayWalletInfo && (
+      {showSendModal && sendWallet && (
         <SendTransaction
-          wallet={displayWalletInfo}
+          wallet={sendWallet}
           onSuccess={() => setShowSendModal(false)}
           onClose={() => setShowSendModal(false)}
         />
@@ -480,15 +501,12 @@ export default function WalletDashboard() {
              {menuOpen && (
                <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
                  <div className="flex flex-col flex-1 min-h-0 pt-8 px-5 pb-5">
-                   {/* Logo */}
+                   {/* Logo: normal logo (full wordmark) */}
                    <button
                      onClick={() => setMenuOpen(false)}
                      className="flex items-center cursor-pointer shrink-0"
                    >
-                     <div className="relative h-[40px]" style={{ width: '279.844px' }}>
-                       <img src="/assets/mt-mark.svg" alt="market.town" className="h-10 w-10 absolute left-0 top-1/2 -translate-y-1/2" />
-                       <img src="/assets/mt-type.svg" alt="market.town" className="h-[40px] absolute left-[20.99%] top-0" style={{ width: 'calc(100% - 20.99%)' }} />
-                     </div>
+                     <img src="/assets/moto-logo.svg" alt="MOTO" className="h-10 w-[172px] object-contain object-center" />
                    </button>
 
                    {/* Divider under logo */}
@@ -584,7 +602,7 @@ export default function WalletDashboard() {
                            )}
                          </div>
 <p className="text-white/50 text-[14px] leading-relaxed">
-                          market.town is 100% decentralized and on-chain. App settings are stored in your private canister and all financial data is stored on ledger.
+                          MOTO is 100% decentralized and on-chain. App settings are stored in your private canister and all financial data is stored on ledger.
                         </p>
                        </div>
                      )}

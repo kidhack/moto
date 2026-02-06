@@ -114,11 +114,11 @@ A decentralized Bitcoin wallet application running entirely on the Internet Comp
 - Prepared infrastructure for future ckBTC integration (not implemented)
 
 ## User Interface
-- Clean, intuitive wallet interface with market.town branding
+- Clean, intuitive wallet interface with MOTO branding
 - Splash screen displays "mt mark.svg" and "mt type.svg" stacked vertically and centered
 - Visually prominent animated transition where "mt type.svg" fades out and "mt mark.svg" smoothly slides upward from its centered position on the splash screen to the top position of the sign-in screen with seamless motion and brand-appropriate timing and easing, running 50% slower than standard speed for enhanced smoothness
 - Sign-in screen features "mt mark.svg" at the top with properly formatted welcome text:
-  - "Welcome to Market Town, your new Bitcoin wallet."
+  - "Welcome to MOTO, your new Bitcoin wallet."
   - "Like a cash wallet, use this is for everyday transactions, not your life savings."
   - "Remember: your phone is your wallet."
   - "Keep it safe."

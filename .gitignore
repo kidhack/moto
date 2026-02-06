@@ -32,8 +32,8 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 
-# Generated files
-declarations/
+# Generated files (root declarations from dfx generate; frontend/src/declarations is committed)
+/declarations/
 *.d.ts
 
 # Temporary files

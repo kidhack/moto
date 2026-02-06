@@ -1,0 +1,42 @@
+type UserWallet = 
+ record {
+   balance: int;
+   bitcoinAddress: BitcoinAddress;
+   createdAt: int;
+   lastUpdated: int;
+   onboardingComplete: bool;
+   "principal": principal;
+   transactions: vec Transaction;
+ };
+type TransactionStatus = 
+ variant {
+   confirmed;
+   failed;
+   pending;
+ };
+type TransactionId = text;
+type Transaction = 
+ record {
+   amount: int;
+   fee: int;
+   fromAddress: BitcoinAddress;
+   id: TransactionId;
+   status: TransactionStatus;
+   timestamp: int;
+   toAddress: BitcoinAddress;
+ };
+type BitcoinAddress = text;
+service : {
+  completeOnboarding: () -> ();
+  ensureWalletExists: () -> (BitcoinAddress);
+  getAllWallets: () -> (vec UserWallet) query;
+  getBalance: () -> (int);
+  getBitcoinAddress: () -> (BitcoinAddress);
+  getTransactionHistory: () -> (vec Transaction);
+  getWalletInfo: () -> (opt UserWallet);
+  isOnboardingComplete: () -> (bool);
+  resetOnboarding: () -> ();
+  sendTransaction: (toAddress: BitcoinAddress, amount: int) ->
+   (TransactionId);
+  signOutAndReset: () -> ();
+}

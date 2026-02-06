@@ -54,7 +54,7 @@ export const LANGUAGES: Language[] = [
   { code: 'zh', name: '中文 (普通话)' },
 ];
 
-const PREFERRED_LANGUAGE_KEY = 'market-town-preferred-language';
+const PREFERRED_LANGUAGE_KEY = 'moto-preferred-language';
 const DEFAULT_LANGUAGE = 'en';
 
 export function getPreferredLanguage(): string {

@@ -1,5 +1,5 @@
 /**
- * Design Tokens for Market Town Bitcoin Wallet
+ * Design Tokens for MOTO Bitcoin Wallet
  * Extracted from Figma designs
  */
 

@@ -7,19 +7,27 @@ import WalletDashboard from './pages/WalletDashboard';
 import LoginPage from './pages/LoginPage';
 import { useOnboardingStatus } from './hooks/useQueries';
 
+const SKIP_SPLASH_KEY = 'moto_skip_splash';
+
 export default function App() {
-  const [splashComplete, setSplashComplete] = useState(false);
+  const [splashComplete, setSplashComplete] = useState(() => {
+    try {
+      if (sessionStorage.getItem(SKIP_SPLASH_KEY)) {
+        sessionStorage.removeItem(SKIP_SPLASH_KEY);
+        return true;
+      }
+    } catch {}
+    return false;
+  });
   const { identity, isInitializing } = useInternetIdentity();
   const { actor } = useActor();
   const { data: isOnboardingComplete, isLoading: isCheckingOnboarding, refetch: refetchOnboarding } = useOnboardingStatus();
 
   useEffect(() => {
-    // Complete splash after 3.45 seconds (3s wait + 450ms animation - 5x faster)
-    const timer = setTimeout(() => {
-      setSplashComplete(true);
-    }, 3450);
+    if (splashComplete) return;
+    const timer = setTimeout(() => setSplashComplete(true), 3450);
     return () => clearTimeout(timer);
-  }, []);
+  }, [splashComplete]);
 
   // Auto-complete onboarding immediately when user signs in (skip onboarding flow)
   useEffect(() => {
@@ -54,7 +62,7 @@ export default function App() {
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
         <div className="flex min-h-screen items-center justify-center bg-black">
           <div className="flex flex-col items-center gap-4">
-            <img src="/assets/mt-mark.svg" alt="Market Town" className="h-16" />
+            <img src="/assets/moto-logo-mark.svg" alt="MOTO" className="h-16" />
           </div>
         </div>
       </ThemeProvider>
@@ -66,7 +74,7 @@ export default function App() {
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
         <div className="flex min-h-screen items-center justify-center bg-black">
           <div className="flex flex-col items-center gap-4">
-            <img src="/assets/mt-mark.svg" alt="Market Town" className="h-16" />
+            <img src="/assets/moto-logo-mark.svg" alt="MOTO" className="h-16" />
           </div>
         </div>
       </ThemeProvider>

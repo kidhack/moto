@@ -257,6 +257,7 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
   const resolvedTxIdsRef = useRef<Set<string>>(new Set());
   const resolvedBurnTxIdsRef = useRef<Set<string>>(new Set());
   const resolvedBurnStatusRef = useRef<Set<string>>(new Set());
+  const failedBlockstreamTxIdsRef = useRef<Set<string>>(new Set());
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -290,8 +291,12 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
           const arr = Array.from(txidBytes as Uint8Array);
           if (arr.length !== 32) continue;
           const txidHex = arr.reverse().map(b => b.toString(16).padStart(2, '0')).join('');
+          if (failedBlockstreamTxIdsRef.current.has(txidHex)) continue;
           const res = await fetch(`${BLOCKSTREAM_API}/tx/${txidHex}`);
-          if (!res.ok) continue;
+          if (!res.ok) {
+            failedBlockstreamTxIdsRef.current.add(txidHex);
+            continue;
+          }
           const data = await res.json();
           const firstVin = data.vin?.[0];
           const addr = firstVin?.prevout?.scriptpubkey_address;
@@ -373,8 +378,12 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
           const arr = Array.from(txidBlob as Uint8Array);
           if (arr.length !== 32) continue;
           const txidHex = [...arr].reverse().map(b => b.toString(16).padStart(2, '0')).join('');
+          if (failedBlockstreamTxIdsRef.current.has(txidHex)) continue;
           const res = await fetch(`${BLOCKSTREAM_API}/tx/${txidHex}`);
-          if (!res.ok) continue;
+          if (!res.ok) {
+            failedBlockstreamTxIdsRef.current.add(txidHex);
+            continue;
+          }
           const data = await res.json();
           const vouts = data.vout ?? [];
           const payout = vouts.find((v: { scriptpubkey_address?: string }) => v.scriptpubkey_address);
@@ -416,6 +425,7 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
       resolvedTxIdsRef.current = new Set();
       resolvedBurnTxIdsRef.current = new Set();
       resolvedBurnStatusRef.current = new Set();
+      failedBlockstreamTxIdsRef.current = new Set();
       setIsFetching(false);
       return;
     }

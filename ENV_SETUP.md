@@ -13,14 +13,14 @@ Create a `.env` file in the `frontend/` directory:
 ```bash
 cd frontend
 cat > .env << EOF
-VITE_CANISTER_ID_BITCOIN_WALLET=l62sy-yx777-77777-aaabq-cai
+VITE_CANISTER_ID_MOTO=l62sy-yx777-77777-aaabq-cai
 DFX_NETWORK=local
 EOF
 ```
 
 Or manually create `frontend/.env` with:
 ```
-VITE_CANISTER_ID_BITCOIN_WALLET=l62sy-yx777-77777-aaabq-cai
+VITE_CANISTER_ID_MOTO=l62sy-yx777-77777-aaabq-cai
 DFX_NETWORK=local
 ```
 

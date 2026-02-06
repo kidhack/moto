@@ -10,6 +10,7 @@ export default function LoginPage({ showSplashAnimation = false }: LoginPageProp
   const { login, isLoggingIn } = useInternetIdentity();
   const [animationStarted, setAnimationStarted] = useState(false);
   const [animationComplete, setAnimationComplete] = useState(false);
+  const [logoMoveComplete, setLogoMoveComplete] = useState(false);
   const [hadSplashAnimation, setHadSplashAnimation] = useState(false);
 
   const handleLogin = async () => {
@@ -24,118 +25,64 @@ export default function LoginPage({ showSplashAnimation = false }: LoginPageProp
   useEffect(() => {
     if (showSplashAnimation) {
       setHadSplashAnimation(true);
+      const timers: ReturnType<typeof setTimeout>[] = [];
       // Start animation after 3 seconds
-      const timer = setTimeout(() => {
-        setAnimationStarted(true);
-        // Complete animation after transition duration (450ms - 5x faster)
+      timers.push(
         setTimeout(() => {
-          setAnimationComplete(true);
-        }, 450); // Match the transition duration
-      }, 3000);
-      return () => clearTimeout(timer);
+          setAnimationStarted(true);
+          // Complete animation after transition duration (450ms)
+          timers.push(
+            setTimeout(() => setAnimationComplete(true), 450)
+          );
+          // Logo move: 450ms delay + 450ms duration. Keep vert-cut in layout until it finishes.
+          timers.push(
+            setTimeout(() => setLogoMoveComplete(true), 900)
+          );
+        }, 3000)
+      );
+      return () => timers.forEach(clearTimeout);
     } else {
-      // If no splash, show content immediately
-      if (!hadSplashAnimation) {
-        setAnimationComplete(true);
-      }
+      // No splash showing: show content immediately (either we skipped splash, or parent marked splash complete)
+      setAnimationComplete(true);
     }
   }, [showSplashAnimation, hadSplashAnimation]);
 
-  // Calculate logo position based on animation state
-  const getLogoPosition = () => {
-    // If we never had a splash animation, use normal relative positioning
-    if (!hadSplashAnimation) {
-      return {
-        position: 'relative' as const,
-        top: 'auto',
-        left: 'auto',
-        transform: 'none',
-        transition: 'none',
-      };
-    }
-    
-    // If animation is complete, keep logo at final absolute position (prevents layout jump)
-    if (animationComplete) {
-      return {
-        position: 'absolute' as const,
-        top: '160px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        transition: 'none',
-      };
-    }
-    
-    // If animation has started, animate to final position
-    if (animationStarted) {
-      return {
-        position: 'absolute' as const,
-        top: '160px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        transition: 'all 450ms ease-in-out', // 5x faster with ease-in-out
-      };
-    }
-    
-    // Initial splash position (centered - logo block centered on screen)
-    // Logo mark is 80px tall, gap is 40px (gap-10), type is 40px tall (h-10)
-    // Total block height: 80px + 40px + 40px = 160px
-    // To center the entire block at 50%, logo mark center should be at 50% - (gap/2 + type/2) = 50% - (20px + 20px) = 50% - 40px
-    return {
-      position: 'absolute' as const,
-      top: 'calc(50% - 40px)',
-      left: '50%',
-      transform: 'translate(-50%, -50%)',
-      transition: 'none',
-    };
-  };
-
-  const logoPosition = getLogoPosition();
-  const isSplashOnly = showSplashAnimation && !animationStarted;
-  // Show welcome content when animation completes OR if we never had a splash animation
+  // Logo always at 160px when showing sign-in. With splash: animates from center; without: starts at 160px.
+  const logoAtTerminus = animationStarted || animationComplete || !hadSplashAnimation;
   const showWelcomeContent = animationComplete || !hadSplashAnimation;
 
   return (
     <div className="relative flex min-h-screen w-full flex-col items-center overflow-hidden bg-black text-white py-8">
-      {/* Logo mark - always rendered, positioned based on state */}
-      <div 
-        className="size-20 flex items-center justify-center z-20"
-        style={logoPosition}
+      {/* Logo block: centered on splash then animates to 160px; or at 160px from start when no splash */}
+      <div
+        className="absolute left-1/2 z-20 flex flex-col items-center"
+        style={{
+          top: logoAtTerminus ? '160px' : '50%',
+          transform: logoAtTerminus ? 'translateX(-50%)' : 'translate(-50%, -50%)',
+          transition: 'top 450ms ease-in-out 450ms, transform 450ms ease-in-out 450ms',
+        }}
       >
-        <img 
-          src="/assets/mt-mark.svg" 
-          alt="Market Town" 
-          className="size-full"
+        <img
+          src="/assets/moto-logo-mark.svg"
+          alt="MOTO"
+          className="size-20 shrink-0"
         />
-      </div>
-
-      {/* Market Town Type - only shown during splash, fades out */}
-      {isSplashOnly && (
-        <div 
-          className="absolute left-1/2 transition-opacity duration-[450ms] ease-in-out"
-          style={{
-            // Logo mark center is at calc(50% - 40px), logo bottom is at 50%
-            // Gap is 40px, type is 40px tall, so type center should be at 50% + 40px + 20px = calc(50% + 60px)
-            top: 'calc(50% + 60px)',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 19,
-            opacity: animationStarted ? 0 : 1,
-          }}
-        >
-          <div 
-            className="h-10"
-            style={{
-              width: '221.096px',
-            }}
-          >
-            <img 
-              src="/assets/mt-type.svg" 
-              alt="Market Town Type" 
-              className="w-full h-full"
+        {(showSplashAnimation || (hadSplashAnimation && animationStarted && !logoMoveComplete)) && (
+          <>
+            <div className="h-2 shrink-0" aria-hidden />
+            <img
+              src="/assets/moto-vert-cut.svg"
+              alt=""
+              className="w-20 shrink-0 object-contain object-top"
+              style={{
+                height: 'auto',
+                clipPath: animationStarted ? 'inset(0 0 100% 0)' : 'inset(0 0 0% 0)',
+                transition: 'clip-path 450ms ease-in-out',
+              }}
             />
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </div>
       
       {/* Welcome screen content - always rendered but hidden until animation completes */}
       <div 
@@ -146,33 +93,33 @@ export default function LoginPage({ showSplashAnimation = false }: LoginPageProp
           transition: 'opacity 450ms ease-in-out',
         }}
       >
-        {/* Spacer for logo when animation is complete (logo is at 160px) */}
-        {/* Use hadSplashAnimation to ensure spacer stays even if prop changes */}
-        {hadSplashAnimation && animationComplete && <div style={{ height: '208px' }} />}
+        {/* Spacer for logo (always at 160px when content is visible) */}
+        {showWelcomeContent && <div style={{ height: '208px' }} />}
         
         {/* Inner container - matches Figma: gap-[80px], pt-[80px] */}
         <div className="flex flex-1 flex-col items-center gap-20 pt-20 w-full">
-          {/* Spacer for logo when no splash animation */}
-          {!hadSplashAnimation && <div className="size-20" />}
           
-          {/* Welcome text - matches Figma exactly */}
-          {/* Figma: Public Sans Medium, 20px, rgba(255,255,255,0.8), line-height 1.5, tracking -0.22px */}
+          {/* Welcome text - same weight, balanced spacing */}
           <div 
-            className="text-center text-xl leading-normal text-white/80 w-full px-5"
+            className="text-center text-xl leading-normal text-white/80 w-full px-5 flex flex-col items-center gap-6"
             style={{ 
               letterSpacing: '-0.22px',
             }}
           >
-              <p className="font-medium mb-0">
-                Welcome to Market.Town,<br aria-hidden="true" />
-                your new Bitcoin wallet.{' '}
+              <p className="font-normal">
+                Welcome to MOTO,<br aria-hidden="true" />
+                your minimal Bitcoin wallet.
               </p>
-              <p className="mb-0">&nbsp;</p>
-              <p className="mb-0">&nbsp;</p>
-              <p className="font-medium mb-0">
+              <div className="h-px w-16 bg-white/50 shrink-0" aria-hidden />
+              <p className="font-normal">
                 Like a cash wallet,<br aria-hidden="true" />
-                use this is for everyday transactions,<br aria-hidden="true" />
+                use MOTO for everyday transactions,<br aria-hidden="true" />
                 not your life savings.
+              </p>
+              <div className="h-px w-16 bg-white/50 shrink-0" aria-hidden />
+              <p className="font-normal">
+                MOTO to MOTO transactions are instant<br aria-hidden="true" />
+                and powered by ckBTC.
               </p>
             </div>
           </div>

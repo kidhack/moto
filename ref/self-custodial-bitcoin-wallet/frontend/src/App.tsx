@@ -46,7 +46,7 @@ export default function App() {
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
         <div className="flex min-h-screen items-center justify-center bg-black">
           <div className="flex flex-col items-center gap-4">
-            <img src="/assets/mt-mark.svg" alt="Market Town" className="h-16" />
+            <img src="/assets/moto-logo-mark.svg" alt="MOTO" className="h-16" />
           </div>
         </div>
       </ThemeProvider>
@@ -61,7 +61,7 @@ export default function App() {
         ) : isCheckingOnboarding || ensureWallet.isPending ? (
           <div className="flex min-h-screen items-center justify-center bg-black">
             <div className="flex flex-col items-center gap-4">
-              <img src="/assets/mt-mark.svg" alt="Market Town" className="h-16" />
+              <img src="/assets/moto-logo-mark.svg" alt="MOTO" className="h-16" />
               <p className="text-sm text-white/60">
                 {ensureWallet.isPending ? 'Setting up your wallet...' : 'Loading...'}
               </p>

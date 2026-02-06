@@ -1,7 +1,7 @@
-# Market Town Bitcoin Wallet - Design System
+# MOTO Bitcoin Wallet - Design System
 
 ## Overview
-This document contains all design specifications extracted from Figma designs for the Market Town Bitcoin Wallet application.
+This document contains all design specifications extracted from Figma designs for the MOTO Bitcoin Wallet application.
 
 ## Typography
 

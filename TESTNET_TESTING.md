@@ -1,6 +1,6 @@
 # Testnet Testing Guide
 
-A comprehensive guide for testing the Market Town Bitcoin wallet application using ckTESTBTC (testnet) instead of real BTC, allowing safe experimentation without spending money.
+A comprehensive guide for testing the MOTO Bitcoin wallet application using ckTESTBTC (testnet) instead of real BTC, allowing safe experimentation without spending money.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Before you begin, ensure you have the following installed:
 ### Step 1: Navigate to Project Directory
 
 ```bash
-cd "/Users/kidhack/Documents/Work/Market Town/MT App"
+cd "/Users/kidhack/Documents/Work/MOTO"
 ```
 
 ### Step 2: Verify dfx Installation
@@ -68,13 +68,13 @@ Keep this terminal running. This starts:
 Open **Terminal 2** (new terminal window) and run:
 
 ```bash
-cd "/Users/kidhack/Documents/Work/Market Town/MT App"
+cd "/Users/kidhack/Documents/Work/MOTO"
 dfx deploy
 ```
 
 This will:
-- Deploy the `market_town` backend canister (Motoko)
-- Deploy the `market_town_frontend` frontend canister
+- Deploy the `moto` backend canister (Motoko)
+- Deploy the `moto_frontend` frontend canister
 - Generate canister IDs
 
 ### Step 5: Generate TypeScript Bindings
@@ -92,20 +92,20 @@ This creates TypeScript types from the Motoko backend that your frontend uses.
 Get your canister ID:
 
 ```bash
-dfx canister id market_town
+dfx canister id moto
 ```
 
 Create a `.env` file in the `frontend/` directory:
 
 ```bash
 cd frontend
-echo "VITE_CANISTER_ID_BITCOIN_WALLET=$(cd .. && dfx canister id market_town)" > .env
+echo "VITE_CANISTER_ID_MOTO=$(cd .. && dfx canister id moto)" > .env
 ```
 
 Or manually create `frontend/.env` with:
 
 ```env
-VITE_CANISTER_ID_BITCOIN_WALLET=YOUR_CANISTER_ID_HERE
+VITE_CANISTER_ID_MOTO=YOUR_CANISTER_ID_HERE
 VITE_DFX_NETWORK=local
 ```
 
@@ -123,7 +123,7 @@ npm install
 Open **Terminal 3** (new terminal window) and run:
 
 ```bash
-cd "/Users/kidhack/Documents/Work/Market Town/MT App/frontend"
+cd "/Users/kidhack/Documents/Work/MOTO/frontend"
 npm run dev
 ```
 
@@ -161,7 +161,7 @@ nano .env
 
 ```env
 VITE_USE_TESTNET=true
-VITE_CANISTER_ID_BITCOIN_WALLET=YOUR_CANISTER_ID_HERE
+VITE_CANISTER_ID_MOTO=YOUR_CANISTER_ID_HERE
 VITE_DFX_NETWORK=local
 ```
 
@@ -398,7 +398,7 @@ useCkBTCLedger: Default subaccount balance: [amount] satoshis
 1. **App-specific principal** (shown in app menu):
    - Different for each app you use
    - Used for address generation and balance queries
-   - Shown in the app's menu under "Market.Town Principal ID"
+   - Shown in the app's menu under "MOTO Principal ID"
 
 2. **NNS top-level principal** (shown in NNS):
    - Your master principal ID
@@ -409,7 +409,7 @@ useCkBTCLedger: Default subaccount balance: [amount] satoshis
 
 1. **Check principal in app:**
    - Open menu in the app
-   - Note the "Market.Town Principal ID"
+   - Note the "MOTO Principal ID"
    - This is the principal used for your wallet
 
 2. **Check console logs:**
@@ -464,7 +464,7 @@ Edit `frontend/.env`:
 ```env
 VITE_USE_TESTNET=false
 # or remove the line entirely
-VITE_CANISTER_ID_BITCOIN_WALLET=YOUR_CANISTER_ID_HERE
+VITE_CANISTER_ID_MOTO=YOUR_CANISTER_ID_HERE
 VITE_DFX_NETWORK=local
 ```
 
@@ -686,8 +686,8 @@ npm run dev
 # Enable testnet mode
 VITE_USE_TESTNET=true
 
-# Your canister ID (from dfx canister id market_town)
-VITE_CANISTER_ID_BITCOIN_WALLET=YOUR_CANISTER_ID_HERE
+# Your canister ID (from dfx canister id moto)
+VITE_CANISTER_ID_MOTO=YOUR_CANISTER_ID_HERE
 
 # Network (local for development)
 VITE_DFX_NETWORK=local
@@ -724,7 +724,7 @@ dfx deploy
 dfx generate
 
 # Get canister ID
-dfx canister id market_town
+dfx canister id moto
 
 # Start frontend
 cd frontend && npm run dev
