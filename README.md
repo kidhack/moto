@@ -113,6 +113,7 @@ moto/
 ## 🔗 Resources
 
 - [Repository](https://github.com/kidhack/moto)
+- [Contributing](CONTRIBUTING.md) – setup, workflow, and how to submit changes
 - [ckBTC Documentation](https://internetcomputer.org/docs/defi/chain-key-tokens/ckbtc/overview)
 - [ckBTC API Reference](https://internetcomputer.org/docs/references/ckbtc-reference)
 - [ICP Bitcoin Integration](https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/overview)
