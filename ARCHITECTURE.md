@@ -6,14 +6,14 @@ This is a self-custodial Bitcoin wallet application built on the Internet Comput
 
 ## Architecture Components
 
-### 1. **Frontend Canister** (`bitcoin_wallet_frontend`)
+### 1. **Frontend Canister** (`moto_frontend`)
 - **Type**: Asset canister (static files)
 - **Technology**: React + TypeScript + Vite
 - **Purpose**: Serves the user interface (HTML, CSS, JavaScript)
 - **Location**: `frontend/` directory
 - **Deployment**: Static assets are uploaded to the canister
 
-### 2. **Backend Canister** (`bitcoin_wallet`)
+### 2. **Backend Canister** (`moto`)
 - **Type**: Motoko canister
 - **Technology**: Motoko (ICP's native language)
 - **Purpose**: Business logic and data storage
@@ -71,7 +71,7 @@ User sees updated UI
 
 ## Backend API
 
-The backend canister (`bitcoin_wallet`) provides these methods:
+The backend canister (`moto`) provides these methods:
 
 - `ensureWalletExists()`: Creates or returns user's Bitcoin address
 - `getWalletInfo()`: Returns user's wallet information (optional - returns null if wallet doesn't exist)

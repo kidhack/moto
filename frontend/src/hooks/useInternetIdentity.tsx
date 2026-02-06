@@ -60,25 +60,11 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
         // Check if user is already authenticated
         const isAuthenticated = await client.isAuthenticated();
         if (isAuthenticated) {
-          // Check if we're using the correct Internet Identity for the network
-          const envNetwork = import.meta.env.VITE_DFX_NETWORK;
-          const hostname = window.location.hostname;
-          const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-          const shouldUseLocal = envNetwork === 'local' || (envNetwork !== 'ic' && isLocalhost);
-          
-          // If we should use localhost but user is authenticated with production, clear it
-          if (shouldUseLocal && isAuthenticated) {
-            // Check if the identity was created with production Internet Identity
-            // Production delegations won't work with localhost canisters
-            // Clear the identity and force re-login with localhost Internet Identity
-            console.warn('useInternetIdentity: Clearing production Internet Identity session - must use local Internet Identity for local development');
-            client.logout();
-            setIdentity(null);
-            setDisplayName(null);
-            setIsInitializing(false);
-            return;
-          }
-          
+          // Use existing session. We no longer clear sessions when on localhost, because we cannot
+          // tell whether the delegation is from local II or production II. Clearing preemptively
+          // was logging out valid sessions and could cause a "new principal" after re-login
+          // (local II and production II use different principals for the same anchor).
+          // If you see delegation errors on localhost, log out and log in again with local II.
           const currentIdentity = client.getIdentity();
           const principalText = currentIdentity.getPrincipal().toText();
           setIdentity(currentIdentity);

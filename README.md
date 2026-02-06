@@ -2,6 +2,8 @@
 
 A decentralized Bitcoin wallet application using ICP's chain-key technology for near-instant transactions.
 
+**Repository:** [github.com/kidhack/moto](https://github.com/kidhack/moto)
+
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -14,8 +16,8 @@ A decentralized Bitcoin wallet application using ICP's chain-key technology for 
 
 1. **Create a new dfx identity for this project:**
    ```bash
-   dfx identity create bitcoin_wallet_dev
-   dfx identity use bitcoin_wallet_dev
+   dfx identity create moto_dev
+   dfx identity use moto_dev
    dfx identity get-principal  # Save this for later
    ```
 
@@ -92,7 +94,7 @@ A decentralized Bitcoin wallet application using ICP's chain-key technology for 
 ## 📁 Project Structure
 
 ```
-ref/self-custodial-bitcoin-wallet/
+moto/
 ├── backend/
 │   └── main.mo                 # Motoko backend (needs ckBTC integration)
 ├── frontend/
@@ -110,6 +112,7 @@ ref/self-custodial-bitcoin-wallet/
 
 ## 🔗 Resources
 
+- [Repository](https://github.com/kidhack/moto)
 - [ckBTC Documentation](https://internetcomputer.org/docs/defi/chain-key-tokens/ckbtc/overview)
 - [ckBTC API Reference](https://internetcomputer.org/docs/references/ckbtc-reference)
 - [ICP Bitcoin Integration](https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/overview)

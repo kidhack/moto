@@ -32,7 +32,7 @@ Run this to generate TypeScript types from your Motoko backend:
 dfx generate
 ```
 
-This will create TypeScript bindings in `.dfx/local/canisters/bitcoin_wallet/` that you can import in your frontend.
+This will create TypeScript bindings in `.dfx/local/canisters/moto/` that you can import in your frontend.
 
 ## Next Steps
 

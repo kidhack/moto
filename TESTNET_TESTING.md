@@ -28,9 +28,7 @@ Before you begin, ensure you have the following installed:
 
 ### Step 1: Navigate to Project Directory
 
-```bash
-cd "/Users/kidhack/Documents/Work/MOTO"
-```
+Ensure you're in the project root (the directory containing `dfx.json`).
 
 ### Step 2: Verify dfx Installation
 
@@ -65,10 +63,9 @@ Keep this terminal running. This starts:
 
 ### Step 4: Deploy Canisters
 
-Open **Terminal 2** (new terminal window) and run:
+Open **Terminal 2** (new terminal window, from project root) and run:
 
 ```bash
-cd "/Users/kidhack/Documents/Work/MOTO"
 dfx deploy
 ```
 
@@ -123,7 +120,7 @@ npm install
 Open **Terminal 3** (new terminal window) and run:
 
 ```bash
-cd "/Users/kidhack/Documents/Work/MOTO/frontend"
+cd frontend
 npm run dev
 ```
 

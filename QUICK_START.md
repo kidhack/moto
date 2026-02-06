@@ -8,9 +8,7 @@
 
 ### 1. Open Terminal and Navigate to Project
 
-```bash
-cd "/Users/kidhack/Documents/Work/MOTO"
-```
+Ensure you're in the project root (the directory containing `dfx.json`).
 
 ### 2. Make sure dfx is in your PATH
 
@@ -35,9 +33,8 @@ Keep this running. This starts:
 
 ### 4. Deploy Canisters
 
-In Terminal 2 (new terminal):
+In Terminal 2 (new terminal, from project root):
 ```bash
-cd "/Users/kidhack/Documents/Work/MOTO"
 dfx deploy
 ```
 
@@ -54,7 +51,7 @@ This creates TypeScript types from the Motoko backend.
 
 Get the canister ID:
 ```bash
-dfx canister id bitcoin_wallet
+dfx canister id moto
 ```
 
 Create `.env` file in frontend:
@@ -67,7 +64,7 @@ echo "VITE_CANISTER_ID_MOTO=$(cd .. && dfx canister id moto)" > .env
 
 In Terminal 3:
 ```bash
-cd "/Users/kidhack/Documents/Work/MOTO/frontend"
+cd frontend
 npm run dev
 ```
 

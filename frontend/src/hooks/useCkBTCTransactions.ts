@@ -418,7 +418,7 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
   );
 
   useEffect(() => {
-    if (!identity || !userBitcoinAddress) {
+    if (!identity) {
       setTransactions([]);
       setSourceAddressByTxId({});
       setDestinationAddressByTxId({});
@@ -563,7 +563,7 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
     
     // Poll for new transactions every 30 seconds
     const interval = setInterval(() => {
-      if (identity && userBitcoinAddress) {
+      if (identity) {
         getTransactions();
       }
     }, 30000);

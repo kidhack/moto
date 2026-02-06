@@ -5,6 +5,7 @@ import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@/components/ui/sonner';
 import WalletDashboard from './pages/WalletDashboard';
 import LoginPage from './pages/LoginPage';
+import SplashScreen from './pages/SplashScreen';
 import { useOnboardingStatus } from './hooks/useQueries';
 
 const SKIP_SPLASH_KEY = 'moto_skip_splash';
@@ -23,9 +24,10 @@ export default function App() {
   const { actor } = useActor();
   const { data: isOnboardingComplete, isLoading: isCheckingOnboarding, refetch: refetchOnboarding } = useOnboardingStatus();
 
+  // Match splash animation: 3s hold + 275ms delay + 300ms move = 3575ms before switching to sign-in
   useEffect(() => {
     if (splashComplete) return;
-    const timer = setTimeout(() => setSplashComplete(true), 3450);
+    const timer = setTimeout(() => setSplashComplete(true), 3575);
     return () => clearTimeout(timer);
   }, [splashComplete]);
 
@@ -47,11 +49,11 @@ export default function App() {
 
 
 
-  // Show login page if no identity (with or without splash animation)
+  // Not signed in: show splash then sign-in as separate screens
   if (!identity) {
     return (
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-        <LoginPage showSplashAnimation={!splashComplete} />
+        {!splashComplete ? <SplashScreen /> : <LoginPage />}
       </ThemeProvider>
     );
   }

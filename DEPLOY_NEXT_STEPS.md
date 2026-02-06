@@ -7,8 +7,8 @@ Once you receive the ICP from Coinbase to your principal:
 
 ### Step 1: Convert ICP to Cycles
 
+From project root:
 ```bash
-cd "/Users/kidhack/Documents/Work/MOTO"
 export DFX_WARNING=-mainnet_plaintext_identity
 dfx cycles convert --amount=1.0 --network ic
 ```
@@ -20,18 +20,18 @@ This will convert 1.0 ICP to cycles. You can adjust the amount as needed.
 ```bash
 unset TERM
 export DFX_WARNING=-mainnet_plaintext_identity
-dfx build bitcoin_wallet --network ic
-dfx build bitcoin_wallet_frontend --network ic
+dfx build moto --network ic
+dfx build moto_frontend --network ic
 ```
 
 ### Step 3: Deploy the Canisters
 
 ```bash
 # Deploy backend first
-dfx deploy bitcoin_wallet --network ic
+dfx deploy moto --network ic
 
 # Then deploy frontend
-dfx deploy bitcoin_wallet_frontend --network ic
+dfx deploy moto_frontend --network ic
 ```
 
 ### Step 4: Get Canister IDs
@@ -39,8 +39,8 @@ dfx deploy bitcoin_wallet_frontend --network ic
 After deployment, you'll see the canister IDs and URLs in the output. You can also get them with:
 
 ```bash
-dfx canister id bitcoin_wallet --network ic
-dfx canister id bitcoin_wallet_frontend --network ic
+dfx canister id moto --network ic
+dfx canister id moto_frontend --network ic
 ```
 
 ### Step 5: Update Frontend Environment (if needed)
@@ -57,7 +57,7 @@ cd ..
 Then redeploy the frontend:
 
 ```bash
-dfx deploy bitcoin_wallet_frontend --network ic
+dfx deploy moto_frontend --network ic
 ```
 
 ### Step 6: Access Your App

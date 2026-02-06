@@ -8,9 +8,8 @@
 
 ### 1. Start dfx Local Network
 
-In Terminal 1:
+In Terminal 1 (from project root):
 ```bash
-cd "/Users/kidhack/Documents/Work/MOTO"
 dfx start
 ```
 
@@ -21,15 +20,14 @@ This will:
 
 ### 2. Deploy Canisters
 
-In Terminal 2 (after dfx start is running):
+In Terminal 2 (after dfx start is running, from project root):
 ```bash
-cd "/Users/kidhack/Documents/Work/MOTO"
 dfx deploy
 ```
 
 This will:
-- Deploy the `bitcoin_wallet` backend canister (Motoko)
-- Deploy the `bitcoin_wallet_frontend` frontend canister
+- Deploy the `moto` backend canister (Motoko)
+- Deploy the `moto_frontend` frontend canister
 - Generate TypeScript bindings
 
 ### 3. Generate TypeScript Bindings
@@ -44,7 +42,7 @@ This creates TypeScript types from the Motoko backend.
 
 After `dfx generate`, check the canister ID:
 ```bash
-dfx canister id bitcoin_wallet
+dfx canister id moto
 ```
 
 Then create a `.env` file in the `frontend/` directory:
@@ -63,7 +61,7 @@ echo "VITE_CANISTER_ID_MOTO=YOUR_CANISTER_ID_HERE" > .env
 
 In Terminal 3:
 ```bash
-cd "/Users/kidhack/Documents/Work/MOTO/frontend"
+cd frontend
 npm run dev
 ```
 

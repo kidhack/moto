@@ -2,6 +2,8 @@
 
 Based on the [official ICP deployment tutorial](https://internetcomputer.org/docs/tutorials/developer-liftoff/level-1/1.5-deploying-canisters).
 
+This guide deploys to **existing** canisters only. Do not create new app canisters—new canister IDs would break any URLs or custom domains that point to the current frontend/backend.
+
 ## Deploy to Production (Mainnet)
 
 ### Prerequisites
@@ -31,16 +33,28 @@ A successful connection will return:
 }
 ```
 
-### Step 2: Build the Canisters
+### Step 2: Use existing canisters
+
+This project is configured to use your existing canisters. The mapping is in **`canister_ids.json`** at the project root:
+
+- **moto** (backend): `2en3s-2iaaa-aaaad-qhqja-cai`
+- **moto_frontend** (frontend): `2rkk7-3aaaa-aaaad-qhqkq-cai`
+
+Do **not** run `dfx canister create`—that would create new canisters and break production URLs/domains that point to the current IDs. Just build and deploy (steps below).
+
+If your existing canisters have different IDs, edit `canister_ids.json` so that the `moto` and `moto_frontend` entries under `"ic"` match your canister IDs.
+
+### Step 3: Build the Canisters
+
+From the project root (the directory containing `dfx.json`):
 
 ```bash
-cd "/Users/kidhack/Documents/Work/MOTO"
 dfx build --network ic
 ```
 
-This builds both `moto` (backend) and `moto_frontend` (frontend).
+This builds both `moto` (from `backend/main.mo`) and `moto_frontend` (from `frontend/dist`).
 
-### Step 3: Deploy Canisters
+### Step 4: Deploy Canisters
 
 Deploy **only** the MOTO canisters, one at a time (do not deploy `internet_identity` — it's a shared system canister on mainnet):
 
@@ -54,7 +68,7 @@ dfx deploy moto_frontend --network ic
 
 **Note:** Some `dfx` versions accept only one canister per `dfx deploy`; if you get "unexpected argument", run the two commands above separately.
 
-### Step 4: Get Production Canister IDs
+### Step 5: Get Production Canister IDs
 
 After deployment, get the canister IDs:
 
@@ -66,14 +80,14 @@ dfx canister id moto --network ic
 dfx canister id moto_frontend --network ic
 ```
 
-### Step 5: Update Frontend Environment Variables
+### Step 6: Update Frontend Environment Variables
 
-The frontend needs the backend canister ID. Create or update `frontend/.env.production`:
+The frontend needs the backend canister ID. Create or update `frontend/.env.production` (using the backend ID from `canister_ids.json`, e.g. `2en3s-2iaaa-aaaad-qhqja-cai`):
 
 ```bash
 cd frontend
 cat > .env.production << EOF
-VITE_CANISTER_ID_MOTO=<backend-canister-id-from-step-4>
+VITE_CANISTER_ID_MOTO=2en3s-2iaaa-aaaad-qhqja-cai
 VITE_DFX_NETWORK=ic
 # Optional: principal that receives app fees (ckBTC). Defaults to the app owner principal if unset.
 # VITE_FEE_TREASURY_PRINCIPAL=c65im-m2qxx-7nvqc-fl62p-4xqmt-emdce-tmtqf-fggqq-3zh4d-yhdre-2qe
@@ -85,7 +99,7 @@ EOF
 
 **Note:** If you're accessing the app via the production URL (`.ic0.app` or `.icp0.io`), the app will automatically detect it's on production and use the correct settings.
 
-### Step 6: Redeploy Frontend (if needed)
+### Step 7: Redeploy Frontend (if needed)
 
 If you updated environment variables, rebuild and redeploy the frontend:
 
@@ -94,7 +108,7 @@ cd ..
 dfx deploy moto_frontend --network ic
 ```
 
-### Step 7: Access Your App
+### Step 8: Access Your App
 
 After deployment, you'll see URLs in the output:
 
@@ -134,6 +148,9 @@ Open the frontend URL in your browser to use your app!
    ```
 
 ## Troubleshooting
+
+**"Cannot find canister id" when running `dfx build --network ic`:**
+- Ensure `canister_ids.json` exists at the project root and has `moto` and `moto_frontend` with an `"ic"` entry and your existing canister IDs. Do not create new canisters—that would break production URLs.
 
 **503 Errors:**
 - Make sure the backend is deployed with the latest changes

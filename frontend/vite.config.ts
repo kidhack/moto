@@ -33,6 +33,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    strictPort: true, // Fail if 5173 is in use (keeps II session origin consistent)
     host: true, // Allow access from network (for Cursor browser)
     open: false, // Don't auto-open browser
     proxy: {
