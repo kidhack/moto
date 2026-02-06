@@ -34,7 +34,11 @@ Thumbs.db
 
 # Generated files (root declarations from dfx generate; frontend/src/declarations is committed)
 /declarations/
+src/
 *.d.ts
+
+# Stray / accidental ref assets (e.g. space in filename)
+ref/img/ .svg
 
 # Temporary files
 *.tmp
