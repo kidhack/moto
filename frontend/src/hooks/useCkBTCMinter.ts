@@ -155,6 +155,17 @@ const createCkBTCMinterIDL = () => {
       Ok: IDL.Opt(DecodedMemo),
       Err: IDL.Opt(IDL.Record({ InvalidMemo: IDL.Text })),
     });
+    const RetrieveBtcStatusV2 = IDL.Variant({
+      Unknown: IDL.Null,
+      Pending: IDL.Null,
+      Signing: IDL.Null,
+      Sending: IDL.Record({ txid: IDL.Vec(IDL.Nat8) }),
+      Submitted: IDL.Record({ txid: IDL.Vec(IDL.Nat8) }),
+      AmountTooLow: IDL.Null,
+      Confirmed: IDL.Record({ txid: IDL.Vec(IDL.Nat8) }),
+      Reimbursed: IDL.Record({ account: IDL.Record({ owner: IDL.Principal, subaccount: IDL.Opt(IDL.Vec(IDL.Nat8)) }), mint_block_index: IDL.Nat64, amount: IDL.Nat64, reason: IDL.Variant({ CallFailed: IDL.Null, TaintedDestination: IDL.Record({ kyt_fee: IDL.Nat64, kyt_provider: IDL.Principal }) }) }),
+      WillReimburse: IDL.Record({ account: IDL.Record({ owner: IDL.Principal, subaccount: IDL.Opt(IDL.Vec(IDL.Nat8)) }), amount: IDL.Nat64, reason: IDL.Variant({ CallFailed: IDL.Null, TaintedDestination: IDL.Record({ kyt_fee: IDL.Nat64, kyt_provider: IDL.Principal }) }) }),
+    });
     return IDL.Service({
       get_btc_address: IDL.Func(
         [IDL.Record({
@@ -183,6 +194,7 @@ const createCkBTCMinterIDL = () => {
         ['update']
       ),
       decode_ledger_memo: IDL.Func([DecodeLedgerMemoArgs], [DecodeLedgerMemoResult], ['query']),
+      retrieve_btc_status_v2: IDL.Func([IDL.Record({ block_index: IDL.Nat64 })], [RetrieveBtcStatusV2], ['query']),
     });
   };
 };

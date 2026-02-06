@@ -86,12 +86,18 @@ export default function TransactionHistory({ transactions }: TransactionHistoryP
                     </TableCell>
                     <TableCell className="font-mono text-sm">
                       {isSent ? (
-                        <span title={tx.toAddress}>
-                          {tx.toAddress.slice(0, 8)}...{tx.toAddress.slice(-6)}
-                        </span>
+                        tx.toAddress === 'Bitcoin Network' ? (
+                          <span>Pending</span>
+                        ) : (
+                          <span title={tx.toAddress}>
+                            {tx.toAddress.slice(0, 8)}...{tx.toAddress.slice(-6)}
+                          </span>
+                        )
+                      ) : (tx.sourceBitcoinAddress ?? tx.fromAddress) === 'Bitcoin Network' ? (
+                        <span>Pending</span>
                       ) : (
-                        <span title={tx.fromAddress}>
-                          {tx.fromAddress.slice(0, 8)}...{tx.fromAddress.slice(-6)}
+                        <span title={tx.sourceBitcoinAddress ?? tx.fromAddress}>
+                          {(tx.sourceBitcoinAddress ?? tx.fromAddress).slice(0, 8)}...{(tx.sourceBitcoinAddress ?? tx.fromAddress).slice(-6)}
                         </span>
                       )}
                     </TableCell>

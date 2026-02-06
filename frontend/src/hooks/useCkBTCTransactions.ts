@@ -3,7 +3,15 @@ import { Principal } from '@dfinity/principal';
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { useInternetIdentity } from './useInternetIdentity';
 import { createCkBTCMinterIDL, CKBTC_MINTER_CANISTER_ID } from './useCkBTCMinter';
+import { getSessionWithdrawal } from '../lib/sessionWithdrawalStore';
 import type { Transaction } from '../backend';
+
+/** Parse ledger block index from burn tx id (e.g. icrc1-burn-12345 -> 12345). */
+function burnTxIdToBlockIndex(txId: string): string | null {
+  if (!txId.startsWith('icrc1-burn-')) return null;
+  const num = txId.replace('icrc1-burn-', '');
+  return num === '' ? null : num;
+}
 
 // Check if we should use testnet
 const USE_TESTNET = import.meta.env.VITE_USE_TESTNET === 'true';
@@ -221,14 +229,19 @@ function convertICRC1TransactionToAppTransaction(
     const fromOwner = burn.from?.owner;
     if (typeof fromOwner?.toText === 'function' && fromOwner.toText() !== principalText) return null;
     if (typeof fromOwner === 'string' && fromOwner !== principalText) return null;
+    const rawMemo = burn.memo;
+    const memoBytes = rawMemo != null && Array.isArray(rawMemo) && rawMemo.length > 0
+      ? Array.from(rawMemo as Iterable<number> | ArrayLike<number>)
+      : undefined;
     return {
       id: `icrc1-burn-${txWithId.id.toString()}`,
       amount: burn.amount ?? BigInt(0),
       timestamp: getTimestamp(burn.created_at_time),
       status: 'confirmed' as const,
       fromAddress: userBitcoinAddress,
-      toAddress: 'Bitcoin Network',
+      toAddress: 'Bitcoin Network', // resolved to actual address via burnMemo decode when available
       fee: BigInt(0),
+      burnMemo: memoBytes,
     };
   }
   return null;
@@ -240,7 +253,10 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
   const { identity } = useInternetIdentity();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [sourceAddressByTxId, setSourceAddressByTxId] = useState<Record<string, string>>({});
+  const [destinationAddressByTxId, setDestinationAddressByTxId] = useState<Record<string, string>>({});
   const resolvedTxIdsRef = useRef<Set<string>>(new Set());
+  const resolvedBurnTxIdsRef = useRef<Set<string>>(new Set());
+  const resolvedBurnStatusRef = useRef<Set<string>>(new Set());
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -291,24 +307,123 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
     return () => { cancelled = true; };
   }, [identity, transactions]);
 
+  // Resolve Bitcoin destination address for burn transactions (decode burn memo -> address)
+  useEffect(() => {
+    if (!identity || transactions.length === 0) return;
+    const agent = new HttpAgent({ identity: identity as any, host: HOST });
+    if (HOST.includes('localhost') || HOST.includes('127.0.0.1')) agent.fetchRootKey().catch(() => {});
+    const minterIDL = createCkBTCMinterIDL();
+    const minterActor = Actor.createActor(minterIDL, {
+      agent,
+      canisterId: Principal.fromText(CKBTC_MINTER_CANISTER_ID),
+    }) as any;
+
+    let cancelled = false;
+    (async () => {
+      for (const tx of transactions) {
+        if (cancelled) break;
+        if (!tx.id.startsWith('icrc1-burn-') || !tx.burnMemo?.length || resolvedBurnTxIdsRef.current.has(tx.id)) continue;
+        try {
+          const decoded = await minterActor.decode_ledger_memo({
+            memo_type: { Burn: null },
+            encoded_memo: tx.burnMemo,
+          });
+          const decodedMemo = Array.isArray(decoded?.Ok) ? decoded.Ok[0] : decoded?.Ok;
+          const burnVariant = decodedMemo?.Burn;
+          const convert = (Array.isArray(burnVariant) ? burnVariant[0] : burnVariant)?.Convert ?? (Array.isArray(burnVariant) ? burnVariant[0] : null);
+          const addressOpt = convert?.address;
+          const address = typeof addressOpt === 'string' ? addressOpt : (Array.isArray(addressOpt) && addressOpt.length > 0 ? addressOpt[0] : undefined);
+          if (address && !cancelled) {
+            resolvedBurnTxIdsRef.current.add(tx.id);
+            setDestinationAddressByTxId(prev => ({ ...prev, [tx.id]: address }));
+          }
+        } catch (_) {
+          // ignore decode errors per tx
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [identity, transactions]);
+
+  // Fallback: resolve burn destination via retrieve_btc_status_v2 + block explorer (when memo not available)
+  useEffect(() => {
+    if (!identity || transactions.length === 0) return;
+    const agent = new HttpAgent({ identity: identity as any, host: HOST });
+    if (HOST.includes('localhost') || HOST.includes('127.0.0.1')) agent.fetchRootKey().catch(() => {});
+    const minterIDL = createCkBTCMinterIDL();
+    const minterActor = Actor.createActor(minterIDL, {
+      agent,
+      canisterId: Principal.fromText(CKBTC_MINTER_CANISTER_ID),
+    }) as any;
+
+    let cancelled = false;
+    (async () => {
+      for (const tx of transactions) {
+        if (cancelled) break;
+        if (!tx.id.startsWith('icrc1-burn-')) continue;
+        if (destinationAddressByTxId[tx.id] || getSessionWithdrawal(burnTxIdToBlockIndex(tx.id) ?? '') != null) continue;
+        const blockIndexStr = burnTxIdToBlockIndex(tx.id);
+        if (!blockIndexStr) continue;
+        const blockIndex = BigInt(blockIndexStr);
+        try {
+          const status = await minterActor.retrieve_btc_status_v2({ block_index: blockIndex });
+          const withTxid = status?.Sending ?? status?.Submitted ?? status?.Confirmed;
+          const txidBlob = withTxid?.txid;
+          if (!txidBlob || !Array.isArray(txidBlob) && !ArrayBuffer.isView(txidBlob)) continue;
+          const arr = Array.from(txidBlob as Uint8Array);
+          if (arr.length !== 32) continue;
+          const txidHex = [...arr].reverse().map(b => b.toString(16).padStart(2, '0')).join('');
+          const res = await fetch(`${BLOCKSTREAM_API}/tx/${txidHex}`);
+          if (!res.ok) continue;
+          const data = await res.json();
+          const vouts = data.vout ?? [];
+          const payout = vouts.find((v: { scriptpubkey_address?: string }) => v.scriptpubkey_address);
+          const addr = payout?.scriptpubkey_address;
+          if (addr && !cancelled) {
+            resolvedBurnStatusRef.current.add(tx.id);
+            setDestinationAddressByTxId(prev => ({ ...prev, [tx.id]: addr }));
+          }
+        } catch (_) {
+          // ignore per-tx errors
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [identity, transactions, destinationAddressByTxId]);
+
   const transactionsWithSource = useMemo(
-    () => transactions.map(tx => ({
-      ...tx,
-      sourceBitcoinAddress: sourceAddressByTxId[tx.id] ?? tx.sourceBitcoinAddress,
-    })),
-    [transactions, sourceAddressByTxId]
+    () => transactions.map(tx => {
+      const isBurn = tx.id.startsWith('icrc1-burn-');
+      const blockIndex = isBurn ? burnTxIdToBlockIndex(tx.id) : null;
+      const sessionAddress = blockIndex ? getSessionWithdrawal(blockIndex) : undefined;
+      const toAddress = isBurn
+        ? (sessionAddress ?? destinationAddressByTxId[tx.id] ?? tx.toAddress)
+        : (destinationAddressByTxId[tx.id] ?? tx.toAddress);
+      return {
+        ...tx,
+        sourceBitcoinAddress: sourceAddressByTxId[tx.id] ?? tx.sourceBitcoinAddress,
+        toAddress,
+      };
+    }),
+    [transactions, sourceAddressByTxId, destinationAddressByTxId]
   );
 
   useEffect(() => {
     if (!identity || !userBitcoinAddress) {
       setTransactions([]);
       setSourceAddressByTxId({});
+      setDestinationAddressByTxId({});
       resolvedTxIdsRef.current = new Set();
+      resolvedBurnTxIdsRef.current = new Set();
+      resolvedBurnStatusRef.current = new Set();
       setIsFetching(false);
       return;
     }
     resolvedTxIdsRef.current = new Set();
+    resolvedBurnTxIdsRef.current = new Set();
+    resolvedBurnStatusRef.current = new Set();
     setSourceAddressByTxId({});
+    setDestinationAddressByTxId({});
 
     async function getTransactions() {
       setIsFetching(true);

@@ -83,9 +83,11 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
   };
 
   const getBlockExplorerUrl = (transactionId: string) => {
-    // For ckBTC transactions, use the Internet Computer dashboard
-    // The transaction ID is used as the index
-    return `https://dashboard.internetcomputer.org/bitcoin/transaction/${transactionId}`;
+    // IC dashboard expects the ledger block index (number), not the full id
+    const numericIndex = transactionId.replace(/^icrc1-(mint-|burn-)?/, '');
+    const index = /^\d+$/.test(numericIndex) ? numericIndex : transactionId;
+    const base = 'https://dashboard.internetcomputer.org/bitcoin/transaction';
+    return `${base}/${encodeURIComponent(index)}`;
   };
 
   const getStatusDisplay = (status: string) => {
@@ -193,23 +195,33 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
                 </span>
               </div>
 
-              {/* From (received: wallet that sent the Bitcoin) or To (sent) - clickable to copy */}
+              {/* From (received: wallet that sent the Bitcoin) or To (sent) - clickable to copy when resolved */}
               <div className="flex items-center gap-[10px]">
                 <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
                   {txType === 'received' ? 'From' : 'To'}
                 </span>
-                <button
-                  onClick={() => copyToClipboard(
-                    txType === 'received' ? (transaction.sourceBitcoinAddress ?? transaction.fromAddress) : transaction.toAddress,
-                    'Address',
-                    'to'
-                  )}
-                  className="font-mono text-base text-white text-right flex-1 cursor-pointer no-underline"
-                  style={{ letterSpacing: '0.32px' }}
-                  title={`Click to copy: ${txType === 'received' ? (transaction.sourceBitcoinAddress ?? transaction.fromAddress) : transaction.toAddress}`}
-                >
-                  {copiedField === 'to' ? 'Copied!' : formatAddress(txType === 'received' ? (transaction.sourceBitcoinAddress ?? transaction.fromAddress) : transaction.toAddress)}
-                </button>
+                {txType === 'received' && (transaction.sourceBitcoinAddress ?? transaction.fromAddress) === 'Bitcoin Network' ? (
+                  <span className="font-mono text-base text-white text-right flex-1" style={{ letterSpacing: '0.32px' }}>
+                    Pending
+                  </span>
+                ) : txType === 'sent' && transaction.toAddress === 'Bitcoin Network' ? (
+                  <span className="font-mono text-base text-white text-right flex-1" style={{ letterSpacing: '0.32px' }}>
+                    Pending
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => copyToClipboard(
+                      txType === 'received' ? (transaction.sourceBitcoinAddress ?? transaction.fromAddress) : transaction.toAddress,
+                      'Address',
+                      'to'
+                    )}
+                    className="font-mono text-base text-white text-right flex-1 cursor-pointer no-underline"
+                    style={{ letterSpacing: '0.32px' }}
+                    title={txType === 'received' ? `Click to copy: ${transaction.sourceBitcoinAddress ?? transaction.fromAddress}` : `Click to copy: ${transaction.toAddress}`}
+                  >
+                    {copiedField === 'to' ? 'Copied!' : formatAddress(txType === 'received' ? (transaction.sourceBitcoinAddress ?? transaction.fromAddress) : transaction.toAddress)}
+                  </button>
+                )}
               </div>
 
               {/* Value (USD) */}

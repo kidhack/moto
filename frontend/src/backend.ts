@@ -19,6 +19,8 @@ export interface Transaction {
   sourceBitcoinAddress?: BitcoinAddress;
   /** Optional: raw mint memo bytes from index, used to decode Bitcoin txid. */
   mintMemo?: number[];
+  /** Optional: raw burn memo bytes from index, used to decode destination Bitcoin address. */
+  burnMemo?: number[];
 }
 
 export interface UserWallet {

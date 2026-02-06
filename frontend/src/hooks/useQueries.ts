@@ -9,6 +9,7 @@ import { useCkBTCLedger, CKBTC_LEDGER_CANISTER_ID } from './useCkBTCLedger';
 import { useCkBTCTransactions } from './useCkBTCTransactions';
 import { useInternetIdentity } from './useInternetIdentity';
 import type { UserWallet, BitcoinAddress, TransactionId, Transaction } from '../backend';
+import { setSessionWithdrawal } from '../lib/sessionWithdrawalStore';
 import { isValidBitcoinAddress } from '../utils/addressValidation';
 import { checkPendingDeposits } from '../utils/bitcoinTestnetChecker';
 
@@ -649,7 +650,8 @@ export function useRetrieveBtc() {
       }
       return { block_index: result.Ok.block_index };
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
+      setSessionWithdrawal(data.block_index.toString(), variables.toAddress);
       queryClient.invalidateQueries({ queryKey: ['walletInfo'] });
     },
     retry: 1,

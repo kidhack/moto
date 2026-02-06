@@ -248,12 +248,40 @@ export default function WalletDashboard() {
   });
 
   return (
-    <div className="flex min-h-screen flex-col bg-black text-white">
+    <div className="flex h-screen flex-col bg-black text-white overflow-hidden">
       
-      {/* Scrollable area: whole page content pulls down; bottom buttons stay fixed below */}
+      {/* Fixed top: header (no scroll) */}
+      <div className="flex flex-col shrink-0 pt-8 px-5">
+        <header className="flex items-center justify-between">
+          <button onClick={() => setMenuOpen(true)} className="cursor-pointer">
+            <img src="/assets/mt-mark.svg" alt="market.town" className="h-10 w-10" />
+          </button>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>₿</span>
+              {isLoadingBalance ? (
+                <div className="h-8 w-24 rounded animate-shimmer" aria-hidden />
+              ) : displayWalletInfo ? (
+                <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>{formatBTC(displayWalletInfo.balance)}</p>
+              ) : (
+                <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>0</p>
+              )}
+            </div>
+            {(!displayWalletInfo || displayWalletInfo.balance <= BigInt(0)) && (
+              <button onClick={() => setShowAddFundsModal(true)} className="h-8 w-8 flex items-center justify-center hover:bg-white/10 transition-colors">
+                <img src="/assets/addfunds.svg" alt="Add Funds" className="h-8 w-8" />
+              </button>
+            )}
+          </div>
+        </header>
+        {/* Top divider - fixed, does not scroll (match main menu: mt-6) */}
+        <div className="h-[1px] w-full bg-white/50 mt-6" />
+      </div>
+
+      {/* Scrollable area: only the transaction list */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto overscroll-contain relative min-h-0"
+        className="flex-1 overflow-y-auto overscroll-contain relative min-h-0 px-5"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -280,66 +308,16 @@ export default function WalletDashboard() {
             ) : null}
           </div>
         </div>
-        {/* Page content: translates down with pull so the whole page moves */}
-        <div
-          className="flex flex-col gap-8 pt-8 px-5 pb-5 transition-[transform] duration-75 ease-out"
-          style={{ transform: `translateY(${pullDistance}px)` }}
-        >
-          {/* Testnet indicator */}
-          {import.meta.env.VITE_USE_TESTNET === 'true' && (
-            <div className="bg-yellow-500/20 border border-yellow-500/50 rounded px-4 py-2 text-center">
-              <p className="text-yellow-500 text-sm font-medium">
-                ⚠️ TESTNET → Using ckTESTBTC
-              </p>
-            </div>
-          )}
-          {/* Figma: Header with logo (40px) on left, balance on right, add funds button (32px) on right */}
-          <header className="flex items-center justify-between">
-          <button 
-            onClick={() => setMenuOpen(true)}
-            className="cursor-pointer"
-          >
-            <img src="/assets/mt-mark.svg" alt="market.town" className="h-10 w-10" />
-          </button>
-          <div className="flex items-center gap-4">
-            {/* Figma: Balance - IBM Plex Mono Bold, 24px, white, tracking 0.96px */}
-            <div className="flex items-center gap-1.5">
-              <span className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>₿</span>
-              {isLoadingBalance ? (
-                <div className="h-8 w-24 rounded animate-shimmer" aria-hidden />
-              ) : displayWalletInfo ? (
-                <p 
-                  className="font-mono text-2xl font-bold text-white"
-                  style={{ letterSpacing: '0.96px' }}
-                >
-                  {formatBTC(displayWalletInfo.balance)}
-                </p>
-              ) : (
-                <p 
-                  className="font-mono text-2xl font-bold text-white"
-                  style={{ letterSpacing: '0.96px' }}
-                >
-                  0
-                </p>
-              )}
-            </div>
-            {/* Figma: Add funds button - 32px; hide when balance > 0 */}
-            {(!displayWalletInfo || displayWalletInfo.balance <= BigInt(0)) && (
-              <button
-                onClick={() => setShowAddFundsModal(true)}
-                className="h-8 w-8 flex items-center justify-center hover:bg-white/10 transition-colors"
-              >
-                <img src="/assets/addfunds.svg" alt="Add Funds" className="h-8 w-8" />
-              </button>
-            )}
+        <div className="flex flex-col gap-6 pt-4 pb-5 transition-[transform] duration-75 ease-out" style={{ transform: `translateY(${pullDistance}px)` }}>
+        {import.meta.env.VITE_USE_TESTNET === 'true' && (
+          <div className="bg-yellow-500/20 border border-yellow-500/50 rounded px-4 py-2 text-center">
+            <p className="text-yellow-500 text-sm font-medium">⚠️ TESTNET → Using ckTESTBTC</p>
           </div>
-        </header>
-
-        {/* Transactions List - One line per transaction */}
-        <div className="flex flex-col gap-6 flex-1">
+        )}
+        {/* Transactions List */}
+        <div className="flex flex-col gap-6">
           {isLoadingBalance ? (
             <div className="flex flex-col gap-4">
-              <div className="h-[1px] w-full bg-white/50" />
               {[1, 2, 3].map((i) => (
                 <div key={i} className="flex items-center justify-between py-2 px-5">
                   <div className="flex items-center gap-2">
@@ -353,9 +331,6 @@ export default function WalletDashboard() {
             </div>
           ) : displayTransactions.length > 0 ? (
             <>
-              {/* Figma: Divider - 1px, rgba(255,255,255,0.5) - constrained to content width */}
-              <div className="h-[1px] w-full bg-white/50" />
-              
               {[...displayTransactions]
                 .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
                 .map((tx) => {
@@ -393,7 +368,6 @@ export default function WalletDashboard() {
             </>
           ) : (
             <>
-              <div className="h-[1px] w-full bg-white/50" />
               <div className="flex flex-1 items-center justify-center">
                 <p className="text-center text-lg text-white/60">No transactions yet</p>
               </div>
