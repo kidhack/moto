@@ -1,12 +1,6 @@
 {
   "version": 1,
   "canisters": {
-    "internet_identity": {
-      "type": "custom",
-      "candid": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.did",
-      "wasm": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.wasm.gz",
-      "shrink": false
-    },
     "market_town": {
       "type": "motoko",
       "main": "backend/main.mo"
@@ -32,4 +26,3 @@
     }
   }
 }
-

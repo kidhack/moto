@@ -151,37 +151,6 @@ export function useCkBTCLedger() {
         console.log('  Balance (formatted 6 decimals):', Number(balanceValue).toFixed(6));
         console.log('');
         
-        // Warn if balance seems incorrect (common issues)
-        if (balanceValue === BigInt(10000000)) {
-          console.warn('');
-          console.warn('⚠️⚠️⚠️ BALANCE MISMATCH DETECTED ⚠️⚠️⚠️');
-          console.warn('');
-          console.warn('Current ledger balance: 10,000,000 satoshis (0.1 BTC)');
-          console.warn('Expected balance from mempool.space: 1,616,679 satoshis (0.01616679 BTC)');
-          console.warn('');
-          console.warn('POSSIBLE CAUSES:');
-          console.warn('1. ⚠️ Bitcoin deposit not yet converted to ckBTC');
-          console.warn('   - Bitcoin deposits take 10-30 minutes to be converted by the minter');
-          console.warn('   - The balance on mempool.space shows raw Bitcoin, not ckBTC');
-          console.warn('   - Check ckBTC minter status to see if deposit is pending');
-          console.warn('');
-          console.warn('2. ⚠️ Wrong principal/account');
-          console.warn('   - The 0.1 BTC might be from a different principal or test account');
-          console.warn('   - Verify the principal used matches the one that generated the address');
-          console.warn('   - Current principal:', principalText);
-          console.warn('');
-          console.warn('3. ⚠️ Test/faucet balance');
-          console.warn('   - The 0.1 BTC might be from a test faucet or different source');
-          console.warn('   - This is separate from your Bitcoin deposit');
-          console.warn('');
-          console.warn('VERIFICATION STEPS:');
-          console.warn('1. Check if Bitcoin deposit is still pending conversion');
-          console.warn('2. Verify the principal in the app menu matches the one used here');
-          console.warn('3. Wait 10-30 minutes for Bitcoin to be converted to ckBTC');
-          console.warn('4. Check the ckBTC minter dashboard for pending deposits');
-          console.warn('');
-        }
-        
         // If balance is still 0, log detailed troubleshooting information
         if (balanceValue === BigInt(0) || balanceValue === 0n) {
           console.warn('⚠️⚠️⚠️ BALANCE IS ZERO ⚠️⚠️⚠️');

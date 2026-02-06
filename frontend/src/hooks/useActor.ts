@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { HttpAgent, Actor } from '@dfinity/agent';
+import { HttpAgent } from '@dfinity/agent';
 import { useInternetIdentity } from './useInternetIdentity';
 import type { BitcoinWalletActor } from '../backend';
+import { createActor as createMarketTownActor } from '../declarations/market_town/index.js';
 
 // This should be set to your canister ID after deployment
 // For local development, you can use the dfx canister id command
@@ -88,41 +89,10 @@ export function useActor() {
           });
         }
 
-        // Create actor from canister ID using generated IDL
-        // Import the generated IDL from declarations folder
-        let bitcoinWalletActor: BitcoinWalletActor;
-        try {
-          // Try to import the generated IDL from declarations folder
-          const idlModule = await import('../declarations/market_town/index.js');
-          
-          // Use the generated createActor function which handles everything
-          // createActor(canisterId, { agent, ... })
-          bitcoinWalletActor = idlModule.createActor(CANISTER_ID, {
-            agent,
-          }) as unknown as BitcoinWalletActor;
-          console.log('useActor: Actor created successfully using createActor function');
-        } catch (error) {
-          console.error('Failed to import generated IDL:', error);
-          console.warn('Trying to use idlFactory directly...');
-          
-          // Fallback: try to use idlFactory directly
-          try {
-            const idlModule = await import('../declarations/market_town/index.js');
-            const idlFactory = idlModule.idlFactory;
-            
-            bitcoinWalletActor = Actor.createActor(
-              idlFactory,
-              {
-                agent,
-                canisterId: CANISTER_ID,
-              }
-            ) as BitcoinWalletActor;
-            console.log('useActor: Actor created successfully using idlFactory');
-          } catch (fallbackError) {
-            console.error('Failed to create actor with idlFactory:', fallbackError);
-            throw new Error('Failed to create actor. Make sure to run: dfx generate and copy the generated files to frontend/src/declarations/');
-          }
-        }
+        // Create actor using bundled declarations (frontend/src/declarations/market_town)
+        const bitcoinWalletActor = createMarketTownActor(CANISTER_ID, {
+          agent,
+        }) as unknown as BitcoinWalletActor;
 
         setActor(bitcoinWalletActor);
         setIsFetching(false);

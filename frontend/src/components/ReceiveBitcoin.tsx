@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import SetAmount from './SetAmount';
-import { useBTCPrice } from '../hooks/useQueries';
+import { useBTCPrice, isPriceStale } from '../hooks/useQueries';
+import StalePriceIndicator from './StalePriceIndicator';
 import { isValidBitcoinAddress } from '../utils/addressValidation';
 
 interface ReceiveBitcoinProps {
@@ -44,8 +45,8 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
   // Store both amount and currency to properly display and convert
   const [amountCurrency, setAmountCurrency] = useState<string>('BTC');
 
-  // Use live BTC price, fallback to default if not loaded yet
-  const BTC_PRICE_USD = btcPriceData?.usd || 101799;
+  const BTC_PRICE_USD = btcPriceData?.usd ?? 101799;
+  const priceIsStale = isPriceStale(btcPriceData);
 
   // Convert amount to BTC for QR code (if amount is in SATS or fiat, convert to BTC)
   const getBTCAmount = (amountValue: string, currency: string): string => {
@@ -199,6 +200,10 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
 
           {/* Bottom section: Amount display and buttons */}
           <div className="flex flex-col gap-2 shrink-0 pb-5">
+            <p className="px-5 font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1" style={{ letterSpacing: '0.15px' }}>
+              1 BTC ≈ ${BTC_PRICE_USD.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              <StalePriceIndicator isStale={priceIsStale} />
+            </p>
             {/* Amount display row (when amount is set) or Set Amount button */}
           <div className="px-5 flex items-center justify-between w-full shrink-0">
             {amount ? (

@@ -156,6 +156,51 @@ persistent actor BitcoinWallet {
     };
   };
 
+  /// Normalize bech32 (bc1/tb1) to lowercase so lookup matches regardless of input case.
+  func normalizeBech32Address(address : Text) : Text {
+    if (Text.size(address) < 4) return address;
+    if (Text.startsWith(address, #text "bc1") or Text.startsWith(address, #text "BC1") or
+       Text.startsWith(address, #text "tb1") or Text.startsWith(address, #text "TB1")) {
+      Text.toLowercase(address)
+    } else { address }
+  };
+
+  /// Updates the caller's stored Bitcoin address (e.g. to the ckBTC minter deposit address from get_btc_address).
+  /// Frontend should call this so getPrincipalByBitcoinAddress can resolve scanned addresses to principals.
+  public shared ({ caller }) func setBitcoinAddress(address : BitcoinAddress) : async () {
+    switch (principalMap.get(userWallets, caller)) {
+      case (?wallet) {
+        let storedAddress = normalizeBech32Address(address);
+        let updatedWallet : UserWallet = {
+          principal = wallet.principal;
+          bitcoinAddress = storedAddress;
+          transactions = wallet.transactions;
+          balance = wallet.balance;
+          onboardingComplete = wallet.onboardingComplete;
+          createdAt = wallet.createdAt;
+          lastUpdated = Time.now();
+        };
+        userWallets := principalMap.put(userWallets, caller, updatedWallet);
+      };
+      case null {
+        Debug.trap("Wallet not found");
+      };
+    };
+  };
+
+  /// Returns the principal whose stored bitcoinAddress equals the given address, or null if none.
+  /// Used by the send flow to decide instant ckBTC transfer vs Bitcoin withdrawal.
+  /// Bech32 (bc1/tb1) is normalized to lowercase so pasted addresses match.
+  public query func getPrincipalByBitcoinAddress(address : Text) : async ?Principal {
+    let normalized = normalizeBech32Address(address);
+    for ((principal, wallet) in principalMap.entries(userWallets)) {
+      if (wallet.bitcoinAddress == normalized) {
+        return ?principal;
+      };
+    };
+    null;
+  };
+
   public shared ({ caller }) func getWalletInfo() : async ?UserWallet {
     // Return optional wallet instead of trapping - allows frontend to handle missing wallet gracefully
     principalMap.get(userWallets, caller);

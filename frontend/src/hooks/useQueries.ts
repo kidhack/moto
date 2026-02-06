@@ -12,9 +12,41 @@ import type { UserWallet, BitcoinAddress, TransactionId, Transaction } from '../
 import { isValidBitcoinAddress } from '../utils/addressValidation';
 import { checkPendingDeposits } from '../utils/bitcoinTestnetChecker';
 
-interface BTCPriceData {
+export interface BTCPriceData {
   usd: number;
   lastUpdated: number;
+}
+
+const BTC_PRICE_STORAGE_KEY = 'market_town_btc_price';
+const STALE_PRICE_THRESHOLD_SEC = 5 * 60; // 5 min
+
+function getStoredBtcPrice(): BTCPriceData | null {
+  try {
+    const raw = localStorage.getItem(BTC_PRICE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { usd?: number; lastUpdated?: number };
+    if (typeof parsed?.usd === 'number' && typeof parsed?.lastUpdated === 'number') {
+      return { usd: parsed.usd, lastUpdated: parsed.lastUpdated };
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function setStoredBtcPrice(data: BTCPriceData): void {
+  try {
+    localStorage.setItem(BTC_PRICE_STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // ignore
+  }
+}
+
+/** True when price data is missing or older than STALE_PRICE_THRESHOLD_SEC. */
+export function isPriceStale(data: BTCPriceData | undefined): boolean {
+  if (!data) return true;
+  const ageSec = Date.now() / 1000 - data.lastUpdated;
+  return ageSec > STALE_PRICE_THRESHOLD_SEC;
 }
 
 export function useWalletInfo() {
@@ -109,35 +141,6 @@ export function useWalletInfo() {
         // Use ledger balance even if it's 0 (it's the source of truth)
         let finalBalance = BigInt(0);
         if (ckbtcBalance !== null && ckbtcBalance !== undefined) {
-          console.log('useWalletInfo: ========================================');
-          console.log('useWalletInfo: Using ckBTC ledger balance');
-          console.log('useWalletInfo: Balance (satoshis):', ckbtcBalance.toString());
-          console.log('useWalletInfo: Balance (BTC):', (Number(ckbtcBalance) / 100000000).toString());
-          console.log('useWalletInfo: Balance (formatted):', (Number(ckbtcBalance) / 100000000).toFixed(6));
-          console.log('useWalletInfo: Balance is zero?', ckbtcBalance === BigInt(0));
-          
-          // Check if balance matches expected value from mempool
-          const expectedBalance = BigInt(1616679); // 0.01616679 BTC
-          if (ckbtcBalance === BigInt(10000000)) {
-            console.warn('');
-            console.warn('useWalletInfo: ⚠️⚠️⚠️ BALANCE MISMATCH ⚠️⚠️⚠️');
-            console.warn('useWalletInfo: Ledger shows: 10,000,000 satoshis (0.1 BTC)');
-            console.warn('useWalletInfo: Mempool shows: 1,616,679 satoshis (0.01616679 BTC)');
-            console.warn('');
-            console.warn('useWalletInfo: LIKELY CAUSE: Bitcoin deposit not yet converted to ckBTC');
-            console.warn('useWalletInfo: - Bitcoin deposits take 10-30 minutes to process');
-            console.warn('useWalletInfo: - The 0.1 BTC might be from a different account/test faucet');
-            console.warn('useWalletInfo: - Wait for the minter to convert your Bitcoin deposit');
-            console.warn('');
-          } else if (ckbtcBalance === expectedBalance) {
-            console.log('useWalletInfo: ✅ Balance matches expected value from mempool.space');
-          } else if (ckbtcBalance > BigInt(0) && ckbtcBalance !== expectedBalance) {
-            console.warn('useWalletInfo: ⚠️ Balance differs from mempool.space');
-            console.warn('useWalletInfo: Ledger:', ckbtcBalance.toString(), 'satoshis');
-            console.warn('useWalletInfo: Mempool: 1,616,679 satoshis');
-            console.warn('useWalletInfo: This might be normal if deposit is still processing');
-          }
-          console.log('useWalletInfo: ========================================');
           finalBalance = ckbtcBalance;
           // Sync canister balance with ledger so sendTransaction (which checks canister balance) succeeds
           try {
@@ -150,6 +153,16 @@ export function useWalletInfo() {
           finalBalance = wallet.balance;
         } else {
           console.log('useWalletInfo: No balance available from ledger or canister');
+        }
+        
+        // Sync canister's stored Bitcoin address whenever we have a wallet and real ckBTC address,
+        // so getPrincipalByBitcoinAddress works for other users (even if our balance hasn't loaded yet).
+        if (wallet && ckbtcAddress && isValidBitcoinAddress(ckbtcAddress)) {
+          try {
+            await actor.setBitcoinAddress(ckbtcAddress);
+          } catch (addrErr) {
+            console.warn('useWalletInfo: setBitcoinAddress failed (non-fatal):', addrErr);
+          }
         }
         
         // NEVER use fake address from custom canister - only use real ckBTC address
@@ -229,16 +242,6 @@ export function useWalletInfo() {
         if (ckbtcTransactions.length > 0) {
           console.log('useWalletInfo: Sample ckBTC transaction:', ckbtcTransactions[0]);
         }
-        if (mergedTransactions.length > 0) {
-          console.log('useWalletInfo: Sample merged transaction:', mergedTransactions[0]);
-        } else {
-          console.warn('useWalletInfo: ⚠️ No transactions found after merge');
-          console.warn('useWalletInfo: This could mean:');
-          console.warn('  1. No transactions exist yet');
-          console.warn('  2. Index canister decode is failing (check useCkBTCTransactions logs)');
-          console.warn('  3. Transactions exist but are being filtered out');
-        }
-        console.log('useWalletInfo: ========================================');
         
         // If we have a balance from the ledger, create a wallet object even if custom canister doesn't have one
         // This ensures the balance is displayed even if the wallet hasn't been created in the custom canister yet
@@ -520,6 +523,82 @@ export function useSendTransaction() {
   });
 }
 
+/** Normalize Bitcoin address for lookup: bech32 (bc1/tb1) is case-insensitive, use lowercase to match canister. */
+function normalizeAddressForLookup(address: string): string {
+  const t = address.trim();
+  if (/^(bc1|tb1)/i.test(t)) return t.toLowerCase();
+  return t;
+}
+
+/** Look up principal by Bitcoin address (for smart send: instant ckBTC vs withdraw to BTC). */
+export function usePrincipalByBitcoinAddress(address: string | null) {
+  const { actor } = useActor();
+  const normalized = address && address.trim() ? normalizeAddressForLookup(address) : '';
+  return useQuery<string | null>({
+    queryKey: ['principalByBitcoinAddress', normalized || ''],
+    queryFn: async () => {
+      if (!actor || !normalized) return null;
+      try {
+        const principal = await actor.getPrincipalByBitcoinAddress(normalized);
+        if (!principal) return null;
+        // Canister may return Principal (object with toText) or string depending on Candid/agent
+        const principalText =
+          typeof principal === 'string'
+            ? principal
+            : typeof (principal as Principal).toText === 'function'
+              ? (principal as Principal).toText()
+              : null;
+        if (principalText) {
+          console.log('getPrincipalByBitcoinAddress: found market.town user', { address: normalized.slice(0, 12) + '...', principal: principalText });
+          return principalText;
+        }
+        return null;
+      } catch (e) {
+        console.warn('getPrincipalByBitcoinAddress: backend call failed (canister may not have this method yet)', e);
+        return null;
+      }
+    },
+    enabled: Boolean(actor && normalized.length > 0),
+    staleTime: 60 * 1000, // 1 min cache per address
+  });
+}
+
+/** Instant ckBTC transfer to another principal (ICRC-1; no minter approval). */
+export function useTransferCkBTC() {
+  const { identity } = useInternetIdentity();
+  const queryClient = useQueryClient();
+
+  return useMutation<{ block_index: bigint }, Error, { toPrincipal: string; amount: bigint }>({
+    mutationFn: async ({ toPrincipal, amount }) => {
+      if (!identity) throw new Error('Not authenticated');
+      const host = 'https://ic0.app';
+      const agent = new HttpAgent({ identity: identity as any, host });
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (isLocal) {
+        try {
+          await agent.fetchRootKey();
+        } catch {
+          // ignore
+        }
+      }
+      const ledger = IcrcLedgerCanister.create({
+        agent,
+        canisterId: Principal.fromText(CKBTC_LEDGER_CANISTER_ID),
+      });
+      const blockIndex = await ledger.transfer({
+        to: { owner: Principal.fromText(toPrincipal), subaccount: [] },
+        amount,
+        // fee omitted – use ledger default (ckBTC-to-ckBTC uses default fee)
+      });
+      return { block_index: blockIndex };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['walletInfo'] });
+    },
+    retry: 1,
+  });
+}
+
 /** Real ckBTC → BTC withdrawal: ICRC-2 approve then minter retrieve_btc_with_approval. */
 export function useRetrieveBtc() {
   const { identity } = useInternetIdentity();
@@ -577,42 +656,91 @@ export function useRetrieveBtc() {
   });
 }
 
+const FALLBACK_BTC_USD = 101799;
+
 export function useBTCPrice() {
   return useQuery<BTCPriceData>({
     queryKey: ['btcPrice'],
+    initialData: () => getStoredBtcPrice() ?? undefined,
     queryFn: async () => {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const onIC = origin.includes('icp0.io') || origin.includes('ic0.app');
       try {
-        // Use CoinGecko's free API (no API key required)
+        if (onIC) {
+          const stored = getStoredBtcPrice();
+          if (stored) return stored;
+          return { usd: FALLBACK_BTC_USD, lastUpdated: Date.now() / 1000 };
+        }
         const response = await fetch(
           'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_last_updated_at=true'
         );
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch BTC price: ${response.statusText}`);
-        }
-        
+        if (!response.ok) throw new Error(`Failed to fetch BTC price: ${response.statusText}`);
         const data = await response.json();
-        
         if (!data.bitcoin || typeof data.bitcoin.usd !== 'number') {
           throw new Error('Invalid response format from CoinGecko API');
         }
-        
-        return {
+        const result: BTCPriceData = {
           usd: data.bitcoin.usd,
           lastUpdated: data.bitcoin.last_updated_at || Date.now() / 1000,
         };
-      } catch (error) {
-        console.error('Error fetching BTC price:', error);
-        // Fallback to a default price if API fails
-        return {
-          usd: 101799, // Default fallback price
-          lastUpdated: Date.now() / 1000,
-        };
+        setStoredBtcPrice(result);
+        return result;
+      } catch {
+        const stored = getStoredBtcPrice();
+        if (stored) return stored;
+        return { usd: FALLBACK_BTC_USD, lastUpdated: Date.now() / 1000 };
       }
     },
-    refetchInterval: 10000, // Refetch every 10 seconds
-    staleTime: 0, // Always consider data stale to ensure frequent updates
-    retry: 2,
-    retryDelay: 1000,
+    refetchInterval: 60 * 1000, // 1 min (avoids 429 when CORS works)
+    staleTime: 2 * 60 * 1000, // 2 min
+    retry: 1,
+    retryDelay: 2000,
+    placeholderData: (previousData) => previousData ?? getStoredBtcPrice() ?? { usd: FALLBACK_BTC_USD, lastUpdated: Date.now() / 1000 },
+  });
+}
+
+/** BTC price at the time of a transaction. Uses CoinGecko market_chart/range and picks the closest point to the tx timestamp. */
+export function useBTCPriceAtTime(timestampSeconds: number | bigint) {
+  const ts = Number(timestampSeconds);
+  const rangeSec = 3600; // 1 hour either side so we get points around the tx time
+  const from = Math.max(0, ts - rangeSec);
+  const to = ts + rangeSec;
+  return useQuery<number>({
+    queryKey: ['btcPriceAtTime', ts],
+    queryFn: async () => {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      if (origin.includes('icp0.io') || origin.includes('ic0.app')) {
+        return FALLBACK_BTC_USD;
+      }
+      try {
+        const response = await fetch(
+        `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range?vs_currency=usd&from=${from}&to=${to}`
+      );
+      if (!response.ok) {
+        throw new Error(`Failed to fetch historical BTC price: ${response.statusText}`);
+      }
+      const data = await response.json();
+      const prices: [number, number][] = data?.prices;
+      if (!Array.isArray(prices) || prices.length === 0) {
+        throw new Error('Invalid historical price response');
+      }
+      const txMs = ts * 1000;
+      let closest = prices[0];
+      let minDiff = Math.abs(prices[0][0] - txMs);
+      for (let i = 1; i < prices.length; i++) {
+        const diff = Math.abs(prices[i][0] - txMs);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closest = prices[i];
+        }
+      }
+      return closest[1];
+      } catch {
+        return FALLBACK_BTC_USD;
+      }
+    },
+    enabled: ts > 0,
+    staleTime: 24 * 60 * 60 * 1000, // Historical price doesn't change
+    retry: 1,
   });
 }

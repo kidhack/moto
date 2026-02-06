@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
-import { useBTCPrice } from '../hooks/useQueries';
+import { useBTCPrice, isPriceStale } from '../hooks/useQueries';
+import StalePriceIndicator from './StalePriceIndicator';
 
 interface SetAmountProps {
   address: string;
@@ -19,8 +20,8 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
   const [currencyMode, setCurrencyMode] = useState<CurrencyMode>(initialCurrency || 'SATS');
   const [amount, setAmount] = useState<string>(initialAmount || '');
 
-  // Use live BTC price, fallback to default if not loaded yet
-  const BTC_PRICE_USD = btcPriceData?.usd || 101799;
+  const BTC_PRICE_USD = btcPriceData?.usd ?? 101799;
+  const priceIsStale = isPriceStale(btcPriceData);
 
   // Convert amount between currencies
   const convertAmount = (value: string, fromCurrency: string, toCurrency: string): string => {
@@ -180,6 +181,10 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
                 {getCurrencyLabel()}
               </p>
             </div>
+            <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1" style={{ letterSpacing: '0.15px' }}>
+              1 BTC ≈ ${BTC_PRICE_USD.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              <StalePriceIndicator isStale={priceIsStale} />
+            </p>
           </div>
 
           {/* Keyboard and Confirm button - gap-[32px] from amount display */}

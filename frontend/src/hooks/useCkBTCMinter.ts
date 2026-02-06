@@ -352,11 +352,12 @@ export function useCkBTCMinter() {
         console.log('useCkBTCMinter: update_balance minted', result.Ok.length, 'UTXO(s) to ckBTC');
       }
       if (result?.Err) {
-        // NoNewUtxos is normal when there are no new deposits
-        const err = result.Err as { NoNewUtxos?: unknown; _?: unknown };
+        const err = result.Err as { NoNewUtxos?: unknown; AlreadyProcessing?: null; [k: string]: unknown };
         if (err.NoNewUtxos !== undefined) {
-          // Nothing to do - no new UTXOs to process
-          return;
+          return; // No new UTXOs to process
+        }
+        if (err.AlreadyProcessing !== undefined) {
+          return; // Another update is in progress, skip logging
         }
         console.warn('useCkBTCMinter: update_balance error', result.Err);
       }

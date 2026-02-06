@@ -1,6 +1,7 @@
 import { type Transaction } from '../backend';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
-import { useBTCPrice } from '../hooks/useQueries';
+import { useBTCPrice, useBTCPriceAtTime, isPriceStale } from '../hooks/useQueries';
+import StalePriceIndicator from './StalePriceIndicator';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -17,11 +18,14 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
   const isSent = transaction.fromAddress === walletAddress;
   const txType = isSent ? 'sent' : (transaction.toAddress === walletAddress ? 'received' : 'added');
   const { preferredCurrency } = usePreferredCurrency();
-  const { data: btcPriceData } = useBTCPrice();
+  const { data: currentPrice } = useBTCPrice();
+  const { data: priceAtTxTime, isLoading: priceAtTimeLoading } = useBTCPriceAtTime(transaction.timestamp);
   const [currencyMode, setCurrencyMode] = useState<CurrencyMode>('BTC');
 
-  // Use live BTC price, fallback to default if not loaded yet
-  const BTC_PRICE_USD = btcPriceData?.usd || 101799;
+  // Use price at time of transaction for this tx's USD value and Market Price row; fallback to current price then default
+  const BTC_PRICE_USD = priceAtTxTime ?? currentPrice?.usd ?? 101799;
+  // Show stale when showing current/fallback price and that price is stale (historical price at tx time is not "stale")
+  const marketPriceStale = priceAtTxTime == null && isPriceStale(currentPrice);
 
   // Cycle through: BTC -> SATS -> Preferred Currency -> BTC
   const cycleCurrency = () => {
@@ -45,7 +49,7 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
     return satoshis.toString();
   };
 
-  // USD conversion using live BTC price
+  // USD conversion using price at time of transaction
   const getUSDValue = (satoshis: bigint) => {
     const btc = Number(satoshis) / 100000000;
     return (btc * BTC_PRICE_USD).toFixed(2);
@@ -61,12 +65,6 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
       const usdValue = getUSDValue(satoshis);
       return `$${usdValue}`;
     }
-  };
-
-  const formatAmountWithUSD = (satoshis: bigint) => {
-    const btc = formatBTC(satoshis);
-    const usd = getUSDValue(satoshis);
-    return `${btc} BTC (~$${usd})`;
   };
 
   const formatDate = (timestamp: bigint) => {
@@ -142,46 +140,49 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
           </button>
         </header>
 
-        {/* Content area - scrollable, centered */}
-        <div className="flex flex-col gap-12 flex-1 min-h-0 overflow-y-auto pb-5 justify-center">
+        {/* Content area - scrollable, aligned to bottom above close button */}
+        <div className="flex flex-col gap-12 flex-1 min-h-0 overflow-y-auto pb-5 justify-end">
           <div className="px-5 flex flex-col gap-12 items-center">
-            {/* Transaction Icon - 64px × 48px */}
-            <div className="h-16 w-12 flex items-center justify-center">
-              {txType === 'sent' ? (
-                <img src="/assets/tx-sent.svg" alt="Sent" className="h-16 w-12 object-contain" />
-              ) : txType === 'received' ? (
-                <img src="/assets/tx-recieve.svg" alt="Received" className="h-16 w-12 object-contain" />
-              ) : (
-                <img src="/assets/addfunds.svg" alt="Added Funds" className="h-16 w-12 object-contain" />
-              )}
+            {/* Icon + amount moved up 80px; icon opacity matches dashboard list */}
+            <div className="flex flex-col gap-6 items-center -mt-20">
+              {/* Transaction Icon - 64px × 48px */}
+              <div className="h-16 w-12 flex items-center justify-center">
+                {txType === 'sent' ? (
+                  <img src="/assets/tx-sent.svg" alt="Sent" className="h-16 w-12 object-contain opacity-60" />
+                ) : txType === 'received' ? (
+                  <img src="/assets/tx-recieve.svg" alt="Received" className="h-16 w-12 object-contain opacity-60" />
+                ) : (
+                  <img src="/assets/addfunds.svg" alt="Added Funds" className="h-16 w-12 object-contain opacity-60" />
+                )}
+              </div>
+
+              {/* Amount - IBM Plex Mono Bold, 32px with BTC text */}
+              <div className="flex items-center gap-2">
+                {currencyMode === 'BTC' && (
+                  <>
+                    <p className="font-mono text-[32px] font-bold text-white" style={{ letterSpacing: '1.28px' }}>
+                      {formatBTC(transaction.amount)}
+                    </p>
+                    <p className="font-mono text-[32px] font-bold text-white" style={{ letterSpacing: '1.28px' }}>
+                      BTC
+                    </p>
+                  </>
+                )}
+                {currencyMode === 'SATS' && (
+                  <p className="font-mono text-[32px] font-bold text-white" style={{ letterSpacing: '1.28px' }}>
+                    {formatSats(transaction.amount)} sats
+                  </p>
+                )}
+                {currencyMode !== 'BTC' && currencyMode !== 'SATS' && (
+                  <p className="font-mono text-[32px] font-bold text-white" style={{ letterSpacing: '1.28px' }}>
+                    {formatAmount(transaction.amount)}
+                  </p>
+                )}
+              </div>
             </div>
 
-            {/* Amount - IBM Plex Mono Bold, 32px with BTC text */}
-            <div className="flex items-center gap-2">
-              {currencyMode === 'BTC' && (
-                <>
-                  <p className="font-mono text-[32px] font-bold text-white" style={{ letterSpacing: '1.28px' }}>
-                    {formatBTC(transaction.amount)}
-                  </p>
-                  <p className="font-mono text-[32px] font-bold text-white" style={{ letterSpacing: '1.28px' }}>
-                    BTC
-                  </p>
-                </>
-              )}
-              {currencyMode === 'SATS' && (
-                <p className="font-mono text-[32px] font-bold text-white" style={{ letterSpacing: '1.28px' }}>
-                  {formatSats(transaction.amount)} sats
-                </p>
-              )}
-              {currencyMode !== 'BTC' && currencyMode !== 'SATS' && (
-                <p className="font-mono text-[32px] font-bold text-white" style={{ letterSpacing: '1.28px' }}>
-                  {formatAmount(transaction.amount)}
-                </p>
-              )}
-            </div>
-
-            {/* Details section - matching Figma order */}
-            <div className="flex flex-col gap-4 w-full py-4">
+            {/* Details section - 80px space above rows */}
+            <div className="flex flex-col gap-4 w-full py-4 mt-20">
               {/* Date */}
               <div className="flex items-center gap-[10px]">
                 <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
@@ -211,23 +212,24 @@ export default function TransactionDetails({ transaction, walletAddress, onClose
                 </button>
               </div>
 
-              {/* Amount */}
+              {/* Value (USD) */}
               <div className="flex items-center gap-[10px]">
                 <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
-                  Amount
+                  Value
                 </span>
                 <span className="font-mono text-base text-white text-right flex-1" style={{ letterSpacing: '0.32px' }}>
-                  {formatAmountWithUSD(transaction.amount)}
+                  ${getUSDValue(transaction.amount)}
                 </span>
               </div>
 
-              {/* Market Price */}
+              {/* Market Price (at time of transaction) */}
               <div className="flex items-center gap-[10px]">
                 <span className="font-medium text-base text-white/80 shrink-0" style={{ letterSpacing: '-0.176px' }}>
                   Market Price
                 </span>
-                <span className="font-mono text-base text-white text-right flex-1" style={{ letterSpacing: '0.32px' }}>
-                  $103,180.27
+                <span className="font-mono text-base text-white text-right flex-1 flex items-center justify-end gap-1" style={{ letterSpacing: '0.32px' }}>
+                  {priceAtTimeLoading ? '…' : `$${BTC_PRICE_USD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  <StalePriceIndicator isStale={marketPriceStale} />
                 </span>
               </div>
 
