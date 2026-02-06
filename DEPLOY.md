@@ -75,8 +75,13 @@ cd frontend
 cat > .env.production << EOF
 VITE_CANISTER_ID_MARKET_TOWN=<backend-canister-id-from-step-4>
 VITE_DFX_NETWORK=ic
+# Optional: principal that receives app fees (ckBTC). Defaults to the app owner principal if unset.
+# VITE_FEE_TREASURY_PRINCIPAL=c65im-m2qxx-7nvqc-fl62p-4xqmt-emdce-tmtqf-fggqq-3zh4d-yhdre-2qe
+# Optional: VITE_FEE_PERCENT=0.5  VITE_FEE_CAP_USD=100
 EOF
 ```
+
+**App fees:** A service fee of 0.5% (max $100, no minimum) is charged per send/withdrawal and sent in ckBTC to the treasury principal. Set `VITE_FEE_TREASURY_PRINCIPAL` to your NNS principal to receive fees there; if unset, a default principal is used. Override with `VITE_FEE_PERCENT` and `VITE_FEE_CAP_USD` if needed.
 
 **Note:** If you're accessing the app via the production URL (`.ic0.app` or `.icp0.io`), the app will automatically detect it's on production and use the correct settings.
 
@@ -118,6 +123,7 @@ Open the frontend URL in your browser to use your app!
    ```bash
    dfx canister status market_town --network ic
    ```
+   App fees are collected in ckBTC to your treasury principal; you fund canister cycles separately (e.g. convert ICP to cycles and top up the canister).
 
 5. **Backend Changes**: The backend now returns `?UserWallet` (optional) from `getWalletInfo()` instead of trapping, which prevents 503 errors
 

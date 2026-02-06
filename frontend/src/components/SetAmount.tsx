@@ -158,9 +158,9 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
           </p>
           <button
             onClick={cycleCurrency}
-            className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity hover:opacity-100"
+            className="h-8 w-8 flex items-center justify-center cursor-pointer opacity-80 transition-opacity hover:opacity-100 active:opacity-100"
           >
-            {/* Currency cycle button */}
+            {/* Currency cycle button - white 80% default, 100% on hover/active (matches Send Set Amount) */}
             <img 
               src="/assets/cyclecurrency.svg" 
               alt="Cycle Currency" 

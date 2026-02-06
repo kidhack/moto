@@ -50,6 +50,26 @@ export function isPriceStale(data: BTCPriceData | undefined): boolean {
   return ageSec > STALE_PRICE_THRESHOLD_SEC;
 }
 
+// --- App fee (0.5%, max $100, no minimum) ---
+const FEE_PERCENT = Number(import.meta.env.VITE_FEE_PERCENT ?? 0.5);
+const FEE_CAP_USD = Number(import.meta.env.VITE_FEE_CAP_USD ?? 100);
+/** Treasury principal that receives app fees (ckBTC). Empty = no fee collected. */
+export const FEE_TREASURY_PRINCIPAL =
+  (import.meta.env.VITE_FEE_TREASURY_PRINCIPAL as string)?.trim() ||
+  'c65im-m2qxx-7nvqc-fl62p-4xqmt-emdce-tmtqf-fggqq-3zh4d-yhdre-2qe';
+
+/**
+ * Compute app fee in satoshis: 0.5% of amount, capped at $100 USD equivalent, no minimum.
+ * Fee never exceeds amount.
+ */
+export function computeFeeSats(amountSats: bigint, btcPriceUsd: number): bigint {
+  if (amountSats <= 0n || btcPriceUsd <= 0) return 0n;
+  const percentFeeSats = (amountSats * BigInt(Math.round(FEE_PERCENT * 10))) / 1000n; // 0.5% = 5/1000
+  const capSats = BigInt(Math.floor((FEE_CAP_USD * 100_000_000) / btcPriceUsd));
+  const fee = percentFeeSats < capSats ? percentFeeSats : capSats;
+  return fee > amountSats ? amountSats : fee;
+}
+
 export function useWalletInfo() {
   const { actor, isFetching } = useActor();
   const { identity } = useInternetIdentity();
@@ -564,13 +584,17 @@ export function usePrincipalByBitcoinAddress(address: string | null) {
   });
 }
 
-/** Instant ckBTC transfer to another principal (ICRC-1; no minter approval). */
+/** Instant ckBTC transfer to another principal (ICRC-1; no minter approval). App fee (0.5%, max $100) sent to treasury when configured. */
 export function useTransferCkBTC() {
   const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
 
-  return useMutation<{ block_index: bigint }, Error, { toPrincipal: string; amount: bigint }>({
-    mutationFn: async ({ toPrincipal, amount }) => {
+  return useMutation<
+    { block_index: bigint },
+    Error,
+    { toPrincipal: string; amount: bigint; btcPriceUsd: number }
+  >({
+    mutationFn: async ({ toPrincipal, amount, btcPriceUsd }) => {
       if (!identity) throw new Error('Not authenticated');
       const host = 'https://ic0.app';
       const agent = new HttpAgent({ identity: identity as any, host });
@@ -586,10 +610,18 @@ export function useTransferCkBTC() {
         agent,
         canisterId: Principal.fromText(CKBTC_LEDGER_CANISTER_ID),
       });
+      const feeSats = FEE_TREASURY_PRINCIPAL ? computeFeeSats(amount, btcPriceUsd) : 0n;
+      const toRecipient = amount - feeSats;
+
+      if (FEE_TREASURY_PRINCIPAL && feeSats > 0n) {
+        await ledger.transfer({
+          to: { owner: Principal.fromText(FEE_TREASURY_PRINCIPAL), subaccount: [] },
+          amount: feeSats,
+        });
+      }
       const blockIndex = await ledger.transfer({
         to: { owner: Principal.fromText(toPrincipal), subaccount: [] },
-        amount,
-        // fee omitted – use ledger default (ckBTC-to-ckBTC uses default fee)
+        amount: toRecipient,
       });
       return { block_index: blockIndex };
     },
@@ -600,13 +632,17 @@ export function useTransferCkBTC() {
   });
 }
 
-/** Real ckBTC → BTC withdrawal: ICRC-2 approve then minter retrieve_btc_with_approval. */
+/** Real ckBTC → BTC withdrawal: ICRC-2 approve then minter retrieve_btc_with_approval. App fee (0.5%, max $100) sent to treasury when configured. */
 export function useRetrieveBtc() {
   const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
 
-  return useMutation<{ block_index: bigint }, Error, { toAddress: string; amount: bigint }>({
-    mutationFn: async ({ toAddress, amount }) => {
+  return useMutation<
+    { block_index: bigint },
+    Error,
+    { toAddress: string; amount: bigint; btcPriceUsd: number }
+  >({
+    mutationFn: async ({ toAddress, amount, btcPriceUsd }) => {
       if (!identity) throw new Error('Not authenticated');
       const host = 'https://ic0.app';
       const agent = new HttpAgent({ identity: identity as any, host });
@@ -622,6 +658,13 @@ export function useRetrieveBtc() {
         agent,
         canisterId: Principal.fromText(CKBTC_LEDGER_CANISTER_ID),
       });
+      const feeSats = FEE_TREASURY_PRINCIPAL ? computeFeeSats(amount, btcPriceUsd) : 0n;
+      if (FEE_TREASURY_PRINCIPAL && feeSats > 0n) {
+        await ledger.transfer({
+          to: { owner: Principal.fromText(FEE_TREASURY_PRINCIPAL), subaccount: [] },
+          amount: feeSats,
+        });
+      }
       const minterPrincipal = Principal.fromText(CKBTC_MINTER_CANISTER_ID);
       await ledger.approve({
         amount,

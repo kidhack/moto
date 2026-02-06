@@ -364,22 +364,22 @@ export default function WalletDashboard() {
                     </button>
                   );
                 })}
-              <div className="h-[1px] w-full bg-white/50" />
             </>
           ) : (
             <>
               <div className="flex flex-1 items-center justify-center">
                 <p className="text-center text-lg text-white/60">No transactions yet</p>
               </div>
-              <div className="h-[1px] w-full bg-white/50" />
             </>
           )}
         </div>
         </div>
       </div>
 
-      {/* Fixed bottom action buttons - do not move with pull-to-refresh */}
-      <div className="flex gap-4 shrink-0 px-5 pb-5">
+      {/* Fixed bottom: divider + Send/Receive buttons - do not scroll (px-5 matches top section so divider width matches) */}
+      <div className="flex flex-col shrink-0 px-5">
+        <div className="h-[1px] w-full bg-white/50" />
+        <div className="flex gap-4 pb-5 pt-4">
         <button
           onClick={() => setShowSendModal(true)}
           className="flex-1 h-16 border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center opacity-80 hover:opacity-100"
@@ -392,6 +392,7 @@ export default function WalletDashboard() {
         >
           <img src="/assets/recieved.svg" alt="Receive" className="h-8 w-8" />
         </button>
+        </div>
       </div>
 
       {/* Send Modal - Full screen */}

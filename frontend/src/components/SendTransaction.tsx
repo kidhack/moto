@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useRetrieveBtc, useTransferCkBTC, usePrincipalByBitcoinAddress } from '../hooks/useQueries';
+import { useRetrieveBtc, useTransferCkBTC, usePrincipalByBitcoinAddress, computeFeeSats } from '../hooks/useQueries';
 import { useQRScanner } from '../qr-code/useQRScanner';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import { useBTCPrice, isPriceStale } from '../hooks/useQueries';
@@ -55,7 +55,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   const [amountCurrency, setAmountCurrency] = useState<CurrencyMode>('SATS');
   const pasteInputRef = useRef<HTMLInputElement>(null);
 
-  const ESTIMATED_FEE = BigInt(1000); // 0.00001 BTC fee estimate (withdraw only)
+  const ESTIMATED_FEE = BigInt(1000); // 0.00001 BTC network fee estimate (withdraw only)
 
   const retrieveBtc = useRetrieveBtc();
   const transferCkBTC = useTransferCkBTC();
@@ -68,19 +68,34 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
         ? 'ckbtc'
         : 'btc'
       : null;
-  const effectiveFee = sendMode === 'ckbtc' ? BigInt(0) : ESTIMATED_FEE;
+  const { data: btcPriceData } = useBTCPrice();
+  const BTC_PRICE_USD = btcPriceData?.usd ?? 101799;
+  const priceIsStale = isPriceStale(btcPriceData);
+
+  // Parse current amount input to satoshis (used for fee and balance)
+  const getCurrentAmountSatoshis = (): bigint => {
+    const cleanAmount = (amount || '0').replace(/,/g, '');
+    if (!cleanAmount || cleanAmount === '0') return BigInt(0);
+    if (amountCurrency === 'BTC') {
+      return BigInt(Math.floor(parseFloat(cleanAmount) * 100000000));
+    }
+    if (amountCurrency === 'SATS') {
+      return BigInt(parseInt(cleanAmount, 10) || 0);
+    }
+    const btc = parseFloat(cleanAmount) / BTC_PRICE_USD;
+    return BigInt(Math.floor(btc * 100000000));
+  };
+  const currentAmountSatoshis = getCurrentAmountSatoshis();
+  const appFeeSats = computeFeeSats(currentAmountSatoshis, BTC_PRICE_USD);
+  const effectiveFee = sendMode === 'ckbtc' ? appFeeSats : ESTIMATED_FEE + appFeeSats;
   const isWithdrawPending = retrieveBtc.isPending;
   const isTransferPending = transferCkBTC.isPending;
   const isConfirmPending = isWithdrawPending || isTransferPending;
   const { preferredCurrency } = usePreferredCurrency();
-  const { data: btcPriceData } = useBTCPrice();
-  
+
   const qrScanner = useQRScanner({
     facingMode: 'environment',
   });
-
-  const BTC_PRICE_USD = btcPriceData?.usd ?? 101799;
-  const priceIsStale = isPriceStale(btcPriceData);
 
   // Handle QR code scan result
   useEffect(() => {
@@ -303,16 +318,23 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     return amountCurrency;
   };
 
+  // Strip leading zeros from amount string (e.g. "000001" -> "1"), keep "0" and preserve decimals
+  const normalizeAmountInput = (value: string): string => {
+    const raw = value.replace(/,/g, '');
+    if (!raw) return '';
+    const parts = raw.split('.');
+    const intPart = parts[0].replace(/^0+/, '') || '0';
+    const decPart = parts.length > 1 ? parts[1] : '';
+    return decPart ? `${intPart}.${decPart}` : intPart;
+  };
+
   // Handle number input
   const handleNumberPress = (num: string) => {
     setAmount((prev) => {
-      if (prev === '0' && num !== '0') {
-        return num;
-      }
-      if (prev.replace(/,/g, '').length >= 15) {
-        return prev;
-      }
-      return prev + num;
+      const rawPrev = prev.replace(/,/g, '');
+      if (rawPrev.length >= 15) return prev;
+      const next = normalizeAmountInput(rawPrev + num);
+      return next;
     });
   };
 
@@ -324,9 +346,9 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     });
   };
 
-  // Handle max button (balance minus fee; fee is 0 for ckBTC)
+  // Handle max button. ckBTC: can send full balance (fee taken from it). BTC: balance minus network + app fee.
   const handleMaxAmount = () => {
-    const maxSendableSatoshis = wallet.balance - effectiveFee;
+    const maxSendableSatoshis = sendMode === 'ckbtc' ? wallet.balance : wallet.balance - effectiveFee;
     if (maxSendableSatoshis <= 0n) {
       setAmount('0');
       setStep('confirm');
@@ -346,35 +368,24 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     setStep('confirm');
   };
 
-  // Parse current amount input to satoshis (for remaining balance while typing)
-  const getCurrentAmountSatoshis = (): bigint => {
-    const cleanAmount = (amount || '0').replace(/,/g, '');
-    if (!cleanAmount || cleanAmount === '0') return BigInt(0);
-    if (amountCurrency === 'BTC') {
-      return BigInt(Math.floor(parseFloat(cleanAmount) * 100000000));
-    }
-    if (amountCurrency === 'SATS') {
-      return BigInt(parseInt(cleanAmount, 10) || 0);
-    }
-    const btc = parseFloat(cleanAmount) / BTC_PRICE_USD;
-    return BigInt(Math.floor(btc * 100000000));
-  };
-
-  // Remaining balance after this send (amount + fee); fee is 0 for ckBTC
+  // Remaining balance after this send. ckBTC: we debit amountSatoshis (fee taken from it). BTC: we debit amountSatoshis + effectiveFee.
   const getRemainingBalanceSatoshis = (): bigint => {
     const amountSatoshis = getCurrentAmountSatoshis();
+    if (sendMode === 'ckbtc') return wallet.balance - amountSatoshis;
     return wallet.balance - amountSatoshis - effectiveFee;
   };
 
-  // Calculate transaction details (effectiveFee is 0 for ckBTC)
+  // Calculate transaction details (includes app fee 0.5%, max $100)
   const getTransactionDetails = () => {
     const amountSatoshis = getCurrentAmountSatoshis();
     const totalAmount = amountSatoshis + effectiveFee;
-    const recipientAmount = amountSatoshis;
+    // ckBTC: we send (amount - fee) to recipient and fee to treasury; BTC: user gets amountSatoshis
+    const recipientAmount = sendMode === 'ckbtc' ? amountSatoshis - appFeeSats : amountSatoshis;
 
     return {
       amountSatoshis,
       estimatedFee: effectiveFee,
+      appFeeSats: appFeeSats,
       totalAmount,
       recipientAmount,
     };
@@ -395,10 +406,15 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
         toast.error("You can't send to yourself");
         return;
       }
+      if (amountSatoshis > wallet.balance) {
+        toast.error('Insufficient balance');
+        return;
+      }
       try {
         await transferCkBTC.mutateAsync({
           toPrincipal: recipientPrincipal,
           amount: amountSatoshis,
+          btcPriceUsd: BTC_PRICE_USD,
         });
         toast.success('Sent! Instant transfer to market.town user.');
         if (onSuccess) {
@@ -417,10 +433,15 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
       return;
     }
 
+    if (amountSatoshis + effectiveFee > wallet.balance) {
+      toast.error('Insufficient balance (including fee)');
+      return;
+    }
     try {
       await retrieveBtc.mutateAsync({
         toAddress,
         amount: amountSatoshis,
+        btcPriceUsd: BTC_PRICE_USD,
       });
       toast.success('Withdrawal submitted. Bitcoin will be sent to the address once the network processes it.');
       if (onSuccess) {
@@ -477,7 +498,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   const remainingFormatted =
     formatAmountInCurrency(remainingSatoshis >= 0n ? remainingSatoshis : -remainingSatoshis, amountCurrency);
   const isInsufficient = remainingSatoshis < 0n;
-  const maxSendableSatoshis = wallet.balance - effectiveFee;
+  const maxSendableSatoshis = sendMode === 'ckbtc' ? wallet.balance : wallet.balance - effectiveFee;
   const maxSendableFormatted =
     maxSendableSatoshis > 0n ? formatAmountInCurrency(maxSendableSatoshis, amountCurrency) : '0';
 
@@ -643,7 +664,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             </p>
             <button
               onClick={cycleCurrency}
-              className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity hover:opacity-100"
+              className="h-8 w-8 flex items-center justify-center cursor-pointer opacity-80 transition-opacity hover:opacity-100 active:opacity-100"
             >
               <img 
                 src="/assets/cyclecurrency.svg" 
@@ -833,11 +854,11 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
               />
             </div>
 
-            {/* Large total amount display - for ckBTC show recipient amount only (no fee) */}
+            {/* Large amount display - always the send amount (same as Set Amount screen) */}
             {transactionDetails && (
               <div className="flex items-center gap-2 h-[22px]">
                 <p className="font-mono text-[32px] font-bold text-white text-center" style={{ letterSpacing: '1.28px' }}>
-                  {formatDisplayAmount(formatAmountInCurrency(sendMode === 'ckbtc' ? transactionDetails.recipientAmount : transactionDetails.totalAmount, amountCurrency))}
+                  {formatDisplayAmount(formatAmountInCurrency(transactionDetails.amountSatoshis, amountCurrency))}
                 </p>
                 <p className="font-mono text-[32px] font-bold text-white text-center" style={{ letterSpacing: '1.28px' }}>
                   {getConfirmationCurrencyLabel()}
@@ -851,19 +872,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             {/* Transaction details - horizontal layout */}
             {transactionDetails && (
               <div className="flex flex-col gap-8 px-0 py-4">
-                {/* Amount to recipient */}
-                <div className="flex gap-2.5 items-center w-full">
-                  <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
-                    Amount
-                  </p>
-                  <div className="flex-1 flex justify-end">
-                    <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
-                      {formatDisplayAmount(formatAmountInCurrency(transactionDetails.recipientAmount, amountCurrency))} {getConfirmationCurrencyLabel()}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Recipient: market.town user (instant) or Bitcoin address */}
+                {/* Recipient */}
                 <div className="flex gap-2.5 items-center w-full">
                   <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
                     Recipient
@@ -884,26 +893,14 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                   </div>
                 </div>
 
-                {/* Fee */}
+                {/* Network */}
                 <div className="flex gap-2.5 items-center w-full">
                   <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
-                    Fee
+                    Network
                   </p>
                   <div className="flex-1 flex justify-end">
                     <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
-                      {sendMode === 'ckbtc' ? 'No fee' : `${formatDisplayAmount(formatAmountInCurrency(transactionDetails.estimatedFee, amountCurrency))} ${getConfirmationCurrencyLabel()}`}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Balance after send */}
-                <div className="flex gap-2.5 items-center w-full">
-                  <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
-                    Balance after send
-                  </p>
-                  <div className="flex-1 flex justify-end">
-                    <p className={`font-mono text-base font-medium text-right tracking-[0.32px] ${isInsufficient ? 'text-red-400' : 'text-white'}`}>
-                      {isInsufficient ? '-' : ''}{formatDisplayAmount(remainingFormatted)} {getConfirmationCurrencyLabel()}
+                      {sendMode === 'ckbtc' ? 'Instant (IC)' : 'Bitcoin'}
                     </p>
                   </div>
                 </div>
@@ -915,7 +912,43 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                   </p>
                   <div className="flex-1 flex justify-end">
                     <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
-                      {sendMode === 'ckbtc' ? 'Instant' : '~30 min (Bitcoin network)'}
+                      {sendMode === 'ckbtc' ? 'Instant' : '~30 min'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Amount (send amount) */}
+                <div className="flex gap-2.5 items-center w-full">
+                  <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
+                    Amount
+                  </p>
+                  <div className="flex-1 flex justify-end">
+                    <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
+                      {formatDisplayAmount(formatAmountInCurrency(transactionDetails.amountSatoshis, amountCurrency))} {getConfirmationCurrencyLabel()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Fee */}
+                <div className="flex gap-2.5 items-center w-full">
+                  <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
+                    Fee
+                  </p>
+                  <div className="flex-1 flex justify-end">
+                    <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
+                      {formatDisplayAmount(formatAmountInCurrency(transactionDetails.estimatedFee, amountCurrency))} {getConfirmationCurrencyLabel()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Total */}
+                <div className="flex gap-2.5 items-center w-full">
+                  <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
+                    Total
+                  </p>
+                  <div className="flex-1 flex justify-end">
+                    <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
+                      {formatDisplayAmount(formatAmountInCurrency(transactionDetails.totalAmount, amountCurrency))} {getConfirmationCurrencyLabel()}
                     </p>
                   </div>
                 </div>
