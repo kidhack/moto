@@ -335,7 +335,7 @@ export default function WalletDashboard() {
         <div className="flex flex-col gap-6 pt-4 pb-5 transition-[transform] duration-75 ease-out" style={{ transform: `translateY(${pullDistance}px)` }}>
         {import.meta.env.VITE_USE_TESTNET === 'true' && (
           <div className="bg-yellow-500/20 border border-yellow-500/50 rounded px-4 py-2 text-center">
-            <p className="text-yellow-500 text-sm font-medium">⚠️ TESTNET → Using ckTESTBTC</p>
+            <p className="text-yellow-500 text-sm font-medium">⚠️ TESTNET</p>
           </div>
         )}
         {/* Transactions List */}
