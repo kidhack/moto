@@ -703,37 +703,42 @@ export function useRetrieveBtc() {
 
 const FALLBACK_BTC_USD = 101799;
 
+const COINGECKO_PRICE_URL =
+  'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_last_updated_at=true';
+
+async function fetchBtcPriceFromUrl(url: string): Promise<BTCPriceData> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch BTC price: ${response.statusText}`);
+  const data = await response.json();
+  if (!data.bitcoin || typeof data.bitcoin.usd !== 'number') {
+    throw new Error('Invalid response format from CoinGecko API');
+  }
+  return {
+    usd: data.bitcoin.usd,
+    lastUpdated: data.bitcoin.last_updated_at ?? Date.now() / 1000,
+  };
+}
+
 export function useBTCPrice() {
   return useQuery<BTCPriceData>({
     queryKey: ['btcPrice'],
     initialData: () => getStoredBtcPrice() ?? undefined,
     queryFn: async () => {
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const onIC = origin.includes('icp0.io') || origin.includes('ic0.app');
       try {
-        if (onIC) {
+        const result = await fetchBtcPriceFromUrl(COINGECKO_PRICE_URL);
+        setStoredBtcPrice(result);
+        return result;
+      } catch {
+        try {
+          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(COINGECKO_PRICE_URL)}`;
+          const result = await fetchBtcPriceFromUrl(proxyUrl);
+          setStoredBtcPrice(result);
+          return result;
+        } catch {
           const stored = getStoredBtcPrice();
           if (stored) return stored;
           return { usd: FALLBACK_BTC_USD, lastUpdated: Date.now() / 1000 };
         }
-        const response = await fetch(
-          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_last_updated_at=true'
-        );
-        if (!response.ok) throw new Error(`Failed to fetch BTC price: ${response.statusText}`);
-        const data = await response.json();
-        if (!data.bitcoin || typeof data.bitcoin.usd !== 'number') {
-          throw new Error('Invalid response format from CoinGecko API');
-        }
-        const result: BTCPriceData = {
-          usd: data.bitcoin.usd,
-          lastUpdated: data.bitcoin.last_updated_at || Date.now() / 1000,
-        };
-        setStoredBtcPrice(result);
-        return result;
-      } catch {
-        const stored = getStoredBtcPrice();
-        if (stored) return stored;
-        return { usd: FALLBACK_BTC_USD, lastUpdated: Date.now() / 1000 };
       }
     },
     refetchInterval: 60 * 1000, // 1 min (avoids 429 when CORS works)
@@ -750,38 +755,38 @@ export function useBTCPriceAtTime(timestampSeconds: number | bigint) {
   const rangeSec = 3600; // 1 hour either side so we get points around the tx time
   const from = Math.max(0, ts - rangeSec);
   const to = ts + rangeSec;
+  const historicalUrl = `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range?vs_currency=usd&from=${from}&to=${to}`;
+
   return useQuery<number>({
     queryKey: ['btcPriceAtTime', ts],
     queryFn: async () => {
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      if (origin.includes('icp0.io') || origin.includes('ic0.app')) {
-        return FALLBACK_BTC_USD;
-      }
-      try {
-        const response = await fetch(
-        `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range?vs_currency=usd&from=${from}&to=${to}`
-      );
-      if (!response.ok) {
-        throw new Error(`Failed to fetch historical BTC price: ${response.statusText}`);
-      }
-      const data = await response.json();
-      const prices: [number, number][] = data?.prices;
-      if (!Array.isArray(prices) || prices.length === 0) {
-        throw new Error('Invalid historical price response');
-      }
-      const txMs = ts * 1000;
-      let closest = prices[0];
-      let minDiff = Math.abs(prices[0][0] - txMs);
-      for (let i = 1; i < prices.length; i++) {
-        const diff = Math.abs(prices[i][0] - txMs);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closest = prices[i];
+      const tryFetch = async (url: string): Promise<number> => {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed: ${response.statusText}`);
+        const data = await response.json();
+        const prices: [number, number][] = data?.prices;
+        if (!Array.isArray(prices) || prices.length === 0) throw new Error('Invalid response');
+        const txMs = ts * 1000;
+        let closest = prices[0];
+        let minDiff = Math.abs(prices[0][0] - txMs);
+        for (let i = 1; i < prices.length; i++) {
+          const diff = Math.abs(prices[i][0] - txMs);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closest = prices[i];
+          }
         }
-      }
-      return closest[1];
+        return closest[1];
+      };
+      try {
+        return await tryFetch(historicalUrl);
       } catch {
-        return FALLBACK_BTC_USD;
+        try {
+          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(historicalUrl)}`;
+          return await tryFetch(proxyUrl);
+        } catch {
+          return FALLBACK_BTC_USD;
+        }
       }
     },
     enabled: ts > 0,

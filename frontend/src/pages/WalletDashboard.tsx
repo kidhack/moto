@@ -118,14 +118,17 @@ export default function WalletDashboard() {
     }
   }, [menuOpen, currentPrincipal]);
 
-  // Ensure wallet exists so we can fetch wallet info (balance, transactions)
-  // Only when actor is available (canister ID set); otherwise ensureWallet would throw
+  // Ensure wallet exists in the canister so we can store this user's Bitcoin address for MOTO-to-MOTO lookup.
+  // Must run even when walletInfo is already populated, because walletInfo can come from ledger-only data
+  // (useWalletInfo returns a synthetic wallet when we have ckbtcAddress but no canister wallet yet).
+  // If we only ran when !walletInfo, the receiver would never get a canister wallet or setBitcoinAddress,
+  // so getPrincipalByBitcoinAddress would never find them and send would default to BTC instead of ckBTC.
   useEffect(() => {
     if (!actor || isCkbtcFetching) return;
-    if (!ensureWallet.isPending && !ensureWallet.isSuccess && !walletInfo) {
+    if (!ensureWallet.isPending && !ensureWallet.isSuccess) {
       ensureWallet.mutate();
     }
-  }, [actor, ckbtcAddress, isCkbtcFetching, ensureWallet, walletInfo]);
+  }, [actor, isCkbtcFetching, ensureWallet]);
 
   const handleResetOnboarding = async () => {
     try {

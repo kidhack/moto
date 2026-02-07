@@ -797,7 +797,13 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
 
   // CONFIRMATION STEP
   const isSelfSend = Boolean(sendMode === 'ckbtc' && identity && recipientPrincipal === identity.getPrincipal().toText());
-  const confirmDisabled = isConfirmPending || isInsufficient || isSelfSend || (sendMode === 'ckbtc' && principalByAddress.isLoading);
+  const isNetworkResolving = Boolean(toAddress.trim() && sendMode === null);
+  const confirmDisabled =
+    isConfirmPending ||
+    isInsufficient ||
+    isSelfSend ||
+    (sendMode === 'ckbtc' && principalByAddress.isLoading) ||
+    (toAddress.trim() && sendMode === null);
 
   return (
     <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
@@ -900,7 +906,11 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                   </p>
                   <div className="flex-1 flex justify-end">
                     <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
-                      {sendMode === 'ckbtc' ? 'Instant (IC)' : 'Bitcoin'}
+                      {isNetworkResolving
+                        ? 'Checking…'
+                        : sendMode === 'ckbtc'
+                          ? 'Instant (IC)'
+                          : 'Bitcoin'}
                     </p>
                   </div>
                 </div>
@@ -912,7 +922,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                   </p>
                   <div className="flex-1 flex justify-end">
                     <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
-                      {sendMode === 'ckbtc' ? 'Instant' : '~30 min'}
+                      {isNetworkResolving ? '—' : sendMode === 'ckbtc' ? 'Instant' : '~30 min'}
                     </p>
                   </div>
                 </div>
