@@ -98,15 +98,17 @@ export default function WalletDashboard() {
 
   const DEFAULT_WALLET_NAME = "Nakamoto's Wallet";
 
+  const [walletNameLoaded, setWalletNameLoaded] = useState(false);
   const [walletName, setWalletName] = useState(DEFAULT_WALLET_NAME);
   const [editingWalletName, setEditingWalletName] = useState(false);
   const [walletNameInput, setWalletNameInput] = useState(DEFAULT_WALLET_NAME);
 
   useEffect(() => {
-    if (walletInfo?.walletName) {
-      setWalletName(walletInfo.walletName);
-      setWalletNameInput(walletInfo.walletName);
-    }
+    if (!walletInfo) return;
+    setWalletNameLoaded(true);
+    const name = walletInfo.walletName || DEFAULT_WALLET_NAME;
+    setWalletName(name);
+    setWalletNameInput(name);
   }, [walletInfo?.walletName]);
 
   const [prefsReady, setPrefsReady] = useState(false);
@@ -617,28 +619,30 @@ export default function WalletDashboard() {
                      {currentPrincipal && (
                        <div className="flex flex-col gap-4">
                          <div className="flex items-center min-h-[2rem]">
-                           {editingWalletName ? (
-                             <input
-                               type="text"
-                               value={walletNameInput}
-                               onChange={(e) => setWalletNameInput(e.target.value.slice(0, 32))}
-                               onBlur={handleSaveWalletName}
-                               onKeyDown={(e) => e.key === 'Enter' && handleSaveWalletName()}
-                               className="w-full bg-transparent border-0 rounded-none px-0 py-0 text-white/80 font-mono font-medium text-base tracking-[0.8px] outline-none placeholder:text-white/50"
-                               placeholder={DEFAULT_WALLET_NAME}
-                               autoFocus
-                             />
-                           ) : (
-                             <button
-                               onClick={() => { setWalletNameInput(walletName); setEditingWalletName(true); }}
-                               className="w-full flex items-center justify-between min-h-[2rem] opacity-80 hover:opacity-100 transition-opacity text-left"
-                             >
-                               <span className="font-mono font-medium text-base text-white/80 tracking-[0.8px]">{walletName}</span>
-                               <svg className="size-4 text-white/70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                               </svg>
-                             </button>
-                           )}
+                          {!walletNameLoaded ? (
+                            <div className="h-5 w-40 rounded animate-shimmer" />
+                          ) : editingWalletName ? (
+                            <input
+                              type="text"
+                              value={walletNameInput}
+                              onChange={(e) => setWalletNameInput(e.target.value.slice(0, 32))}
+                              onBlur={handleSaveWalletName}
+                              onKeyDown={(e) => e.key === 'Enter' && handleSaveWalletName()}
+                              className="w-full bg-transparent border-0 rounded-none px-0 py-0 text-white/80 font-mono font-medium text-base tracking-[0.8px] outline-none placeholder:text-white/50"
+                              placeholder={DEFAULT_WALLET_NAME}
+                              autoFocus
+                            />
+                          ) : (
+                            <button
+                              onClick={() => { setWalletNameInput(walletName); setEditingWalletName(true); }}
+                              className="w-full flex items-center justify-between min-h-[2rem] opacity-80 hover:opacity-100 transition-opacity text-left"
+                            >
+                              <span className="font-mono font-medium text-base text-white/80 tracking-[0.8px]">{walletName}</span>
+                              <svg className="size-4 text-white/70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            </button>
+                          )}
                          </div>
                          <div className="w-full border-t border-white/50 shrink-0" />
                        </div>
