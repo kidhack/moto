@@ -25,6 +25,7 @@ import CurrencySelector from '../components/CurrencySelector';
 import LanguageSelector from '../components/LanguageSelector';
 import TransactionDetails from '../components/TransactionDetails';
 import { SlideFromRight } from '../components/SlideFromRight';
+import { useBackButton } from '../hooks/useBackButton';
 
 export default function WalletDashboard() {
   const { clear, identity } = useInternetIdentity();
@@ -78,6 +79,12 @@ export default function WalletDashboard() {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [menuClosing, setMenuClosing] = useState(false);
   const [menuEntering, setMenuEntering] = useState(true);
+
+  useBackButton(showSendModal, () => setShowSendModal(false));
+  useBackButton(showReceiveModal, () => setShowReceiveModal(false));
+  useBackButton(showAddFundsModal, () => setShowAddFundsModal(false));
+  useBackButton(menuOpen, () => { setMenuClosing(true); });
+  useBackButton(selectedTransaction !== null, () => setSelectedTransaction(null));
 
   const WALLET_NAME_KEY_PREFIX = 'moto_wallet_name_';
   const DEFAULT_WALLET_NAME = "Nakamoto's Wallet";
@@ -659,7 +666,7 @@ export default function WalletDashboard() {
                      {/* Principal ID + blurb */}
                      {currentPrincipal && (
                        <div className="flex flex-col gap-3">
-                         <p className="text-white/60 text-xs font-medium">Principal ID</p>
+                         <p className="text-white/60 text-xs font-medium">Your Principal ID</p>
                          <div
                            onClick={async () => {
                              try {

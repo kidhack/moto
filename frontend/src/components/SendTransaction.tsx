@@ -37,25 +37,24 @@ type Step = 'scan' | 'amount' | 'confirm';
 // Currency display mode: 'BTC' | 'SATS' | preferred currency code
 type CurrencyMode = 'BTC' | 'SATS' | string;
 
-// Parse Bitcoin address from QR code data (handles bitcoin:address?amount=X format)
-const parseBitcoinAddress = (data: string): string | null => {
-  // Remove whitespace
+// Parse Bitcoin address (and optional amount) from QR code data (BIP21: bitcoin:address?amount=X)
+const parseBitcoinURI = (data: string): { address: string; amount?: string } | null => {
   const trimmed = data.trim();
-  
-  // Check if it's a bitcoin: URI
+
   if (trimmed.startsWith('bitcoin:')) {
-    const address = trimmed.replace(/^bitcoin:/, '').split('?')[0];
-    // Basic validation - Bitcoin addresses are typically 26-35 characters
+    const withoutScheme = trimmed.replace(/^bitcoin:/, '');
+    const [address, queryString] = withoutScheme.split('?');
     if (address.length >= 26 && address.length <= 62) {
-      return address;
+      const params = new URLSearchParams(queryString || '');
+      const amount = params.get('amount') || undefined;
+      return { address, amount };
     }
   }
-  
-  // Check if it's a plain address (mainnet: bc1, 1, 3; testnet: tb1, m, n, 2)
+
   if (trimmed.length >= 26 && trimmed.length <= 62 && /^(bc1|tb1|[13mn2])/.test(trimmed)) {
-    return trimmed;
+    return { address: trimmed };
   }
-  
+
   return null;
 };
 
@@ -120,9 +119,13 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   useEffect(() => {
     if (qrScanner.qrResults.length > 0 && step === 'scan') {
       const latestResult = qrScanner.qrResults[0];
-      const address = parseBitcoinAddress(latestResult.data);
-      if (address) {
-        setToAddress(address);
+      const parsed = parseBitcoinURI(latestResult.data);
+      if (parsed) {
+        setToAddress(parsed.address);
+        if (parsed.amount) {
+          setAmount(parsed.amount);
+          setAmountCurrency('BTC');
+        }
         qrScanner.stopScanning();
         setStep('amount');
       }
@@ -206,9 +209,17 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   ]);
 
   // Handle address or principal detection (paste / QR)
-  const handleAddressDetected = (address: string) => {
-    const trimmed = address.trim();
-    if (parsePrincipalInput(trimmed)) {
+  const handleAddressDetected = (input: string) => {
+    const trimmed = input.trim();
+    const parsed = parseBitcoinURI(trimmed);
+    if (parsed && isValidBitcoinAddress(parsed.address)) {
+      setToAddress(parsed.address);
+      if (parsed.amount) {
+        setAmount(parsed.amount);
+        setAmountCurrency('BTC');
+      }
+      setStep('amount');
+    } else if (parsePrincipalInput(trimmed)) {
       setToAddress(trimmed);
       setStep('amount');
     } else if (isValidBitcoinAddress(trimmed)) {
@@ -253,13 +264,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     const handleGlobalPaste = (e: ClipboardEvent) => {
       const pastedText = e.clipboardData?.getData('text');
       if (pastedText) {
-        const trimmed = pastedText.trim();
-        if (parsePrincipalInput(trimmed) || isValidBitcoinAddress(trimmed)) {
-          setToAddress(trimmed);
-          setStep('amount');
-        } else {
-          toast.error('Enter a Bitcoin address or Principal ID');
-        }
+        handleAddressDetected(pastedText);
       }
     };
 
@@ -350,6 +355,8 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   const handleNumberPress = (num: string) => {
     setAmount((prev) => {
       const rawPrev = prev.replace(/,/g, '');
+      if (num === '.' && rawPrev.includes('.')) return prev;
+      if (num === '.' && rawPrev === '') return '0.';
       if (rawPrev.length >= 15) return prev;
       const next = normalizeAmountInput(rawPrev + num);
       return next;
@@ -533,16 +540,11 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             </p>
             <div className="h-8 w-8" />
           </header>
-          <div className="px-5 shrink-0 mt-4">
-            <div className="h-px w-full bg-white/50 shrink-0" />
-          </div>
 
           {/* Content area */}
-          <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-            {/* Top section: QR Scanner */}
-            <div className="flex flex-col gap-8 shrink-0 pt-2">
-              {/* QR Scanner window */}
-              <div className="px-5">
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            {/* QR Scanner - centered vertically */}
+            <div className="flex-1 flex items-center justify-center min-h-0 px-5">
                 <div className="w-full max-w-[370px] aspect-square mx-auto bg-black/50 rounded-lg overflow-hidden relative">
                   {/* Always render video element so ref is available for stream attachment */}
                   <video
@@ -619,33 +621,33 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                     </>
                   )}
                 </div>
-              </div>
             </div>
 
-            {/* Spacer to push bottom content down */}
-            <div className="flex-1 min-h-0" />
+          </div>
+        </div>
 
-            {/* Bottom section: Paste Address button */}
-            <div className="flex flex-col gap-2 shrink-0 pb-5 px-5">
-              {/* Hidden input for paste detection */}
-              <input
-                ref={pasteInputRef}
-                type="text"
-                onPaste={handlePaste}
-                className="absolute opacity-0 pointer-events-none w-0 h-0"
-                tabIndex={-1}
-                aria-hidden="true"
-              />
-              
-              <button
-                type="button"
-                onClick={handlePasteFromClipboard}
-                className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full select-none"
-                style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
-              >
-                <span className="font-bold text-base text-white/80 tracking-[0.15px] pointer-events-none">Paste Address</span>
-              </button>
-            </div>
+        {/* Bottom bar - matches dashboard button position */}
+        <div
+          className="shrink-0 flex flex-col bg-black px-5"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        >
+          <div className="pt-4 pb-4">
+            <input
+              ref={pasteInputRef}
+              type="text"
+              onPaste={handlePaste}
+              className="absolute opacity-0 pointer-events-none w-0 h-0"
+              tabIndex={-1}
+              aria-hidden="true"
+            />
+            <button
+              type="button"
+              onClick={handlePasteFromClipboard}
+              className="h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors w-full select-none"
+              style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+            >
+              <span className="font-bold text-base text-white/80 tracking-[0.15px] pointer-events-none">Paste Address</span>
+            </button>
           </div>
         </div>
       </div>
@@ -674,9 +676,6 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
               />
             </button>
           </header>
-          <div className="px-5 shrink-0 mt-4">
-            <div className="h-px w-full bg-white/50 shrink-0" />
-          </div>
 
           {/* Content area */}
           <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
@@ -761,7 +760,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                   ))}
                 </div>
 
-                {/* Row 4: Backspace, 0, Empty */}
+                {/* Row 4: Backspace, 0, Period */}
                 <div className="flex gap-2">
                   <button
                     onClick={handleBackspace}
@@ -779,7 +778,12 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                     <span className="font-mono text-2xl font-bold text-white">0</span>
                   </button>
 
-                  <div className="flex-1" />
+                  <button
+                    onClick={() => handleNumberPress('.')}
+                    className="flex-1 h-[46px] rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                  >
+                    <span className="font-mono text-2xl font-bold text-white">.</span>
+                  </button>
                 </div>
               </div>
               </div>
@@ -839,9 +843,6 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             </button>
           )}
         </header>
-        <div className="px-5 shrink-0 mt-4">
-          <div className="h-px w-full bg-white/50 shrink-0" />
-        </div>
 
         {/* Content area */}
         <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">

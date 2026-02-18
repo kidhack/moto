@@ -105,14 +105,11 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
   // Handle number input
   const handleNumberPress = (num: string) => {
     setAmount((prev) => {
-      // Prevent leading zeros
-      if (prev === '0' && num !== '0') {
-        return num;
-      }
-      // Prevent too many digits (max 15 digits)
-      if (prev.replace(/,/g, '').length >= 15) {
-        return prev;
-      }
+      if (num === '.' && prev.includes('.')) return prev;
+      if (num === '.' && prev === '') return '0.';
+      if (prev === '0' && num === '0') return '0';
+      if (prev === '0' && num !== '.') return num;
+      if (prev.replace(/,/g, '').length >= 15) return prev;
       return prev + num;
     });
   };
@@ -125,14 +122,15 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
     });
   };
 
-  // Handle confirm
+  // Handle confirm — zero or empty clears the set amount
   const handleConfirm = () => {
-    if (!amount || amount === '0') {
-      return;
+    const cleanAmount = (amount || '').replace(/,/g, '');
+    const numericValue = parseFloat(cleanAmount) || 0;
+    if (numericValue === 0) {
+      onConfirm('', currencyMode);
+    } else {
+      onConfirm(cleanAmount, currencyMode);
     }
-    // Remove commas before passing to parent
-    const cleanAmount = amount.replace(/,/g, '');
-    onConfirm(cleanAmount, currencyMode);
   };
 
   const displayAmount = formatDisplayAmount(amount || '0');
@@ -169,10 +167,6 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
             />
           </button>
         </header>
-        <div className="px-5 shrink-0 mt-4">
-          <div className="h-px w-full bg-white/50 shrink-0" />
-        </div>
-
         {/* Content area - centered, scrollable */}
         <div className="flex flex-col gap-8 flex-1 min-h-0 overflow-y-auto pb-5">
           {/* Amount display - centered, gap-[32px] from header (via mb-8 on header) */}
@@ -191,83 +185,80 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
             </p>
           </div>
 
-          {/* Keyboard and Confirm button - gap-[32px] from amount display */}
-          <div className="flex flex-col gap-8 px-5 pb-5">
-            {/* Numeric Keypad - gap-[12px] between rows (gap-3) */}
-            <div className="flex flex-col gap-3 py-5">
-              {/* Row 1: 1, 2, 3 */}
-              <div className="flex gap-2">
-                {[1, 2, 3].map((num) => (
-                  <button
-                    key={num}
-                    onClick={() => handleNumberPress(num.toString())}
-                    className="flex-1 h-[46px] rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-                  >
-                    <span className="font-mono text-2xl font-bold text-white">{num}</span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Row 2: 4, 5, 6 */}
-              <div className="flex gap-2">
-                {[4, 5, 6].map((num) => (
-                  <button
-                    key={num}
-                    onClick={() => handleNumberPress(num.toString())}
-                    className="flex-1 h-[46px] rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-                  >
-                    <span className="font-mono text-2xl font-bold text-white">{num}</span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Row 3: 7, 8, 9 */}
-              <div className="flex gap-2">
-                {[7, 8, 9].map((num) => (
-                  <button
-                    key={num}
-                    onClick={() => handleNumberPress(num.toString())}
-                    className="flex-1 h-[46px] rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-                  >
-                    <span className="font-mono text-2xl font-bold text-white">{num}</span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Row 4: Backspace, 0, Empty */}
-              <div className="flex gap-2">
-                {/* Backspace button */}
+          {/* Numeric Keypad */}
+          <div className="flex flex-col gap-3 px-5">
+            <div className="flex gap-2">
+              {[1, 2, 3].map((num) => (
                 <button
-                  onClick={handleBackspace}
+                  key={num}
+                  onClick={() => handleNumberPress(num.toString())}
                   className="flex-1 h-[46px] rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
                 >
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
-                  </svg>
+                  <span className="font-mono text-2xl font-bold text-white">{num}</span>
                 </button>
-
-                {/* 0 button */}
-                <button
-                  onClick={() => handleNumberPress('0')}
-                  className="flex-1 h-[46px] rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-                >
-                  <span className="font-mono text-2xl font-bold text-white">0</span>
-                </button>
-
-                {/* Empty space */}
-                <div className="flex-1" />
-              </div>
+              ))}
             </div>
-
-            {/* Confirm button */}
-            <button
-              onClick={handleConfirm}
-              disabled={!amount || amount === '0' || isConfirmDisabled}
-              className="h-16 w-full border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="font-bold text-base text-white/80 tracking-[0.15px]">Confirm Amount</span>
-            </button>
+            <div className="flex gap-2">
+              {[4, 5, 6].map((num) => (
+                <button
+                  key={num}
+                  onClick={() => handleNumberPress(num.toString())}
+                  className="flex-1 h-[46px] rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                >
+                  <span className="font-mono text-2xl font-bold text-white">{num}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              {[7, 8, 9].map((num) => (
+                <button
+                  key={num}
+                  onClick={() => handleNumberPress(num.toString())}
+                  className="flex-1 h-[46px] rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                >
+                  <span className="font-mono text-2xl font-bold text-white">{num}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleBackspace}
+                className="flex-1 h-[46px] rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+              >
+                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+              <button
+                onClick={() => handleNumberPress('0')}
+                className="flex-1 h-[46px] rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+              >
+                <span className="font-mono text-2xl font-bold text-white">0</span>
+              </button>
+              <button
+                onClick={() => handleNumberPress('.')}
+                className="flex-1 h-[46px] rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+              >
+                <span className="font-mono text-2xl font-bold text-white">.</span>
+              </button>
+            </div>
           </div>
+        </div>
+      </div>
+
+      {/* Set button - fixed bottom, matches dashboard button position */}
+      <div
+        className="shrink-0 flex flex-col bg-black px-5"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        <div className="pt-4 pb-4">
+          <button
+            onClick={handleConfirm}
+            disabled={isConfirmDisabled}
+            className="h-16 w-full border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="font-bold text-base text-white/80 tracking-[0.15px]">Set</span>
+          </button>
         </div>
       </div>
     </div>

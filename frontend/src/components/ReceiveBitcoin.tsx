@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { QRCodeSVG } from 'qrcode.react';
 import { useScreenTransitionGuard } from '../hooks/useScreenTransitionGuard';
 import { vibrateLight } from '../utils/haptics';
 import { SlideFromRight } from './SlideFromRight';
@@ -81,10 +82,9 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
     }
   };
 
-  // Generate QR code URL - if amount is set, include it in the QR code data
+  // Generate QR code data - if amount is set, include it as BIP21 URI
   const btcAmount = amount ? getBTCAmount(amount, amountCurrency) : '';
   const qrData = btcAmount ? `bitcoin:${address}?amount=${btcAmount}` : address;
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=370x370&data=${encodeURIComponent(qrData)}&margin=0`;
 
   // Handle amount confirmation from SetAmount component
   const handleAmountConfirm = (confirmedAmount: string, currency: string) => {
@@ -110,20 +110,6 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
 
   const [addressCopied, setAddressCopied] = useState(false);
   const isGuardDisabled = useScreenTransitionGuard(500);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [canScroll, setCanScroll] = useState(true);
-
-  useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    const check = () => {
-      setCanScroll(el.scrollHeight > el.clientHeight);
-    };
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [qrCodeUrl, address]);
 
   const copyAddress = async () => {
     try {
@@ -138,19 +124,24 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
   };
 
   const shareAddress = async () => {
+    const currencyLabel = amountCurrency === 'BTC' ? 'BTC' : amountCurrency === 'SATS' ? 'sats' : amountCurrency;
+    const amountText = amount ? `${amount} ${currencyLabel} ` : '';
+    const text = `MOTO user requests ${amountText}sent to ${address}`;
+
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: 'Bitcoin Address',
-          text: `Send Bitcoin to: ${address}${amount ? ` (Amount: ${amount} BTC)` : ''}`,
-        });
+        await navigator.share({ text });
       } catch (error) {
-        // User cancelled or share failed
         console.error('Share failed:', error);
       }
     } else {
-      // Fallback: copy to clipboard
-      copyAddress();
+      try {
+        await navigator.clipboard.writeText(text);
+        vibrateLight();
+        toast.success('Copied to clipboard');
+      } catch {
+        toast.error('Failed to copy to clipboard');
+      }
     }
   };
 
@@ -181,116 +172,85 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
           <div className="h-8 w-8" /> {/* Empty space for symmetry */}
         </header>
 
-        {/* Divider - mt-4 matches dashboard/menu */}
-        <div className="px-5 shrink-0 mt-4">
-          <div className="h-px w-full bg-white/50 shrink-0" />
-        </div>
-
-        {/* Content area - only scroll when content overflows */}
-        <div
-          ref={scrollContainerRef}
-          className="flex flex-col flex-1 min-h-0"
-          style={{ overflowY: canScroll ? 'auto' : 'hidden' }}
-        >
-          {/* Top section: QR Code and Address block */}
-          <div className="flex flex-col gap-8 shrink-0 pt-2">
-            {/* QR Code - half size on mobile to show more content */}
-            <div className="flex items-center justify-center px-5">
-              <div className="w-full max-w-[185px] sm:max-w-[370px] aspect-square flex items-center justify-center shrink-0">
-              <img 
-                src={qrCodeUrl} 
-                alt="QR Code" 
-                  className="w-full h-full object-contain"
-                  onError={() => {
-                  console.error('Failed to load QR code');
-                }}
+        {/* Content area - no scroll, QR scales to fit */}
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden" style={{ paddingTop: 24 }}>
+          {/* QR Code - fills available vertical space, constrained by width */}
+          <div className="flex-1 flex items-center justify-center px-5 min-h-0">
+            <div className="max-w-[370px] max-h-full aspect-square w-full flex items-center justify-center bg-white p-1 rounded">
+              <QRCodeSVG
+                value={qrData}
+                size={370}
+                level="M"
+                marginSize={2}
+                className="w-full h-full"
               />
-              </div>
-            </div>
-
-            {/* Bitcoin Wallet Address box - tap to copy */}
-            <div className="px-5">
-              <button
-                type="button"
-                onClick={copyAddress}
-                className="bg-white/10 flex items-center justify-center w-full min-h-16 px-4 py-3 cursor-pointer active:bg-white/15 transition-colors rounded-none border-0 text-left relative"
-              >
-                <p className="text-white/80 font-mono text-[16px] font-medium text-center break-all leading-relaxed" style={{ letterSpacing: '0.32px', textWrap: 'balance' }}>
-                  {address}
-                </p>
-                {addressCopied && (
-                  <p className="absolute inset-0 flex items-center justify-center bg-zinc-900/90 text-white/80 font-sans text-base font-medium" style={{ letterSpacing: '0.32px' }}>
-                    Copied!
-                  </p>
-                )}
-              </button>
             </div>
           </div>
 
-          {/* Spacer to push bottom content down */}
-          <div className="flex-1 min-h-0" />
+          {/* Bitcoin Wallet Address box - tap to copy */}
+          <div className="px-5 shrink-0" style={{ paddingTop: 24 }}>
+            <button
+              type="button"
+              onClick={copyAddress}
+              className="bg-white/10 flex items-center justify-center w-full min-h-16 px-4 py-3 cursor-pointer active:bg-white/15 transition-colors rounded-none border-0 text-left relative"
+            >
+              <p className="text-white/80 font-mono text-[16px] font-medium text-center break-all leading-relaxed" style={{ letterSpacing: '0.32px', textWrap: 'balance' }}>
+                {address}
+              </p>
+              {addressCopied && (
+                <p className="absolute inset-0 flex items-center justify-center bg-zinc-900/90 text-white/80 font-sans text-base font-medium" style={{ letterSpacing: '0.32px' }}>
+                  Copied!
+                </p>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
 
-          {/* Bottom section: Amount display and buttons */}
-          <div className="flex flex-col gap-2 shrink-0 pb-5">
-            <p className="px-5 font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1" style={{ letterSpacing: '0.15px' }}>
-              1 BTC ≈ ${BTC_PRICE_USD.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-              <StalePriceIndicator isStale={priceIsStale} />
-            </p>
-            {/* Amount display row (when amount is set) or Set Amount button */}
-          <div className="px-5 flex items-center justify-between w-full shrink-0">
-            {amount ? (
-              <>
-                {/* Amount display - left side */}
-                <div className="flex items-center gap-2 h-[22px]">
-                  <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>
-                    {formatDisplayAmount(amount)}
-                  </p>
-                  <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>
-                    {getCurrencyLabel()}
-                  </p>
-                </div>
-                {/* Edit button - right side */}
-                <button
-                  onClick={() => setShowSetAmount(true)}
-                  disabled={isGuardDisabled}
-                  className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors px-8 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span className="font-bold text-base text-white/80 tracking-[0.15px]">Edit</span>
-                </button>
-              </>
-            ) : (
-                /* Set Amount button - when no amount is set, full width */
+      {/* Bottom bar - fixed position matching dashboard */}
+      <div
+        className="shrink-0 flex flex-col bg-black px-5"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        <div className="flex flex-col pt-4 pb-4 gap-2">
+          <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1 pb-1" style={{ letterSpacing: '0.15px' }}>
+            1 BTC ≈ ${BTC_PRICE_USD.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+            <StalePriceIndicator isStale={priceIsStale} />
+          </p>
+          {amount ? (
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2 h-[22px]">
+                <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>
+                  {formatDisplayAmount(amount)}
+                </p>
+                <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>
+                  {getCurrencyLabel()}
+                </p>
+              </div>
               <button
                 onClick={() => setShowSetAmount(true)}
                 disabled={isGuardDisabled}
-                className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors px-8 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span className="font-bold text-base text-white/80 tracking-[0.15px]">Set Amount</span>
+                <span className="font-bold text-base text-white/80 tracking-[0.15px]">Edit</span>
               </button>
-            )}
-          </div>
-
-          {/* Buttons container - gap-2 (8px) from amount/set amount */}
-          <div className="px-5 flex flex-col gap-2 w-full shrink-0">
-            {/* Copy Address button */}
+            </div>
+          ) : (
             <button
-              onClick={copyAddress}
+              onClick={() => setShowSetAmount(true)}
               disabled={isGuardDisabled}
               className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span className="font-bold text-base text-white/80 tracking-[0.15px]">Copy Address</span>
+              <span className="font-bold text-base text-white/80 tracking-[0.15px]">Set Amount</span>
             </button>
-
-            {/* Share button */}
-            <button
-              onClick={shareAddress}
-              disabled={isGuardDisabled}
-              className="h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors w-full disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="font-bold text-base text-white/80 tracking-[0.15px]">Share</span>
-            </button>
-            </div>
-          </div>
+          )}
+          <button
+            onClick={shareAddress}
+            disabled={isGuardDisabled}
+            className="h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="font-bold text-base text-white/80 tracking-[0.15px]">Share</span>
+          </button>
         </div>
       </div>
     </div>
