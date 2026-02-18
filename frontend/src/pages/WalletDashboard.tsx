@@ -42,8 +42,8 @@ export default function WalletDashboard() {
   const walletAddressForTx = walletInfo?.bitcoinAddress || ckbtcAddress || '';
   const { transactions: ckbtcTransactions } = useCkBTCTransactions(walletAddressForTx);
   const { t } = useTranslation();
-  const { preferredCurrency } = usePreferredCurrency();
-  const { preferredLanguage } = usePreferredLanguage();
+  const { preferredCurrency, setPreferredCurrency } = usePreferredCurrency();
+  const { preferredLanguage, setPreferredLanguage } = usePreferredLanguage();
   const languageName = LANGUAGES.find(l => l.code === preferredLanguage)?.name ?? preferredLanguage;
   // Prefer merged list from walletInfo; fall back to ckBTC hook so history shows even if query hasn't merged yet
   const displayTransactions = (walletInfo?.transactions?.length ? walletInfo.transactions : ckbtcTransactions) ?? [];
@@ -94,42 +94,37 @@ export default function WalletDashboard() {
   useBackButton(menuOpen, () => { setMenuClosing(true); });
   useBackButton(selectedTransaction !== null, () => setSelectedTransaction(null));
 
-  const WALLET_NAME_KEY_PREFIX = 'moto_wallet_name_';
   const DEFAULT_WALLET_NAME = "Nakamoto's Wallet";
-  const getStoredWalletName = (principal: string) => {
-    try {
-      const s = localStorage.getItem(WALLET_NAME_KEY_PREFIX + principal);
-      return s?.trim() || DEFAULT_WALLET_NAME;
-    } catch {
-      return DEFAULT_WALLET_NAME;
-    }
-  };
-  const setStoredWalletName = (principal: string, name: string) => {
-    try {
-      const trimmed = name?.trim() || DEFAULT_WALLET_NAME;
-      localStorage.setItem(WALLET_NAME_KEY_PREFIX + principal, trimmed);
-    } catch {
-      // ignore
-    }
-  };
-  const clearStoredWalletName = (principal: string) => {
-    try {
-      localStorage.removeItem(WALLET_NAME_KEY_PREFIX + principal);
-    } catch {
-      // ignore
-    }
-  };
 
   const [walletName, setWalletName] = useState(DEFAULT_WALLET_NAME);
   const [editingWalletName, setEditingWalletName] = useState(false);
   const [walletNameInput, setWalletNameInput] = useState(DEFAULT_WALLET_NAME);
 
   useEffect(() => {
-    if (currentPrincipal) {
-      setWalletName(getStoredWalletName(currentPrincipal));
-      setWalletNameInput(getStoredWalletName(currentPrincipal));
+    if (walletInfo?.walletName) {
+      setWalletName(walletInfo.walletName);
+      setWalletNameInput(walletInfo.walletName);
+    } else {
+      setWalletName(DEFAULT_WALLET_NAME);
+      setWalletNameInput(DEFAULT_WALLET_NAME);
     }
-  }, [currentPrincipal]);
+  }, [walletInfo?.walletName]);
+
+  const [prefsSeeded, setPrefsSeeded] = useState(false);
+  useEffect(() => {
+    if (prefsSeeded || !walletInfo) return;
+    if (walletInfo.preferredCurrency) setPreferredCurrency(walletInfo.preferredCurrency);
+    if (walletInfo.preferredLanguage) setPreferredLanguage(walletInfo.preferredLanguage);
+    setPrefsSeeded(true);
+  }, [walletInfo, prefsSeeded]);
+
+  // Persist currency/language to canister when changed (skip initial seed)
+  useEffect(() => {
+    if (!prefsSeeded || !actor) return;
+    actor.setPreferences(preferredCurrency, preferredLanguage).catch(() => {
+      console.error('Failed to save preferences to canister');
+    });
+  }, [preferredCurrency, preferredLanguage, prefsSeeded, actor]);
   
   // Debug: Log principal when menu opens
   useEffect(() => {
@@ -204,7 +199,7 @@ export default function WalletDashboard() {
 
   const handleWipeCanisterAndSignOut = async () => {
     setMenuOpen(false);
-    if (currentPrincipal) clearStoredWalletName(currentPrincipal);
+    // Wallet name is stored in the canister and will be wiped with signOutAndReset
     try {
       try {
         await signOutAndReset.mutateAsync();
@@ -235,12 +230,16 @@ export default function WalletDashboard() {
     }
   };
 
-  const handleSaveWalletName = () => {
+  const handleSaveWalletName = async () => {
     if (!currentPrincipal) return;
-    const name = walletNameInput?.trim() || DEFAULT_WALLET_NAME;
+    const name = (walletNameInput?.trim() || DEFAULT_WALLET_NAME).slice(0, 32);
     setWalletName(name);
-    setStoredWalletName(currentPrincipal, name);
     setEditingWalletName(false);
+    try {
+      await actor?.setWalletName(name);
+    } catch {
+      console.error('Failed to save wallet name to canister');
+    }
   };
 
   const formatBTC = (satoshis: bigint) => {
@@ -291,6 +290,9 @@ export default function WalletDashboard() {
           transactions: [] as Transaction[],
           balance: ledgerBalance,
           onboardingComplete: true,
+          walletName: '',
+          preferredCurrency: '',
+          preferredLanguage: '',
           createdAt: BigInt(0),
           lastUpdated: BigInt(0),
         }
@@ -621,7 +623,7 @@ export default function WalletDashboard() {
                              <input
                                type="text"
                                value={walletNameInput}
-                               onChange={(e) => setWalletNameInput(e.target.value)}
+                               onChange={(e) => setWalletNameInput(e.target.value.slice(0, 32))}
                                onBlur={handleSaveWalletName}
                                onKeyDown={(e) => e.key === 'Enter' && handleSaveWalletName()}
                                className="w-full bg-transparent border-0 rounded-none px-0 py-0 text-white/80 font-mono font-medium text-base tracking-[0.8px] outline-none placeholder:text-white/50"

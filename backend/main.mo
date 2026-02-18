@@ -37,6 +37,9 @@ persistent actor BitcoinWallet {
     transactions : [Transaction];
     balance : Int;
     onboardingComplete : Bool;
+    walletName : Text;
+    preferredCurrency : Text;
+    preferredLanguage : Text;
     createdAt : Int;
     lastUpdated : Int;
   };
@@ -55,6 +58,9 @@ persistent actor BitcoinWallet {
           transactions = [];
           balance = 0;
           onboardingComplete = false;
+          walletName = "";
+          preferredCurrency = "";
+          preferredLanguage = "";
           createdAt = timestamp;
           lastUpdated = timestamp;
         };
@@ -87,6 +93,9 @@ persistent actor BitcoinWallet {
           transactions = wallet.transactions;
           balance = newBalance;
           onboardingComplete = wallet.onboardingComplete;
+          walletName = wallet.walletName;
+          preferredCurrency = wallet.preferredCurrency;
+          preferredLanguage = wallet.preferredLanguage;
           createdAt = wallet.createdAt;
           lastUpdated = Time.now();
         };
@@ -132,6 +141,9 @@ persistent actor BitcoinWallet {
           transactions = updatedTransactions;
           balance = wallet.balance - amount;
           onboardingComplete = wallet.onboardingComplete;
+          walletName = wallet.walletName;
+          preferredCurrency = wallet.preferredCurrency;
+          preferredLanguage = wallet.preferredLanguage;
           createdAt = wallet.createdAt;
           lastUpdated = Time.now();
         };
@@ -177,6 +189,9 @@ persistent actor BitcoinWallet {
           transactions = wallet.transactions;
           balance = wallet.balance;
           onboardingComplete = wallet.onboardingComplete;
+          walletName = wallet.walletName;
+          preferredCurrency = wallet.preferredCurrency;
+          preferredLanguage = wallet.preferredLanguage;
           createdAt = wallet.createdAt;
           lastUpdated = Time.now();
         };
@@ -203,6 +218,62 @@ persistent actor BitcoinWallet {
     null;
   };
 
+  public shared ({ caller }) func setWalletName(name : Text) : async () {
+    switch (principalMap.get(userWallets, caller)) {
+      case (?wallet) {
+        let trimmed = Text.trimStart(Text.trimEnd(name, #text " "), #text " ");
+        let bounded = if (Text.size(trimmed) > 32) {
+          var acc = "";
+          var i = 0;
+          for (c in trimmed.chars()) {
+            if (i < 32) { acc := acc # Char.toText(c) };
+            i += 1;
+          };
+          acc;
+        } else { trimmed };
+        let updatedWallet : UserWallet = {
+          principal = wallet.principal;
+          bitcoinAddress = wallet.bitcoinAddress;
+          transactions = wallet.transactions;
+          balance = wallet.balance;
+          onboardingComplete = wallet.onboardingComplete;
+          walletName = bounded;
+          preferredCurrency = wallet.preferredCurrency;
+          preferredLanguage = wallet.preferredLanguage;
+          createdAt = wallet.createdAt;
+          lastUpdated = Time.now();
+        };
+        userWallets := principalMap.put(userWallets, caller, updatedWallet);
+      };
+      case null {
+        Debug.trap("Wallet not found");
+      };
+    };
+  };
+
+  public shared ({ caller }) func setPreferences(currency : Text, language : Text) : async () {
+    switch (principalMap.get(userWallets, caller)) {
+      case (?wallet) {
+        let updatedWallet : UserWallet = {
+          principal = wallet.principal;
+          bitcoinAddress = wallet.bitcoinAddress;
+          transactions = wallet.transactions;
+          balance = wallet.balance;
+          onboardingComplete = wallet.onboardingComplete;
+          walletName = wallet.walletName;
+          preferredCurrency = currency;
+          preferredLanguage = language;
+          createdAt = wallet.createdAt;
+          lastUpdated = Time.now();
+        };
+        userWallets := principalMap.put(userWallets, caller, updatedWallet);
+      };
+      case null {
+        Debug.trap("Wallet not found");
+      };
+    };
+  };
+
   public shared ({ caller }) func getWalletInfo() : async ?UserWallet {
     // Return optional wallet instead of trapping - allows frontend to handle missing wallet gracefully
     principalMap.get(userWallets, caller);
@@ -217,6 +288,9 @@ persistent actor BitcoinWallet {
           transactions = wallet.transactions;
           balance = wallet.balance;
           onboardingComplete = true;
+          walletName = wallet.walletName;
+          preferredCurrency = wallet.preferredCurrency;
+          preferredLanguage = wallet.preferredLanguage;
           createdAt = wallet.createdAt;
           lastUpdated = Time.now();
         };
@@ -248,6 +322,9 @@ persistent actor BitcoinWallet {
           transactions = wallet.transactions;
           balance = wallet.balance;
           onboardingComplete = false;
+          walletName = wallet.walletName;
+          preferredCurrency = wallet.preferredCurrency;
+          preferredLanguage = wallet.preferredLanguage;
           createdAt = wallet.createdAt;
           lastUpdated = Time.now();
         };
@@ -270,7 +347,10 @@ persistent actor BitcoinWallet {
     };
   };
 
-  public query func getAllWallets() : async [UserWallet] {
+  public shared ({ caller }) func getAllWallets() : async [UserWallet] {
+    if (not Principal.isController(caller)) {
+      Debug.trap("Unauthorized: only the canister controller can call getAllWallets");
+    };
     Iter.toArray(principalMap.vals(userWallets));
   };
 

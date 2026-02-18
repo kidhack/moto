@@ -23,11 +23,14 @@ export const idlFactory = ({ IDL }) => {
     'lastUpdated' : IDL.Int,
     'bitcoinAddress' : BitcoinAddress,
     'transactions' : IDL.Vec(Transaction),
+    'walletName' : IDL.Text,
+    'preferredCurrency' : IDL.Text,
+    'preferredLanguage' : IDL.Text,
   });
   return IDL.Service({
     'completeOnboarding' : IDL.Func([], [], []),
     'ensureWalletExists' : IDL.Func([], [BitcoinAddress], []),
-    'getAllWallets' : IDL.Func([], [IDL.Vec(UserWallet)], ['query']),
+    'getAllWallets' : IDL.Func([], [IDL.Vec(UserWallet)], []),
     'getBalance' : IDL.Func([], [IDL.Int], []),
     'getBitcoinAddress' : IDL.Func([], [BitcoinAddress], []),
     'getPrincipalByBitcoinAddress' : IDL.Func(
@@ -45,6 +48,8 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'setBitcoinAddress' : IDL.Func([BitcoinAddress], [], []),
+    'setWalletName' : IDL.Func([IDL.Text], [], []),
+    'setPreferences' : IDL.Func([IDL.Text, IDL.Text], [], []),
     'signOutAndReset' : IDL.Func([], [], []),
     'syncBalanceFromLedger' : IDL.Func([IDL.Int], [], []),
   });

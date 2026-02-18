@@ -7,6 +7,9 @@ type UserWallet =
    onboardingComplete: bool;
    "principal": principal;
    transactions: vec Transaction;
+   walletName: text;
+   preferredCurrency: text;
+   preferredLanguage: text;
  };
 type TransactionStatus = 
  variant {
@@ -29,7 +32,7 @@ type BitcoinAddress = text;
 service : {
   completeOnboarding: () -> ();
   ensureWalletExists: () -> (BitcoinAddress);
-  getAllWallets: () -> (vec UserWallet) query;
+  getAllWallets: () -> (vec UserWallet);
   getBalance: () -> (int);
   getBitcoinAddress: () -> (BitcoinAddress);
   getTransactionHistory: () -> (vec Transaction);
@@ -39,6 +42,8 @@ service : {
   sendTransaction: (toAddress: BitcoinAddress, amount: int) ->
    (TransactionId);
   setBitcoinAddress: (BitcoinAddress) -> ();
+  setWalletName: (text) -> ();
+  setPreferences: (currency: text, language: text) -> ();
   getPrincipalByBitcoinAddress: (text) -> (opt principal) query;
   signOutAndReset: () -> ();
 }

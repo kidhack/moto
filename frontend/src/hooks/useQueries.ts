@@ -282,12 +282,14 @@ export function useWalletInfo() {
           bitcoinAddress: realBitcoinAddress, // Use real address or empty string (never fake)
           transactions: mergedTransactions, // Use merged transactions from both sources
         } : (finalBalance > 0 || realBitcoinAddress || mergedTransactions.length > 0) ? {
-          // Create a minimal wallet object if we have balance, address, or transactions
           principal: identity ? identity.getPrincipal() : Principal.anonymous(),
           bitcoinAddress: realBitcoinAddress,
           transactions: mergedTransactions,
           balance: finalBalance,
           onboardingComplete: true,
+          walletName: '',
+          preferredCurrency: '',
+          preferredLanguage: '',
           createdAt: BigInt(Date.now()),
           lastUpdated: BigInt(Date.now()),
         } : null;

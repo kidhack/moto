@@ -29,6 +29,9 @@ export interface UserWallet {
   transactions: Transaction[];
   balance: bigint;
   onboardingComplete: boolean;
+  walletName: string;
+  preferredCurrency: string;
+  preferredLanguage: string;
   createdAt: bigint;
   lastUpdated: bigint;
 }
@@ -42,6 +45,8 @@ export interface BitcoinWalletActor {
   sendTransaction: (toAddress: BitcoinAddress, amount: bigint) => Promise<TransactionId>;
   getBitcoinAddress: () => Promise<BitcoinAddress>;
   setBitcoinAddress: (address: BitcoinAddress) => Promise<void>;
+  setWalletName: (name: string) => Promise<void>;
+  setPreferences: (currency: string, language: string) => Promise<void>;
   getWalletInfo: () => Promise<UserWallet | null>;
   getPrincipalByBitcoinAddress: (address: string) => Promise<Principal | null>;
   completeOnboarding: () => Promise<void>;
