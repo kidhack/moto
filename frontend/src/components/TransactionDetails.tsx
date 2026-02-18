@@ -228,7 +228,7 @@ export default function TransactionDetails({
 
   const { preferredCurrency } = usePreferredCurrency();
   const { data: currentPrice } = useBTCPrice();
-  const { data: priceAtTxTime, isLoading: priceAtTimeLoading } = useBTCPriceAtTime(transaction.timestamp);
+  const { data: priceAtTxTime, isLoading: priceAtTimeLoading } = useBTCPriceAtTime(transaction.timestamp, preferredCurrency);
   const [currencyMode, setCurrencyMode] = useState<CurrencyMode>('BTC');
 
   const canSwipeLeft = localIndex < transactions.length - 1;

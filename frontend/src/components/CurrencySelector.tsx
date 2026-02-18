@@ -37,8 +37,7 @@ export default function CurrencySelector({ onClose, embedded }: CurrencySelector
           <div className="h-px w-full bg-white/50 shrink-0" />
         </div>
 
-        {/* Currency list container - scrollable, matching menu items container structure - extends to edge for scrollbar */}
-        <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pb-5">
+        <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pb-5" style={{ touchAction: 'pan-y' }}>
           {/* Content wrapper with padding - scrollbar stays at edge, pt-6 matches menu */}
           <div className="px-5 pt-6 flex flex-col gap-4">
             {/* Currency items - matching menu structure */}

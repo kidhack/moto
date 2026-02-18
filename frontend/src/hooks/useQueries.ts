@@ -788,15 +788,16 @@ export function getBTCPriceInCurrency(priceData: BTCPriceData | undefined, curre
 }
 
 /** BTC price at the time of a transaction. Uses CoinGecko market_chart/range and picks the closest point to the tx timestamp. */
-export function useBTCPriceAtTime(timestampSeconds: number | bigint) {
+export function useBTCPriceAtTime(timestampSeconds: number | bigint, currencyCode: string = 'USD') {
   const ts = Number(timestampSeconds);
-  const rangeSec = 3600; // 1 hour either side so we get points around the tx time
+  const rangeSec = 3600;
   const from = Math.max(0, ts - rangeSec);
   const to = ts + rangeSec;
-  const historicalUrl = `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range?vs_currency=usd&from=${from}&to=${to}`;
+  const vsCurrency = currencyCode.toLowerCase();
+  const historicalUrl = `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range?vs_currency=${vsCurrency}&from=${from}&to=${to}`;
 
   return useQuery<number>({
-    queryKey: ['btcPriceAtTime', ts],
+    queryKey: ['btcPriceAtTime', ts, vsCurrency],
     queryFn: async () => {
       const tryFetch = async (url: string): Promise<number> => {
         const response = await fetch(url);

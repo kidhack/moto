@@ -27,6 +27,9 @@ import TransactionDetails from '../components/TransactionDetails';
 import { SlideFromRight } from '../components/SlideFromRight';
 import { useBackButton } from '../hooks/useBackButton';
 import { useTranslation } from '../i18n';
+import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
+import { usePreferredLanguage } from '../hooks/usePreferredLanguage';
+import { LANGUAGES } from '../data/languages';
 
 export default function WalletDashboard() {
   const { clear, identity } = useInternetIdentity();
@@ -39,6 +42,9 @@ export default function WalletDashboard() {
   const walletAddressForTx = walletInfo?.bitcoinAddress || ckbtcAddress || '';
   const { transactions: ckbtcTransactions } = useCkBTCTransactions(walletAddressForTx);
   const { t } = useTranslation();
+  const { preferredCurrency } = usePreferredCurrency();
+  const { preferredLanguage } = usePreferredLanguage();
+  const languageName = LANGUAGES.find(l => l.code === preferredLanguage)?.name ?? preferredLanguage;
   // Prefer merged list from walletInfo; fall back to ckBTC hook so history shows even if query hasn't merged yet
   const displayTransactions = (walletInfo?.transactions?.length ? walletInfo.transactions : ckbtcTransactions) ?? [];
   
@@ -645,6 +651,7 @@ export default function WalletDashboard() {
                      >
                        <img src="/assets/currency.svg" alt="" className="size-5 shrink-0 opacity-80" />
                        <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.currency')}</span>
+                       <span className="ml-auto font-mono font-medium text-base text-white/50 tracking-[0.8px]">{preferredCurrency}</span>
                      </button>
 
                      {/* Language */}
@@ -654,6 +661,7 @@ export default function WalletDashboard() {
                      >
                        <img src="/assets/language.svg" alt="" className="size-5 shrink-0 opacity-80" />
                        <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.language')}</span>
+                       <span className="ml-auto font-medium text-base text-white/50 tracking-[0.8px]">{languageName}</span>
                      </button>
 
                      <div className="w-full border-t border-white/30 shrink-0" />
