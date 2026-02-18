@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { useActor } from '../hooks/useActor';
+import { useQueryClient } from '@tanstack/react-query';
 import { useWalletInfo, useEnsureWallet, useResetOnboarding, useSignOutAndReset, useWalletAddress } from '../hooks/useQueries';
 import { useCkBTCMinter } from '../hooks/useCkBTCMinter';
 import { useCkBTCLedger } from '../hooks/useCkBTCLedger';
@@ -34,6 +35,7 @@ import { LANGUAGES } from '../data/languages';
 export default function WalletDashboard() {
   const { clear, identity } = useInternetIdentity();
   const { actor } = useActor();
+  const queryClient = useQueryClient();
   const { data: walletInfo, isLoading, error: walletInfoError, isFetching: isWalletInfoFetching, refetch: refetchWalletInfo } = useWalletInfo();
   const { data: walletAddress, isLoading: isLoadingAddress, error: walletAddressError } = useWalletAddress();
   const { address: ckbtcAddress, isFetching: isCkbtcFetching } = useCkBTCMinter(); // Check if we have ckBTC address
@@ -104,27 +106,21 @@ export default function WalletDashboard() {
     if (walletInfo?.walletName) {
       setWalletName(walletInfo.walletName);
       setWalletNameInput(walletInfo.walletName);
-    } else {
-      setWalletName(DEFAULT_WALLET_NAME);
-      setWalletNameInput(DEFAULT_WALLET_NAME);
     }
   }, [walletInfo?.walletName]);
 
-  const [prefsSeeded, setPrefsSeeded] = useState(false);
+  const [prefsReady, setPrefsReady] = useState(false);
   useEffect(() => {
-    if (prefsSeeded || !walletInfo) return;
+    if (prefsReady || !walletInfo || !actor) return;
     if (walletInfo.preferredCurrency) setPreferredCurrency(walletInfo.preferredCurrency);
     if (walletInfo.preferredLanguage) setPreferredLanguage(walletInfo.preferredLanguage);
-    setPrefsSeeded(true);
-  }, [walletInfo, prefsSeeded]);
+    setPrefsReady(true);
+  }, [walletInfo, actor, prefsReady]);
 
-  // Persist currency/language to canister when changed (skip initial seed)
   useEffect(() => {
-    if (!prefsSeeded || !actor) return;
-    actor.setPreferences(preferredCurrency, preferredLanguage).catch(() => {
-      console.error('Failed to save preferences to canister');
-    });
-  }, [preferredCurrency, preferredLanguage, prefsSeeded, actor]);
+    if (!prefsReady || !actor) return;
+    actor.setPreferences(preferredCurrency, preferredLanguage).catch(() => {});
+  }, [preferredCurrency, preferredLanguage, prefsReady, actor]);
   
   // Debug: Log principal when menu opens
   useEffect(() => {
@@ -235,10 +231,12 @@ export default function WalletDashboard() {
     const name = (walletNameInput?.trim() || DEFAULT_WALLET_NAME).slice(0, 32);
     setWalletName(name);
     setEditingWalletName(false);
+    if (!actor) return;
     try {
-      await actor?.setWalletName(name);
-    } catch {
-      console.error('Failed to save wallet name to canister');
+      await actor.setWalletName(name);
+      queryClient.invalidateQueries({ queryKey: ['walletInfo'] });
+    } catch (e) {
+      console.error('Failed to save wallet name to canister:', e);
     }
   };
 
