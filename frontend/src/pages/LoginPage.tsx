@@ -1,6 +1,8 @@
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { toast } from 'sonner';
 
+const CONTENT_MAX_WIDTH = 320;
+
 export default function LoginPage() {
   const { login, isLoggingIn } = useInternetIdentity();
 
@@ -18,7 +20,7 @@ export default function LoginPage() {
       {/* Logo: same position as splash terminus */}
       <div
         className="absolute left-1/2 z-20 flex flex-col items-center"
-        style={{ top: '120px', transform: 'translateX(-50%)' }}
+        style={{ top: '80px', transform: 'translateX(-50%)' }}
       >
         <img
           src="/assets/moto-logo-mark.svg"
@@ -30,8 +32,8 @@ export default function LoginPage() {
       {/* Text block: bottom-aligned, same width as button */}
       <div className="flex-1 flex items-end justify-center w-full px-5 min-h-0">
         <div
-          className="w-full text-left p-8"
-          style={{ letterSpacing: '-0.22px', width: '372px', maxWidth: '100%', fontSize: '1.1rem' }}
+          className="w-full max-w-full text-left py-8"
+          style={{ letterSpacing: '-0.22px', width: CONTENT_MAX_WIDTH, maxWidth: '100%', fontSize: '1.1rem' }}
         >
           <p className="font-medium text-white leading-normal">
             Welcome to MOTO,
@@ -55,7 +57,7 @@ export default function LoginPage() {
             onClick={handleLogin}
             disabled={isLoggingIn}
             className="h-16 border-2 border-white/80 bg-transparent text-white/80 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-            style={{ borderRadius: 0, width: '372px', maxWidth: '100%' }}
+            style={{ borderRadius: 0, width: CONTENT_MAX_WIDTH, maxWidth: '100%' }}
           >
             <span className="font-bold text-base leading-6" style={{ letterSpacing: '0.15px' }}>
               {isLoggingIn ? (

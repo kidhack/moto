@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 
 /**
- * Splash screen: logo (mark + vert-cut) centered, then animates to top (120px)
+ * Splash screen: logo (mark + vert-cut) centered, then animates to top (80px)
  * with vert-cut clipping away. App switches to LoginPage when timer completes;
- * sign-in logo is at 160px to match this end position.
+ * sign-in logo matches this end position.
  */
 const HOLD_MS = 3000;
 const MOVE_DURATION_MS = 300;
 const MOVE_DELAY_MS = 275;
-const LOGO_TERMINUS_TOP_PX = 120;
+const LOGO_TERMINUS_TOP_PX = 80;
 
 export default function SplashScreen() {
   const [animationStarted, setAnimationStarted] = useState(false);
@@ -44,7 +44,7 @@ export default function SplashScreen() {
           style={{
             height: 'auto',
             clipPath: animationStarted ? 'inset(0 0 100% 0)' : 'inset(0 0 0% 0)',
-            transition: `clip-path ${MOVE_DURATION_MS}ms ease-out`,
+            transition: `clip-path ${MOVE_DURATION_MS}ms ease-out ${MOVE_DELAY_MS}ms`,
           }}
         />
       </div>
