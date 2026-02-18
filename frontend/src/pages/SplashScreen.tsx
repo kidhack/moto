@@ -21,7 +21,7 @@ export default function SplashScreen() {
   const atTerminus = animationStarted;
 
   return (
-    <div className="relative flex min-h-screen w-full flex-col items-center overflow-hidden bg-black">
+    <div className="fixed inset-0 flex min-h-dvh h-dvh w-full flex-col items-center overflow-hidden bg-black">
       {/* Logo block: centered, then animates to LOGO_TERMINUS_TOP_PX to match sign-in page */}
       <div
         className="absolute left-1/2 z-20 flex flex-col items-center"

@@ -24,6 +24,7 @@ import ReceiveBitcoin from '../components/ReceiveBitcoin';
 import CurrencySelector from '../components/CurrencySelector';
 import LanguageSelector from '../components/LanguageSelector';
 import TransactionDetails from '../components/TransactionDetails';
+import { SlideFromRight } from '../components/SlideFromRight';
 
 export default function WalletDashboard() {
   const { clear, identity } = useInternetIdentity();
@@ -74,6 +75,9 @@ export default function WalletDashboard() {
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [principalCopied, setPrincipalCopied] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [menuClosing, setMenuClosing] = useState(false);
+  const [menuEntering, setMenuEntering] = useState(true);
+  const [menuNextAction, setMenuNextAction] = useState<'currency' | 'language' | null>(null);
 
   const WALLET_NAME_KEY_PREFIX = 'moto_wallet_name_';
   const DEFAULT_WALLET_NAME = "Nakamoto's Wallet";
@@ -118,6 +122,13 @@ export default function WalletDashboard() {
       console.log('Menu opened - Current Principal ID:', currentPrincipal);
     }
   }, [menuOpen, currentPrincipal]);
+
+  // Reset menu animation state when opening
+  useEffect(() => {
+    if (menuOpen) {
+      setMenuEntering(true);
+    }
+  }, [menuOpen]);
 
   // Ensure wallet exists in the canister so we can store this user's Bitcoin address for MOTO-to-MOTO lookup.
   // Do NOT wait for isCkbtcFetching: the minter can be slow; we need the canister wallet to exist first.
@@ -285,13 +296,19 @@ export default function WalletDashboard() {
   });
 
   return (
-    <div className="flex h-screen flex-col bg-black text-white overflow-hidden">
+    <div className="flex h-dvh min-h-dvh flex-col bg-black text-white overflow-hidden">
       
-      {/* Fixed top: header (no scroll) */}
-      <div className="flex flex-col shrink-0 pt-8 px-5">
+      {/* Fixed top: header (no scroll) - z-30 so logo tap works above scroll area */}
+      <div className="flex flex-col shrink-0 pt-4 px-5 relative z-30">
         <header className="flex items-center justify-between">
-          <button onClick={() => setMenuOpen(true)} className="cursor-pointer">
-            <img src="/assets/moto-logo-mark.svg" alt="MOTO" className="h-10 w-10" />
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            onPointerDown={(e) => { e.preventDefault(); setMenuOpen(true); }}
+            className="cursor-pointer -m-2 p-2 flex items-center justify-center touch-manipulation"
+            aria-label="Open menu"
+          >
+            <img src="/assets/moto-logo-mark.svg" alt="" className="h-10 w-10 pointer-events-none select-none" />
           </button>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
@@ -307,20 +324,21 @@ export default function WalletDashboard() {
               )}
             </div>
             {(ledgerBalance === null || ledgerBalance <= BigInt(0)) && (
-              <button onClick={() => setShowAddFundsModal(true)} className="h-8 w-8 flex items-center justify-center hover:bg-white/10 transition-colors">
-                <img src="/assets/addfunds.svg" alt="Add Funds" className="h-8 w-8" />
+              <button onClick={() => setShowAddFundsModal(true)} className="h-8 w-8 flex items-center justify-center hover:bg-white/10 transition-colors" aria-label="Add funds">
+                <img src="/assets/addfunds.svg" alt="" className="h-8 w-8" />
               </button>
             )}
           </div>
         </header>
-        {/* Top divider - fixed, does not scroll (match main menu: mt-6) */}
-        <div className="h-[1px] w-full bg-white/50 mt-6" />
+        {/* Top divider - fixed, does not scroll */}
+        <div className="h-[1px] w-full bg-white/50 mt-4" />
       </div>
 
-      {/* Scrollable area: only the transaction list */}
+      {/* Scrollable area: only the transaction list - pb for fixed bottom bar */}
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto overscroll-contain relative min-h-0 px-5"
+        style={{ paddingBottom: 'calc(105px + env(safe-area-inset-bottom, 0px))' }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -397,7 +415,7 @@ export default function WalletDashboard() {
                           </p>
                         </div>
                       </div>
-                      <p className="font-mono text-[18px] font-normal text-white/50" style={{ letterSpacing: '0.8px' }}>
+                      <p className="font-mono text-[18px] font-normal text-white/50" style={{ letterSpacing: '0.77px' }}>
                         {formatDate(tx.timestamp)}
                       </p>
                     </button>
@@ -415,10 +433,13 @@ export default function WalletDashboard() {
         </div>
       </div>
 
-      {/* Fixed bottom: divider + Send/Receive buttons - do not scroll (px-5 matches top section so divider width matches) */}
-      <div className="flex flex-col shrink-0 px-5">
+      {/* Fixed bottom: divider + Send/Receive buttons - flush with viewport bottom */}
+      <div
+        className="fixed bottom-0 left-0 right-0 flex flex-col bg-black px-5 z-20"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
         <div className="h-[1px] w-full bg-white/50" />
-        <div className="flex gap-4 pb-5 pt-4">
+        <div className="flex gap-4 pt-4 pb-4">
         <button
           onClick={() => setShowSendModal(true)}
           className="flex-1 h-16 border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center opacity-80 hover:opacity-100"
@@ -434,22 +455,26 @@ export default function WalletDashboard() {
         </div>
       </div>
 
-      {/* Send Modal - Full screen */}
+      {/* Send Modal - slide from right */}
       {showSendModal && sendWallet && (
-        <SendTransaction
-          wallet={sendWallet}
-          onSuccess={() => setShowSendModal(false)}
-          onClose={() => setShowSendModal(false)}
-        />
+        <SlideFromRight open={showSendModal} onClose={() => setShowSendModal(false)}>
+          <SendTransaction
+            wallet={sendWallet}
+            onSuccess={() => setShowSendModal(false)}
+            onClose={() => setShowSendModal(false)}
+          />
+        </SlideFromRight>
       )}
 
-      {/* Receive Modal - Full screen - Show modal even if address is loading */}
+      {/* Receive Modal - slide from right */}
       {showReceiveModal && (
         walletAddress ? (
-          <ReceiveBitcoin 
-            address={walletAddress} 
-            onClose={() => setShowReceiveModal(false)} 
-          />
+          <SlideFromRight open={showReceiveModal} onClose={() => setShowReceiveModal(false)}>
+            <ReceiveBitcoin 
+              address={walletAddress} 
+              onClose={() => setShowReceiveModal(false)} 
+            />
+          </SlideFromRight>
         ) : (
           <div className="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center px-5">
             {isLoadingAddress ? (
@@ -479,13 +504,15 @@ export default function WalletDashboard() {
         )
       )}
 
-      {/* Add Funds Modal (same as Receive) - Show modal even if address is loading */}
+      {/* Add Funds Modal (same as Receive) - slide from right */}
       {showAddFundsModal && (
         walletAddress ? (
-          <ReceiveBitcoin 
-            address={walletAddress} 
-            onClose={() => setShowAddFundsModal(false)} 
-          />
+          <SlideFromRight open={showAddFundsModal} onClose={() => setShowAddFundsModal(false)}>
+            <ReceiveBitcoin 
+              address={walletAddress} 
+              onClose={() => setShowAddFundsModal(false)} 
+            />
+          </SlideFromRight>
         ) : (
           <div className="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center px-5">
             {isLoadingAddress ? (
@@ -515,13 +542,34 @@ export default function WalletDashboard() {
         )
       )}
 
-             {/* Full-screen Menu Modal - Figma layout: logo, dividers, sections, Close at bottom */}
-             {menuOpen && (
-               <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
+             {/* Full-screen Menu Modal - wipe from top on open, wipe to top on close */}
+             {(menuOpen || menuClosing) && (
+               <div
+                 className="fixed inset-0 bg-black z-[9999] flex flex-col"
+                 style={{
+                   transform: menuClosing ? 'translateY(-100%)' : menuEntering ? 'translateY(-100%)' : 'translateY(0)',
+                   transition: 'transform 300ms ease-out',
+                 }}
+                 onTransitionEnd={() => {
+                   if (menuClosing) {
+                     setMenuOpen(false);
+                     setMenuClosing(false);
+                     if (menuNextAction === 'currency') {
+                       setShowCurrencySelector(true);
+                       setMenuNextAction(null);
+                     } else if (menuNextAction === 'language') {
+                       setShowLanguageSelector(true);
+                       setMenuNextAction(null);
+                     }
+                   } else if (menuEntering) {
+                     setMenuEntering(false);
+                   }
+                 }}
+               >
                  <div className="flex flex-col flex-1 min-h-0 pt-8 px-5 pb-5">
-                   {/* Logo: normal logo (full wordmark) */}
+                   {/* Logo: normal logo (full wordmark) - tap to close */}
                    <button
-                     onClick={() => setMenuOpen(false)}
+                     onClick={() => setMenuClosing(true)}
                      className="flex items-center cursor-pointer shrink-0"
                    >
                      <img src="/assets/moto-logo.svg" alt="MOTO" className="h-10 w-[172px] object-contain object-center" />
@@ -565,7 +613,7 @@ export default function WalletDashboard() {
 
                      {/* Currency */}
                      <button
-                       onClick={() => { setMenuOpen(false); setShowCurrencySelector(true); }}
+                       onClick={() => { setMenuNextAction('currency'); setMenuClosing(true); }}
                        className="flex gap-4 h-10 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
                      >
                        <img src="/assets/currency.svg" alt="" className="size-6 shrink-0 opacity-80" />
@@ -574,7 +622,7 @@ export default function WalletDashboard() {
 
                      {/* Language */}
                      <button
-                       onClick={() => { setMenuOpen(false); setShowLanguageSelector(true); }}
+                       onClick={() => { setMenuNextAction('language'); setMenuClosing(true); }}
                        className="flex gap-4 h-10 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
                      >
                        <img src="/assets/language.svg" alt="" className="size-6 shrink-0 opacity-80" />
@@ -648,7 +696,7 @@ export default function WalletDashboard() {
 
                    {/* Close button - bottom, full width */}
                    <button
-                     onClick={() => setMenuOpen(false)}
+                     onClick={() => setMenuClosing(true)}
                      className="w-full h-16 mt-6 border border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center shrink-0"
                    >
                      <span className="font-bold text-base text-white/80 tracking-[0.15px]">Close</span>
@@ -657,24 +705,35 @@ export default function WalletDashboard() {
                </div>
              )}
 
-      {/* Currency Selector Modal */}
+      {/* Currency Selector Modal - slide from right */}
       {showCurrencySelector && (
-        <CurrencySelector onClose={() => { setShowCurrencySelector(false); setMenuOpen(true); }} />
+        <SlideFromRight open={showCurrencySelector} onClose={() => { setShowCurrencySelector(false); setMenuOpen(true); }}>
+          <CurrencySelector onClose={() => { setShowCurrencySelector(false); setMenuOpen(true); }} />
+        </SlideFromRight>
       )}
 
-      {/* Language Selector Modal */}
+      {/* Language Selector Modal - slide from right */}
       {showLanguageSelector && (
-        <LanguageSelector onClose={() => { setShowLanguageSelector(false); setMenuOpen(true); }} />
+        <SlideFromRight open={showLanguageSelector} onClose={() => { setShowLanguageSelector(false); setMenuOpen(true); }}>
+          <LanguageSelector onClose={() => { setShowLanguageSelector(false); setMenuOpen(true); }} />
+        </SlideFromRight>
       )}
 
-      {/* Transaction Details Modal */}
-      {selectedTransaction && (walletAddress || walletAddressForTx) && (
-        <TransactionDetails 
-          transaction={selectedTransaction} 
-          walletAddress={walletAddress ?? walletAddressForTx}
-          onClose={() => setSelectedTransaction(null)} 
-        />
-      )}
+      {/* Transaction Details - card with swipe */}
+      {selectedTransaction && (walletAddress || walletAddressForTx) && (() => {
+        const sorted = [...displayTransactions].sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
+        const idx = sorted.findIndex((t) => t.id === selectedTransaction.id);
+        if (idx < 0) return null;
+        return (
+          <TransactionDetails
+            transactions={sorted}
+            selectedIndex={idx}
+            walletAddress={walletAddress ?? walletAddressForTx}
+            onClose={() => setSelectedTransaction(null)}
+            onSelectTransaction={(tx) => setSelectedTransaction(tx)}
+          />
+        );
+      })()}
 
       <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
         <AlertDialogContent>

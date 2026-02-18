@@ -62,7 +62,7 @@ export default function App() {
     // This shouldn't happen if user is logged in, but handle it just in case
     return (
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-        <div className="flex min-h-screen items-center justify-center bg-black">
+        <div className="flex h-dvh min-h-dvh items-center justify-center bg-black overflow-hidden">
           <div className="flex flex-col items-center gap-4">
             <img src="/assets/moto-logo-mark.svg" alt="MOTO" className="h-16" />
           </div>
@@ -74,7 +74,7 @@ export default function App() {
   if (isInitializing) {
     return (
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-        <div className="flex min-h-screen items-center justify-center bg-black">
+        <div className="flex h-dvh min-h-dvh items-center justify-center bg-black overflow-hidden">
           <div className="flex flex-col items-center gap-4">
             <img src="/assets/moto-logo-mark.svg" alt="MOTO" className="h-16" />
           </div>
@@ -87,7 +87,7 @@ export default function App() {
   // Auto-complete onboarding in the background
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark">
-      <div className="min-h-screen bg-black">
+      <div className="h-dvh min-h-dvh overflow-hidden bg-black">
         <WalletDashboard />
         <Toaster position="top-center" />
       </div>

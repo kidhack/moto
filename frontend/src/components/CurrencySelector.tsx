@@ -25,11 +25,11 @@ export default function CurrencySelector({ onClose }: CurrencySelectorProps) {
           <button
             onClick={onClose}
             className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
+            aria-label="Close"
           >
-            {/* Close icon - 80% opacity, 100% on hover */}
             <img 
               src="/assets/close.png" 
-              alt="Close" 
+              alt="" 
               className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
             />
           </button>

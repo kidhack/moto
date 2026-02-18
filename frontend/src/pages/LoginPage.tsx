@@ -13,18 +13,12 @@ export default function LoginPage() {
     }
   };
 
-  // Match splash terminus exactly: absolute left-1/2, top 120px, translateX(-50%)
-  const LOGO_TERMINUS_TOP_PX = 120;
-
   return (
-    <div className="relative flex min-h-screen w-full flex-col items-center bg-black text-white pt-8 pb-0">
-      {/* Logo: same position as end of splash (absolute, top 160px, centered) */}
+    <div className="fixed inset-0 flex min-h-dvh h-dvh w-full flex-col items-center overflow-hidden bg-black text-white pt-4 sm:pt-8 pb-0">
+      {/* Logo: same position as splash terminus */}
       <div
         className="absolute left-1/2 z-20 flex flex-col items-center"
-        style={{
-          top: `${LOGO_TERMINUS_TOP_PX}px`,
-          transform: 'translateX(-50%)',
-        }}
+        style={{ top: '120px', transform: 'translateX(-50%)' }}
       >
         <img
           src="/assets/moto-logo-mark.svg"
@@ -33,33 +27,27 @@ export default function LoginPage() {
         />
       </div>
 
-      {/* Text block: centered in the viewport (not between logo and button) */}
-      <div
-        className="absolute left-1/2 top-1/2 z-10 w-full max-w-lg px-5 -translate-x-1/2 -translate-y-1/2"
-        style={{ letterSpacing: '-0.22px' }}
-      >
-        <div className="text-center text-xl leading-normal text-white/80 flex flex-col items-center gap-6">
-          <p className="font-normal">
-            Welcome to MOTO,<br aria-hidden="true" />
+      {/* Text block: bottom-aligned, same width as button */}
+      <div className="flex-1 flex items-end justify-center w-full px-5 min-h-0">
+        <div
+          className="w-full text-left py-4"
+          style={{ letterSpacing: '-0.22px', width: '372px', maxWidth: '100%', fontSize: '1.2rem' }}
+        >
+          <p className="font-medium text-white leading-normal">
+            Welcome to MOTO,
+            <br aria-hidden="true" />
             your minimal Bitcoin wallet.
           </p>
-          <div className="h-px w-16 bg-white/50 shrink-0" aria-hidden />
-          <p className="font-normal">
-            Like a cash wallet,<br aria-hidden="true" />
-            use MOTO for everyday transactions,<br aria-hidden="true" />
-            not your life savings.
+          <div className="my-5 sm:my-6 h-px w-full bg-white/30" aria-hidden />
+          <p className="leading-relaxed text-white/80">
+            Like a cash wallet, use MOTO for everyday transactions, not your life savings.
           </p>
-          <div className="h-px w-16 bg-white/50 shrink-0" aria-hidden />
-          <p className="font-normal">
-            MOTO to MOTO transactions are instant<br aria-hidden="true" />
-            and powered by ckBTC.
+          <div className="my-5 sm:my-6 h-px w-full bg-white/30" aria-hidden />
+          <p className="leading-relaxed text-white/80">
+            MOTO to MOTO transactions are instant and powered by ckBTC.
           </p>
         </div>
       </div>
-
-      {/* Spacer to push button to bottom (logo 120px + 80px = 200px, then flex-1) */}
-      <div style={{ height: '200px' }} aria-hidden />
-      <div className="flex-1 min-h-0" aria-hidden />
 
       {/* Sign In button at bottom */}
       <div className="flex shrink-0 justify-center w-full px-5 pt-4" style={{ paddingBottom: '1.25rem' }}>

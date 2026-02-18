@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
+import { useScreenTransitionGuard } from '../hooks/useScreenTransitionGuard';
+import { vibrateLight } from '../utils/haptics';
+import { SlideFromRight } from './SlideFromRight';
 import SetAmount from './SetAmount';
 import { useBTCPrice, isPriceStale } from '../hooks/useQueries';
 import StalePriceIndicator from './StalePriceIndicator';
@@ -105,10 +108,26 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
   };
 
   const [addressCopied, setAddressCopied] = useState(false);
+  const isGuardDisabled = useScreenTransitionGuard(500);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [canScroll, setCanScroll] = useState(true);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const check = () => {
+      setCanScroll(el.scrollHeight > el.clientHeight);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [qrCodeUrl, address]);
 
   const copyAddress = async () => {
     try {
       await navigator.clipboard.writeText(address);
+      vibrateLight();
       setAddressCopied(true);
       setTimeout(() => setAddressCopied(false), 2000);
     } catch (error) {
@@ -134,16 +153,18 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
     }
   };
 
-  // If SetAmount screen is open, show it
+  // If SetAmount screen is open, show it with slide-from-right
   if (showSetAmount) {
     return (
-      <SetAmount
-        address={address}
-        onConfirm={handleAmountConfirm}
-        onClose={() => setShowSetAmount(false)}
-        initialCurrency={amountCurrency}
-        initialAmount={amount}
-      />
+      <SlideFromRight open={showSetAmount} onClose={() => setShowSetAmount(false)}>
+        <SetAmount
+          address={address}
+          onConfirm={handleAmountConfirm}
+          onClose={() => setShowSetAmount(false)}
+          initialCurrency={amountCurrency}
+          initialAmount={amount}
+        />
+      </SlideFromRight>
     );
   }
 
@@ -156,11 +177,11 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
           <button
             onClick={onClose}
             className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
+            aria-label="Close"
           >
-            {/* Close icon - 80% opacity, 100% on hover */}
             <img 
               src="/assets/close.png" 
-              alt="Close" 
+              alt="" 
               className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
             />
           </button>
@@ -170,13 +191,17 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
           <div className="h-8 w-8" /> {/* Empty space for symmetry */}
         </header>
 
-        {/* Content area - flex column with top and bottom alignment */}
-        <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
+        {/* Content area - only scroll when content overflows */}
+        <div
+          ref={scrollContainerRef}
+          className="flex flex-col flex-1 min-h-0"
+          style={{ overflowY: canScroll ? 'auto' : 'hidden' }}
+        >
           {/* Top section: QR Code and Address block */}
           <div className="flex flex-col gap-8 shrink-0 pt-2">
-            {/* QR Code - centered and responsive */}
+            {/* QR Code - half size on mobile to show more content */}
             <div className="flex items-center justify-center px-5">
-              <div className="w-full max-w-[370px] aspect-square flex items-center justify-center shrink-0">
+              <div className="w-full max-w-[185px] sm:max-w-[370px] aspect-square flex items-center justify-center shrink-0">
               <img 
                 src={qrCodeUrl} 
                 alt="QR Code" 
@@ -232,7 +257,8 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
                 {/* Edit button - right side */}
                 <button
                   onClick={() => setShowSetAmount(true)}
-                  className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors px-8 shrink-0"
+                  disabled={isGuardDisabled}
+                  className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors px-8 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span className="font-bold text-base text-white/80 tracking-[0.15px]">Edit</span>
                 </button>
@@ -241,7 +267,8 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
                 /* Set Amount button - when no amount is set, full width */
               <button
                 onClick={() => setShowSetAmount(true)}
-                className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full shrink-0"
+                disabled={isGuardDisabled}
+                className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="font-bold text-base text-white/80 tracking-[0.15px]">Set Amount</span>
               </button>
@@ -253,7 +280,8 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
             {/* Copy Address button */}
             <button
               onClick={copyAddress}
-              className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full"
+              disabled={isGuardDisabled}
+              className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span className="font-bold text-base text-white/80 tracking-[0.15px]">Copy Address</span>
             </button>
@@ -261,7 +289,8 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
             {/* Share button */}
             <button
               onClick={shareAddress}
-              className="h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors w-full"
+              disabled={isGuardDisabled}
+              className="h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span className="font-bold text-base text-white/80 tracking-[0.15px]">Share</span>
             </button>

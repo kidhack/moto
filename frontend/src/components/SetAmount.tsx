@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
+import { useScreenTransitionGuard } from '../hooks/useScreenTransitionGuard';
 import { useBTCPrice, isPriceStale } from '../hooks/useQueries';
 import StalePriceIndicator from './StalePriceIndicator';
 
@@ -135,6 +136,7 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
   };
 
   const displayAmount = formatDisplayAmount(amount || '0');
+  const isConfirmDisabled = useScreenTransitionGuard(500);
 
   return (
     <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
@@ -145,11 +147,11 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
           <button
             onClick={onClose}
             className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
+            aria-label="Close"
           >
-            {/* Close icon - 80% opacity, 100% on hover */}
             <img 
               src="/assets/close.png" 
-              alt="Close" 
+              alt="" 
               className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
             />
           </button>
@@ -159,11 +161,11 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
           <button
             onClick={cycleCurrency}
             className="h-8 w-8 flex items-center justify-center cursor-pointer opacity-80 transition-opacity hover:opacity-100 active:opacity-100"
+            aria-label="Cycle currency"
           >
-            {/* Currency cycle button - white 80% default, 100% on hover/active (matches Send Set Amount) */}
             <img 
               src="/assets/cyclecurrency.svg" 
-              alt="Cycle Currency" 
+              alt="" 
               className="h-8 w-8" 
             />
           </button>
@@ -258,7 +260,7 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
             {/* Confirm button */}
             <button
               onClick={handleConfirm}
-              disabled={!amount || amount === '0'}
+              disabled={!amount || amount === '0' || isConfirmDisabled}
               className="h-16 w-full border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span className="font-bold text-base text-white/80 tracking-[0.15px]">Confirm Amount</span>

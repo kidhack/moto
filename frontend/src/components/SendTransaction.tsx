@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Principal } from '@dfinity/principal';
+import { useScreenTransitionGuard } from '../hooks/useScreenTransitionGuard';
+import { vibrateLight } from '../utils/haptics';
 import { useRetrieveBtc, useTransferCkBTC, usePrincipalByBitcoinAddress, computeFeeSats } from '../hooks/useQueries';
 import { useQRScanner } from '../qr-code/useQRScanner';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
@@ -9,12 +11,6 @@ import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { toast } from 'sonner';
 import { isValidBitcoinAddress } from '../utils/addressValidation';
 import type { UserWallet } from '../backend';
-
-/** Shorten principal for display e.g. abcde-...-cai */
-function shortenPrincipal(principal: string): string {
-  if (principal.length <= 20) return principal;
-  return `${principal.slice(0, 5)}...${principal.slice(-4)}`;
-}
 
 /** If text is a valid ICP principal, return its string form; otherwise null. */
 function parsePrincipalInput(text: string): string | null {
@@ -113,6 +109,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   const isTransferPending = transferCkBTC.isPending;
   const isConfirmPending = isWithdrawPending || isTransferPending;
   const { preferredCurrency } = usePreferredCurrency();
+  const isPrimaryButtonDisabled = useScreenTransitionGuard(500, step);
 
   const qrScanner = useQRScanner({
     facingMode: 'environment',
@@ -413,6 +410,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
 
   // Handle send confirmation: instant ckBTC to MOTO user or withdraw to Bitcoin
   const handleConfirm = async () => {
+    vibrateLight();
     const { amountSatoshis } = getTransactionDetails();
 
     if (amountSatoshis > wallet.balance) {
@@ -532,10 +530,11 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             <button
               onClick={onClose}
               className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
+              aria-label="Close"
             >
               <img 
                 src="/assets/close.png" 
-                alt="Close" 
+                alt="" 
                 className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
               />
             </button>
@@ -566,7 +565,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                       });
                     }}
                   />
-                  <canvas ref={qrScanner.canvasRef} className="hidden" />
+                  <canvas ref={qrScanner.canvasRef} className="absolute top-0 left-0 w-full h-full opacity-0 pointer-events-none" aria-hidden />
                   
                   {/* Scanning overlay - only show when active */}
                   {qrScanner.isActive && (
@@ -646,10 +645,12 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
               />
               
               <button
+                type="button"
                 onClick={handlePasteFromClipboard}
-                className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full"
+                className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full select-none"
+                style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
               >
-                <span className="font-bold text-base text-white/80 tracking-[0.15px]">Paste Address</span>
+                <span className="font-bold text-base text-white/80 tracking-[0.15px] pointer-events-none">Paste Address</span>
               </button>
             </div>
           </div>
@@ -685,10 +686,11 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             <button
               onClick={cycleCurrency}
               className="h-8 w-8 flex items-center justify-center cursor-pointer opacity-80 transition-opacity hover:opacity-100 active:opacity-100"
+              aria-label="Cycle currency"
             >
               <img 
                 src="/assets/cyclecurrency.svg" 
-                alt="Cycle Currency" 
+                alt="" 
                 className="h-8 w-8" 
               />
             </button>
@@ -803,7 +805,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
               {/* Next button */}
               <button
                 onClick={handleNext}
-                disabled={!amount || amount === '0' || isInsufficient}
+                disabled={!amount || amount === '0' || isInsufficient || isPrimaryButtonDisabled}
                 className="h-16 w-full border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="font-bold text-base text-white/80 tracking-[0.15px]">Next</span>
@@ -822,6 +824,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     isConfirmPending ||
     isInsufficient ||
     isSelfSend ||
+    isPrimaryButtonDisabled ||
     (sendMode === 'ckbtc' && principalByAddress.isLoading) ||
     (toAddress.trim() && sendMode === null)
   );
@@ -841,10 +844,11 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                 }
               }}
               className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
+              aria-label="Close"
             >
               <img 
                 src="/assets/close.png" 
-                alt="Close" 
+                alt="" 
                 className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
               />
             </button>
@@ -858,10 +862,11 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             <button
               onClick={cycleCurrency}
               className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity hover:opacity-100"
+              aria-label="Cycle currency"
             >
               <img 
                 src="/assets/cyclecurrency.svg" 
-                alt="Cycle Currency" 
+                alt="" 
                 className="h-8 w-8" 
               />
             </button>
@@ -895,10 +900,10 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
           </div>
 
           {/* Bottom section: Details and buttons */}
-          <div className="flex flex-col gap-8 shrink-0 pb-5 px-5">
+          <div className="flex flex-col gap-4 shrink-0 pb-5 px-5">
             {/* Transaction details - horizontal layout */}
             {transactionDetails && (
-              <div className="flex flex-col gap-8 px-0 py-4">
+              <div className="flex flex-col gap-4 px-0 py-4">
                 {/* Recipient */}
                 <div className="flex gap-2.5 items-center w-full">
                   <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
@@ -986,11 +991,12 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
               {!isConfirmPending && (
                 <button
                   onClick={() => setStep('amount')}
-                  className="h-16 w-20 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors shrink-0"
+                  className="h-16 w-16 flex items-center justify-center shrink-0 opacity-80 hover:opacity-100 transition-opacity"
+                  aria-label="Back"
                 >
                   <img 
                     src="/assets/back.svg" 
-                    alt="Back" 
+                    alt="" 
                     className="h-8 w-8" 
                   />
                 </button>
