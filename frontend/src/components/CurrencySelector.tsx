@@ -1,11 +1,13 @@
 import { CURRENCIES } from '../data/currencies';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
+import BackCloseButton from './BackCloseButton';
 
 interface CurrencySelectorProps {
   onClose: () => void;
+  embedded?: boolean;
 }
 
-export default function CurrencySelector({ onClose }: CurrencySelectorProps) {
+export default function CurrencySelector({ onClose, embedded }: CurrencySelectorProps) {
   const { preferredCurrency, setPreferredCurrency } = usePreferredCurrency();
 
   const handleSelectCurrency = (code: string) => {
@@ -17,37 +19,26 @@ export default function CurrencySelector({ onClose }: CurrencySelectorProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-      {/* Main container matching menu screen: pt-8 (32px) */}
-      <div className="flex flex-col pt-8 flex-1 min-h-0">
-        {/* Header with close button, title, and empty space - matching menu header height (40px logo) - fixed at top */}
-        <header className="flex items-center justify-between h-10 mb-6 shrink-0 px-5">
-          <button
-            onClick={onClose}
-            className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
-            aria-label="Close"
-          >
-            <img 
-              src="/assets/close.png" 
-              alt="" 
-              className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
-            />
-          </button>
+    <div className={embedded ? 'w-full h-full min-h-0 flex flex-col bg-black' : 'fixed inset-0 bg-black z-[9999] flex flex-col'}>
+      {/* Main container - pt-4 matches dashboard/menu header */}
+      <div className="flex flex-col pt-4 flex-1 min-h-0">
+        <header className="flex items-center justify-between h-8 shrink-0 px-5">
+          <BackCloseButton onClose={onClose} />
           <p className="font-medium text-xl text-white tracking-[-0.22px]">
             Currency
           </p>
           <div className="h-8 w-8" /> {/* Empty space for symmetry */}
         </header>
 
-        {/* Divider - matches main menu top divider (mt-6 below header) */}
-        <div className="px-5 shrink-0">
+        {/* Divider - mt-4 matches dashboard/menu */}
+        <div className="px-5 shrink-0 mt-4">
           <div className="h-px w-full bg-white/50 shrink-0" />
         </div>
 
         {/* Currency list container - scrollable, matching menu items container structure - extends to edge for scrollbar */}
-        <div className="flex flex-col gap-10 flex-1 min-h-0 overflow-y-auto pb-5">
+        <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pb-5">
           {/* Content wrapper with padding - scrollbar stays at edge, pt-6 matches menu */}
-          <div className="px-5 pt-6 flex flex-col gap-10">
+          <div className="px-5 pt-6 flex flex-col gap-4">
             {/* Currency items - matching menu structure */}
             {CURRENCIES.map((currency) => {
               const isSelected = currency.code === preferredCurrency;
@@ -57,7 +48,7 @@ export default function CurrencySelector({ onClose }: CurrencySelectorProps) {
                   onClick={() => handleSelectCurrency(currency.code)}
                   className="flex items-center gap-8 h-6 w-full justify-between shrink-0"
                 >
-                  <div className={`flex items-center gap-10 text-xl tracking-[0.8px] text-left ${isSelected ? 'text-white' : 'text-white/80'}`}>
+                  <div className={`flex items-center gap-10 text-base tracking-[0.8px] text-left font-medium ${isSelected ? 'text-white' : 'text-white/80'}`}>
                     <span className="font-mono font-bold">{currency.code}</span>
                     <span className="font-medium">{currency.name}</span>
                   </div>

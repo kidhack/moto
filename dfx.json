@@ -1,1 +1,36 @@
-{"version":1,"canisters":{"moto":{"type":"motoko","main":"backend/main.mo"},"moto_frontend":{"type":"assets","source":["frontend/dist"],"dependencies":["moto"]}},"networks":{"local":{"bind":"127.0.0.1:4943","type":"ephemeral"},"ic":{"remote":{"id":{"type":"principal"}},"type":"persistent"}}}
+{
+  "version": 1,
+  "canisters": {
+    "internet_identity": {
+      "type": "custom",
+      "candid": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.did",
+      "wasm": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity_dev.wasm.gz",
+      "specified_id": "rdmx6-jaaaa-aaaaa-aaadq-cai",
+      "init_arg": "(opt record { new_flow_origins = opt vec { \"http://localhost:5173\"; \"http://127.0.0.1:5173\"; \"http://localhost:4943\"; \"http://127.0.0.1:4943\" } })",
+      "remote": {
+        "id": {
+          "ic": "rdmx6-jaaaa-aaaaa-aaadq-cai"
+        }
+      }
+    },
+    "moto": {
+      "type": "motoko",
+      "main": "backend/main.mo"
+    },
+    "moto_frontend": {
+      "type": "assets",
+      "source": ["frontend/dist"],
+      "dependencies": ["moto"]
+    }
+  },
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:4943",
+      "type": "ephemeral"
+    },
+    "ic": {
+      "remote": { "id": { "type": "principal" } },
+      "type": "persistent"
+    }
+  }
+}

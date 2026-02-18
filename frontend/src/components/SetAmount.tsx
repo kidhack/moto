@@ -140,10 +140,9 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
 
   return (
     <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-      {/* Main container matching menu screen: pt-8 (32px) */}
-      <div className="flex flex-col pt-8 flex-1 min-h-0">
-        {/* Header with close button, title, and currency cycle button */}
-        <header className="flex items-center justify-between h-10 mb-8 shrink-0 px-5">
+      {/* Main container - pt-4 matches dashboard/menu header */}
+      <div className="flex flex-col pt-4 flex-1 min-h-0">
+        <header className="flex items-center justify-between h-8 shrink-0 px-5">
           <button
             onClick={onClose}
             className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
@@ -170,6 +169,9 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
             />
           </button>
         </header>
+        <div className="px-5 shrink-0 mt-4">
+          <div className="h-px w-full bg-white/50 shrink-0" />
+        </div>
 
         {/* Content area - centered, scrollable */}
         <div className="flex flex-col gap-8 flex-1 min-h-0 overflow-y-auto pb-5">

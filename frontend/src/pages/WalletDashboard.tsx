@@ -73,11 +73,11 @@ export default function WalletDashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showCurrencySelector, setShowCurrencySelector] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
+  const [settingsExiting, setSettingsExiting] = useState(false);
   const [principalCopied, setPrincipalCopied] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [menuClosing, setMenuClosing] = useState(false);
   const [menuEntering, setMenuEntering] = useState(true);
-  const [menuNextAction, setMenuNextAction] = useState<'currency' | 'language' | null>(null);
 
   const WALLET_NAME_KEY_PREFIX = 'moto_wallet_name_';
   const DEFAULT_WALLET_NAME = "Nakamoto's Wallet";
@@ -123,10 +123,12 @@ export default function WalletDashboard() {
     }
   }, [menuOpen, currentPrincipal]);
 
-  // Reset menu animation state when opening
+  // Reset menu animation state when opening - delay ensures initial clipPath is painted before transition
   useEffect(() => {
     if (menuOpen) {
       setMenuEntering(true);
+      const id = setTimeout(() => setMenuEntering(false), 16);
+      return () => clearTimeout(id);
     }
   }, [menuOpen]);
 
@@ -298,17 +300,17 @@ export default function WalletDashboard() {
   return (
     <div className="flex h-dvh min-h-dvh flex-col bg-black text-white overflow-hidden">
       
-      {/* Fixed top: header (no scroll) - z-30 so logo tap works above scroll area */}
+      {/* Fixed top: header - large tappable logo area for reliable mobile menu open */}
       <div className="flex flex-col shrink-0 pt-4 px-5 relative z-30">
         <header className="flex items-center justify-between">
+          {/* Logo mark - same height (h-8) as menu logo, left aligned */}
           <button
             type="button"
-            onClick={() => setMenuOpen(true)}
-            onPointerDown={(e) => { e.preventDefault(); setMenuOpen(true); }}
-            className="cursor-pointer -m-2 p-2 flex items-center justify-center touch-manipulation"
+            onClick={() => { setMenuOpen(true); setMenuEntering(true); }}
+            className="cursor-pointer flex items-center justify-start -m-2 p-2 shrink-0 touch-manipulation"
             aria-label="Open menu"
           >
-            <img src="/assets/moto-logo-mark.svg" alt="" className="h-10 w-10 pointer-events-none select-none" />
+            <img src="/assets/moto-logo-mark.svg" alt="" className="h-8 w-8 object-left pointer-events-none select-none" />
           </button>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
@@ -372,7 +374,7 @@ export default function WalletDashboard() {
           </div>
         )}
         {/* Transactions List */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col" style={{ gap: 19 }}>
           {isLoadingBalance ? (
             <div className="flex flex-col gap-4">
               {[1, 2, 3].map((i) => (
@@ -396,16 +398,14 @@ export default function WalletDashboard() {
                     <button
                       key={tx.id}
                       onClick={() => setSelectedTransaction(tx)}
-                      className="flex w-full items-center justify-between h-8 opacity-80 hover:opacity-100 transition-opacity"
+                      className="group flex w-full items-center justify-between h-8 opacity-80 hover:opacity-100 transition-opacity"
                     >
                       <div className="flex items-center gap-[8px]">
-                        <div className="h-8 w-6 flex items-center justify-center shrink-0">
+                        <div className="h-4 w-4 flex items-center justify-center shrink-0">
                           {txType === 'sent' ? (
-                            <img src="/assets/tx-sent.svg" alt="Sent" className="h-8 w-6 object-contain opacity-60" />
-                          ) : txType === 'received' ? (
-                            <img src="/assets/tx-recieve.svg" alt="Received" className="h-8 w-6 object-contain opacity-60" />
+                            <div className="h-2 w-2 rounded-full bg-red-500 opacity-60 group-hover:opacity-100 group-active:opacity-100 transition-opacity" />
                           ) : (
-                            <img src="/assets/addfunds.svg" alt="Added Funds" className="h-8 w-6 object-contain" />
+                            <div className="h-2 w-2 rounded-full bg-green-500 opacity-60 group-hover:opacity-100 group-active:opacity-100 transition-opacity" />
                           )}
                         </div>
                         <div className="flex items-center gap-1">
@@ -415,7 +415,7 @@ export default function WalletDashboard() {
                           </p>
                         </div>
                       </div>
-                      <p className="font-mono text-[18px] font-normal text-white/50" style={{ letterSpacing: '0.77px' }}>
+                      <p className="font-mono text-[18px] font-normal text-white/50" style={{ letterSpacing: '-0.04em' }}>
                         {formatDate(tx.timestamp)}
                       </p>
                     </button>
@@ -439,7 +439,7 @@ export default function WalletDashboard() {
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <div className="h-[1px] w-full bg-white/50" />
-        <div className="flex gap-4 pt-4 pb-4">
+        <div className="flex gap-2 pt-4 pb-4">
         <button
           onClick={() => setShowSendModal(true)}
           className="flex-1 h-16 border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center opacity-80 hover:opacity-100"
@@ -542,47 +542,61 @@ export default function WalletDashboard() {
         )
       )}
 
-             {/* Full-screen Menu Modal - wipe from top on open, wipe to top on close */}
+             {/* Full-screen Menu Modal - wipe reveal; menu pushes left when Currency/Language open */}
              {(menuOpen || menuClosing) && (
                <div
-                 className="fixed inset-0 bg-black z-[9999] flex flex-col"
+                 className="fixed inset-0 bg-black z-[9999] origin-top overflow-hidden"
                  style={{
-                   transform: menuClosing ? 'translateY(-100%)' : menuEntering ? 'translateY(-100%)' : 'translateY(0)',
-                   transition: 'transform 300ms ease-out',
+                   clipPath: menuClosing ? 'inset(0 0 100% 0)' : menuEntering ? 'inset(0 0 100% 0)' : 'inset(0 0 0 0)',
+                   transition: 'clip-path 100ms ease-out',
                  }}
                  onTransitionEnd={() => {
                    if (menuClosing) {
                      setMenuOpen(false);
                      setMenuClosing(false);
-                     if (menuNextAction === 'currency') {
-                       setShowCurrencySelector(true);
-                       setMenuNextAction(null);
-                     } else if (menuNextAction === 'language') {
-                       setShowLanguageSelector(true);
-                       setMenuNextAction(null);
-                     }
+                     setShowCurrencySelector(false);
+                     setShowLanguageSelector(false);
+                     setSettingsExiting(false);
                    } else if (menuEntering) {
                      setMenuEntering(false);
                    }
                  }}
                >
-                 <div className="flex flex-col flex-1 min-h-0 pt-8 px-5 pb-5">
-                   {/* Logo: normal logo (full wordmark) - tap to close */}
+                 <div
+                   className="flex flex-row h-full transition-transform duration-200 ease-out"
+                   style={{
+                     width: ((showCurrencySelector || showLanguageSelector) || settingsExiting) ? '200%' : '100%',
+                     transform: ((showCurrencySelector || showLanguageSelector) && !settingsExiting) ? 'translateX(-50%)' : 'translateX(0)',
+                   }}
+                   onTransitionEnd={(e) => {
+                     if (e.target !== e.currentTarget) return;
+                     if (settingsExiting) {
+                       setShowCurrencySelector(false);
+                       setShowLanguageSelector(false);
+                       setSettingsExiting(false);
+                     }
+                   }}
+                 >
+                 <div
+                   className={`flex flex-col flex-1 min-h-0 shrink-0 ${((showCurrencySelector || showLanguageSelector) || settingsExiting) ? 'w-1/2' : 'w-full'}`}
+                 >
+                 <div className="flex flex-col flex-1 min-h-0 pt-4 px-5 pb-5">
+                   {/* Logo: normal logo (full wordmark) - tap to close, left aligned */}
                    <button
                      onClick={() => setMenuClosing(true)}
-                     className="flex items-center cursor-pointer shrink-0"
+                     className="flex items-center justify-start cursor-pointer shrink-0 w-full"
                    >
-                     <img src="/assets/moto-logo.svg" alt="MOTO" className="h-10 w-[172px] object-contain object-center" />
+                     <img src="/assets/moto-logo.svg" alt="MOTO" className="h-8 w-[172px] object-contain object-left" />
                    </button>
 
-                   {/* Divider under logo */}
-                   <div className="h-px w-full bg-white/50 shrink-0 mt-6" />
+                   {/* Divider under logo - same spacing as dashboard */}
+                   <div className="h-px w-full bg-white/50 shrink-0 mt-4" />
 
                    {/* Scrollable content: My Wallet, Currency, Language, Principal ID, Sign Out, Wipe */}
-                   <div className="flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto pt-6">
+                   <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pt-6">
                      {/* My Wallet - equal space above and below the name */}
                      {currentPrincipal && (
-                       <div className="flex flex-col gap-6">
+                       <div className="flex flex-col gap-4">
                          <div className="flex items-center min-h-[2rem]">
                            {editingWalletName ? (
                              <input
@@ -591,7 +605,7 @@ export default function WalletDashboard() {
                                onChange={(e) => setWalletNameInput(e.target.value)}
                                onBlur={handleSaveWalletName}
                                onKeyDown={(e) => e.key === 'Enter' && handleSaveWalletName()}
-                               className="w-full bg-transparent border-0 rounded-none px-0 py-0 text-white/80 font-mono font-medium text-xl tracking-[0.8px] outline-none placeholder:text-white/50"
+                               className="w-full bg-transparent border-0 rounded-none px-0 py-0 text-white/80 font-mono font-medium text-base tracking-[0.8px] outline-none placeholder:text-white/50"
                                placeholder={DEFAULT_WALLET_NAME}
                                autoFocus
                              />
@@ -600,52 +614,52 @@ export default function WalletDashboard() {
                                onClick={() => { setWalletNameInput(walletName); setEditingWalletName(true); }}
                                className="w-full flex items-center justify-between min-h-[2rem] opacity-80 hover:opacity-100 transition-opacity text-left"
                              >
-                               <span className="font-mono font-medium text-xl text-white/80 tracking-[0.8px]">{walletName}</span>
-                               <svg className="size-5 text-white/70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                               <span className="font-mono font-medium text-base text-white/80 tracking-[0.8px]">{walletName}</span>
+                               <svg className="size-4 text-white/70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                </svg>
                              </button>
                            )}
                          </div>
-                         <div className="h-px w-full bg-white/20" />
+                         <div className="w-full border-t border-white/50 shrink-0" />
                        </div>
                      )}
 
                      {/* Currency */}
                      <button
-                       onClick={() => { setMenuNextAction('currency'); setMenuClosing(true); }}
-                       className="flex gap-4 h-10 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
+                       onClick={() => { setShowLanguageSelector(false); setShowCurrencySelector(true); }}
+                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
                      >
-                       <img src="/assets/currency.svg" alt="" className="size-6 shrink-0 opacity-80" />
-                       <span className="font-medium text-xl text-white/80 tracking-[0.8px]">Currency</span>
+                       <img src="/assets/currency.svg" alt="" className="size-5 shrink-0 opacity-80" />
+                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">Currency</span>
                      </button>
 
                      {/* Language */}
                      <button
-                       onClick={() => { setMenuNextAction('language'); setMenuClosing(true); }}
-                       className="flex gap-4 h-10 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
+                       onClick={() => { setShowCurrencySelector(false); setShowLanguageSelector(true); }}
+                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
                      >
-                       <img src="/assets/language.svg" alt="" className="size-6 shrink-0 opacity-80" />
-                       <span className="font-medium text-xl text-white/80 tracking-[0.8px]">Language</span>
+                       <img src="/assets/language.svg" alt="" className="size-5 shrink-0 opacity-80" />
+                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">Language</span>
                      </button>
 
-                     <div className="h-px w-full bg-white/20" />
+                     <div className="w-full border-t border-white/30 shrink-0" />
 
                      {/* Sign Out */}
                      <button
                        onClick={handleLogOut}
-                       className="flex gap-4 h-10 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
+                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
                      >
-                       <img src="/assets/logout.svg" alt="" className="size-6 shrink-0 opacity-80" />
-                       <span className="font-medium text-xl text-white/80 tracking-[0.8px]">Sign Out</span>
+                       <img src="/assets/logout.svg" alt="" className="size-5 shrink-0 opacity-80" />
+                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">Sign Out</span>
                      </button>
 
-                     <div className="h-px w-full bg-white/20" />
+                     <div className="w-full border-t border-white/30 shrink-0" />
 
                      {/* Principal ID + blurb */}
                      {currentPrincipal && (
                        <div className="flex flex-col gap-3">
-                         <p className="text-white/60 text-[14px] font-medium">Principal ID</p>
+                         <p className="text-white/60 text-xs font-medium">Principal ID</p>
                          <div
                            onClick={async () => {
                              try {
@@ -658,16 +672,16 @@ export default function WalletDashboard() {
                            }}
                            className="bg-zinc-900/90 p-3 cursor-pointer flex items-center justify-center relative"
                          >
-                           <p className="text-white/80 font-mono text-[16px] font-medium text-center break-all leading-relaxed" style={{ letterSpacing: '0.32px', textWrap: 'balance' }}>
+                           <p className="text-white/80 font-mono text-sm font-medium text-center break-all leading-relaxed" style={{ letterSpacing: '0.32px', textWrap: 'balance' }}>
                              {currentPrincipal}
                            </p>
                            {principalCopied && (
-                             <p className="absolute inset-0 flex items-center justify-center bg-zinc-900/90 text-white/80 font-sans text-[16px] font-medium">
+                             <p className="absolute inset-0 flex items-center justify-center bg-zinc-900/90 text-white/80 font-sans text-sm font-medium">
                                Copied!
                              </p>
                            )}
                          </div>
-<p className="text-white/50 text-[14px] leading-relaxed">
+<p className="text-white/50 text-xs leading-relaxed">
                           MOTO is 100% decentralized and on-chain. App settings are stored in your private canister and all financial data is stored on ledger.
                         </p>
                        </div>
@@ -677,47 +691,38 @@ export default function WalletDashboard() {
                      <button
                        onClick={handleWipeCanisterAndSignOut}
                        disabled={signOutAndReset.isPending}
-                       className="flex gap-4 h-10 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
+                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
                      >
                        <img
                          src="/assets/wipeout.svg"
                          alt=""
-                         className="size-6 shrink-0"
+                         className="size-5 shrink-0"
                          style={{ filter: 'brightness(0) saturate(100%) invert(27%) sepia(98%) saturate(1000%) hue-rotate(346deg) brightness(104%) contrast(97%)' }}
                        />
-                       <span className="font-medium text-xl text-red-500 tracking-[0.8px]">
+                       <span className="font-medium text-base text-red-500 tracking-[0.8px]">
                          {signOutAndReset.isPending ? 'Wiping...' : 'Wipe Canister & Sign Out'}
                        </span>
                      </button>
 
                      {/* Divider below Wipe Canister & Sign Out */}
-                     <div className="h-px w-full bg-white/20" />
+                     <div className="w-full border-t border-white/30 shrink-0" />
                    </div>
+                 </div>
+                 </div>
 
-                   {/* Close button - bottom, full width */}
-                   <button
-                     onClick={() => setMenuClosing(true)}
-                     className="w-full h-16 mt-6 border border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center shrink-0"
-                   >
-                     <span className="font-bold text-base text-white/80 tracking-[0.15px]">Close</span>
-                   </button>
+                 {((showCurrencySelector || showLanguageSelector) || settingsExiting) && (
+                   <div className="w-1/2 flex flex-col flex-1 min-h-0 shrink-0 bg-black overflow-hidden">
+                     {(showCurrencySelector || settingsExiting) && !showLanguageSelector && (
+                       <CurrencySelector onClose={() => setSettingsExiting(true)} embedded />
+                     )}
+                     {(showLanguageSelector || settingsExiting) && !showCurrencySelector && (
+                       <LanguageSelector onClose={() => setSettingsExiting(true)} embedded />
+                     )}
+                   </div>
+                 )}
                  </div>
                </div>
              )}
-
-      {/* Currency Selector Modal - slide from right */}
-      {showCurrencySelector && (
-        <SlideFromRight open={showCurrencySelector} onClose={() => { setShowCurrencySelector(false); setMenuOpen(true); }}>
-          <CurrencySelector onClose={() => { setShowCurrencySelector(false); setMenuOpen(true); }} />
-        </SlideFromRight>
-      )}
-
-      {/* Language Selector Modal - slide from right */}
-      {showLanguageSelector && (
-        <SlideFromRight open={showLanguageSelector} onClose={() => { setShowLanguageSelector(false); setMenuOpen(true); }}>
-          <LanguageSelector onClose={() => { setShowLanguageSelector(false); setMenuOpen(true); }} />
-        </SlideFromRight>
-      )}
 
       {/* Transaction Details - card with swipe */}
       {selectedTransaction && (walletAddress || walletAddressForTx) && (() => {

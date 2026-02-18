@@ -8,6 +8,7 @@ import { useBTCPrice, isPriceStale } from '../hooks/useQueries';
 import StalePriceIndicator from './StalePriceIndicator';
 import { useActor } from '../hooks/useActor';
 import { isValidBitcoinAddress, isBech32AddressForStorage } from '../utils/addressValidation';
+import BackCloseButton from './BackCloseButton';
 
 interface ReceiveBitcoinProps {
   address: string;
@@ -170,26 +171,20 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
 
   return (
     <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-      {/* Main container matching menu screen: pt-8 (32px) */}
-      <div className="flex flex-col pt-8 flex-1 min-h-0">
-        {/* Header with close button, title, and empty space */}
-        <header className="flex items-center justify-between h-10 mb-8 shrink-0 px-5">
-          <button
-            onClick={onClose}
-            className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
-            aria-label="Close"
-          >
-            <img 
-              src="/assets/close.png" 
-              alt="" 
-              className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
-            />
-          </button>
+      {/* Main container - pt-4 matches dashboard/menu header */}
+      <div className="flex flex-col pt-4 flex-1 min-h-0">
+        <header className="flex items-center justify-between h-8 shrink-0 px-5">
+          <BackCloseButton onClose={() => onClose?.()} />
           <p className="font-medium text-xl text-white tracking-[-0.22px]">
             Receive Bitcoin
           </p>
           <div className="h-8 w-8" /> {/* Empty space for symmetry */}
         </header>
+
+        {/* Divider - mt-4 matches dashboard/menu */}
+        <div className="px-5 shrink-0 mt-4">
+          <div className="h-px w-full bg-white/50 shrink-0" />
+        </div>
 
         {/* Content area - only scroll when content overflows */}
         <div

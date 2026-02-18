@@ -3,6 +3,7 @@ import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import { useBTCPrice, useBTCPriceAtTime, isPriceStale } from '../hooks/useQueries';
 import StalePriceIndicator from './StalePriceIndicator';
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { vibrateLight } from '../utils/haptics';
@@ -61,13 +62,19 @@ function TxCard({
   const isSent = transaction.fromAddress === walletAddress;
   const txType = isSent ? 'sent' : (transaction.toAddress === walletAddress ? 'received' : 'added');
 
+  const isTestnet = import.meta.env.VITE_USE_TESTNET === 'true';
+  const isMintOrBurn = transaction.id.startsWith('icrc1-mint-') || transaction.id.startsWith('icrc1-burn-');
+  const network = isMintOrBurn
+    ? (isTestnet ? 'BTC Testnet' : 'BTC')
+    : (isTestnet ? 'ckTESTBTC' : 'ckBTC');
+
   return (
     <div
-      className="flex-shrink-0 w-full flex flex-col rounded-xl overflow-hidden"
-      style={{ backgroundColor: '#111111', minHeight: '100%' }}
+      className="flex-shrink-0 w-full flex flex-col overflow-hidden"
+      style={{ backgroundColor: '#111111', minHeight: '100%', borderRadius: 2 }}
     >
-      {/* Header */}
-      <header className="flex items-center justify-between shrink-0 px-4 pt-4 pb-2">
+      {/* Header - 20px inner padding */}
+      <header className="flex items-center justify-between h-8 shrink-0 px-5 mb-5" style={{ marginTop: 16 }}>
         <button
           onClick={onClose}
           className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
@@ -76,7 +83,7 @@ function TxCard({
           <img src="/assets/close.png" alt="" className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" />
         </button>
         <p className="font-medium text-lg text-white tracking-[-0.22px] truncate">
-          {txType === 'received' ? 'Received Bitcoin' : 'Transaction Details'}
+          {txType === 'received' ? 'Received' : 'Sent'}
         </p>
         <button
           onClick={onCycleCurrency}
@@ -87,9 +94,8 @@ function TxCard({
         </button>
       </header>
 
-      {/* Centered icon + amount above text rows */}
-      <div className="flex flex-col items-center justify-center flex-1 min-h-0 px-4 py-4">
-        <div className="flex flex-col gap-2 items-center shrink-0">
+      {/* Icon + balance 64px below header */}
+      <div className="flex flex-col items-center px-5" style={{ marginTop: 64, gap: 24 }}>
           <div className="h-12 w-9 flex items-center justify-center">
             {txType === 'sent' ? (
               <img src="/assets/tx-sent.svg" alt="Sent" className="h-12 w-9 object-contain opacity-60" />
@@ -121,10 +127,11 @@ function TxCard({
               </p>
             )}
           </div>
-        </div>
+      </div>
 
-        {/* Text rows - aligned to bottom of card */}
-        <div className="flex flex-col gap-2 w-full mt-auto pt-4 shrink-0">
+      {/* Detail rows pinned to bottom */}
+      <div className="mt-auto shrink-0 px-5 pb-5">
+        <div className="flex flex-col gap-2 w-full">
           <div className="flex gap-2 items-center text-base">
             <span className="text-white/80 shrink-0">Date</span>
             <span className="font-mono text-white flex-1 text-right truncate">{formatDate(transaction.timestamp)}</span>
@@ -154,6 +161,14 @@ function TxCard({
             <span className="text-white/80 shrink-0">Value</span>
             <span className="font-mono text-white flex-1 text-right">${getUSDValue(transaction.amount)}</span>
           </div>
+          {transaction.fee > 0n && (
+            <div className="flex gap-2 items-center text-base">
+              <span className="text-white/80 shrink-0">Fee</span>
+              <span className="font-mono text-white flex-1 text-right">
+                {currencyMode === 'BTC' ? `${formatBTC(transaction.fee)} BTC` : currencyMode === 'SATS' ? `${formatSats(transaction.fee)} sats` : `$${getUSDValue(transaction.fee)}`}
+              </span>
+            </div>
+          )}
           <div className="flex gap-2 items-center text-base">
             <span className="text-white/80 shrink-0">Price</span>
             <span className="font-mono text-white flex-1 text-right flex items-center justify-end gap-1">
@@ -171,6 +186,10 @@ function TxCard({
             >
               {formatAddress(transaction.id)}
             </a>
+          </div>
+          <div className="flex gap-2 items-center text-base">
+            <span className="text-white/80 shrink-0">Network</span>
+            <span className="font-mono text-white flex-1 text-right">{network}</span>
           </div>
           <div className="flex gap-2 items-center text-base">
             <span className="text-white/80 shrink-0">Status</span>
@@ -292,6 +311,28 @@ export default function TransactionDetails({
   };
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const [carouselWidth, setCarouselWidth] = useState(0);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const { width } = entries[0]?.contentRect ?? {};
+      if (typeof width === 'number') setCarouselWidth(width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const GAP = 8;
+  const SIDE_PADDING = 20;
+  const cardWidth = carouselWidth > 0 ? Math.max(0, carouselWidth - SIDE_PADDING * 2) : 0;
+  const trackWidth = carouselWidth > 0 ? transactions.length * cardWidth + (transactions.length - 1) * GAP : 0;
+  const stepPx = cardWidth + GAP;
+  const centerOffset = (carouselWidth - cardWidth) / 2;
+  const isDragging = delta.deltaX !== 0;
+  const translateXPx = centerOffset - localIndex * stepPx + delta.deltaX;
+
   const handleBackdropClick = (e: React.MouseEvent | React.TouchEvent) => {
     const target = e.target as Node;
     if (containerRef.current && !containerRef.current.contains(target)) {
@@ -299,10 +340,7 @@ export default function TransactionDetails({
     }
   };
 
-  const cardWidthPercent = 100 / transactions.length;
-  const translateX = `calc(${-localIndex * cardWidthPercent}% + ${delta.deltaX}px)`;
-
-  return (
+  const content = (
     <div
       className="fixed inset-0 z-[9999] flex flex-col bg-black/60"
       onTouchStart={handleTouchStart}
@@ -310,31 +348,28 @@ export default function TransactionDetails({
       onTouchEnd={handleTouchEnd}
       onClick={handleBackdropClick}
     >
-      {/* Top divider - card top aligns with this */}
-      <div className="h-[1px] w-full bg-white/50 shrink-0" />
+      {/* Spacer - card top aligns with bottom of dashboard header + 8px down */}
+      <div className="shrink-0" style={{ height: 73 }} />
 
-      {/* Card area: card top at divider, 16px below card */}
-      <div className="flex-1 flex flex-col items-center min-h-0 overflow-hidden">
+      {/* Card area: edge-to-edge viewport, 8px between cards */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <div
           ref={containerRef}
-          className="w-full max-w-md flex-1 min-h-0 overflow-hidden flex flex-col"
+          className="w-full flex-1 min-h-0 overflow-hidden flex flex-col"
           style={{ paddingBottom: 16 }}
         >
-          <div className="flex-1 flex items-stretch gap-0 min-h-0 overflow-hidden">
-            {/* Left peek - prev card edge when can swipe right */}
-            {canSwipeRight ? (
-              <div className="w-3 shrink-0 rounded-l-lg self-stretch opacity-70" style={{ backgroundColor: '#111111' }} aria-hidden />
-            ) : null}
-            <div className="flex-1 min-w-0 overflow-hidden px-1">
-              <div
-                className="flex h-full"
-                style={{
-                  transform: `translateX(${translateX})`,
-                  width: `${transactions.length * 100}%`,
-                }}
-              >
+          <div className="flex-1 flex min-h-0 overflow-hidden">
+            <div
+              className="flex h-full flex-nowrap"
+              style={{
+                transform: `translateX(${translateXPx}px)`,
+                transition: isDragging ? 'none' : 'transform 300ms ease-out',
+                width: trackWidth,
+                gap: `${GAP}px`,
+              }}
+            >
             {transactions.map((tx) => (
-                <div key={tx.id} className="flex-shrink-0 h-full" style={{ width: `${cardWidthPercent}%` }}>
+                <div key={tx.id} className="flex-shrink-0 h-full overflow-hidden" style={{ width: cardWidth, borderRadius: 2, border: '2px solid black' }}>
                   <TxCard
                     transaction={tx}
                     walletAddress={walletAddress}
@@ -357,15 +392,12 @@ export default function TransactionDetails({
                   />
                 </div>
               ))}
-              </div>
             </div>
-            {/* Right peek - next card edge when can swipe left */}
-            {canSwipeLeft ? (
-              <div className="w-3 shrink-0 rounded-r-lg self-stretch opacity-70" style={{ backgroundColor: '#111111' }} aria-hidden />
-            ) : null}
           </div>
         </div>
       </div>
     </div>
   );
+
+  return createPortal(content, document.body);
 }

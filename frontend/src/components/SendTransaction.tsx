@@ -7,6 +7,7 @@ import { useQRScanner } from '../qr-code/useQRScanner';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import { useBTCPrice, isPriceStale } from '../hooks/useQueries';
 import StalePriceIndicator from './StalePriceIndicator';
+import BackCloseButton from './BackCloseButton';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { toast } from 'sonner';
 import { isValidBitcoinAddress } from '../utils/addressValidation';
@@ -524,25 +525,17 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   if (step === 'scan') {
     return (
       <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-        <div className="flex flex-col pt-8 flex-1 min-h-0">
-          {/* Header */}
-          <header className="flex items-center justify-between h-10 mb-8 shrink-0 px-5">
-            <button
-              onClick={onClose}
-              className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
-              aria-label="Close"
-            >
-              <img 
-                src="/assets/close.png" 
-                alt="" 
-                className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
-              />
-            </button>
+        <div className="flex flex-col pt-4 flex-1 min-h-0">
+          <header className="flex items-center justify-between h-8 shrink-0 px-5">
+            <BackCloseButton onClose={() => onClose?.()} />
             <p className="font-medium text-xl text-white tracking-[-0.22px]">
               Send Bitcoin
             </p>
             <div className="h-8 w-8" />
           </header>
+          <div className="px-5 shrink-0 mt-4">
+            <div className="h-px w-full bg-white/50 shrink-0" />
+          </div>
 
           {/* Content area */}
           <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
@@ -663,23 +656,9 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   if (step === 'amount') {
     return (
       <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-        <div className="flex flex-col pt-8 flex-1 min-h-0">
-          {/* Header */}
-          <header className="flex items-center justify-between h-10 mb-8 shrink-0 px-5">
-            <button
-              onClick={() => {
-                if (onClose) {
-                  onClose();
-                }
-              }}
-              className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
-            >
-              <img 
-                src="/assets/close.png" 
-                alt="Close" 
-                className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
-              />
-            </button>
+        <div className="flex flex-col pt-4 flex-1 min-h-0">
+          <header className="flex items-center justify-between h-8 shrink-0 px-5">
+            <BackCloseButton onClose={() => onClose?.()} />
             <p className="font-medium text-xl text-white tracking-[-0.22px]">
               Set Amount
             </p>
@@ -695,6 +674,9 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
               />
             </button>
           </header>
+          <div className="px-5 shrink-0 mt-4">
+            <div className="h-px w-full bg-white/50 shrink-0" />
+          </div>
 
           {/* Content area */}
           <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
@@ -831,27 +813,12 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
 
   return (
     <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
-      <div className="flex flex-col pt-8 flex-1 min-h-0">
-        {/* Header - hide close and cycle when confirming */}
-        <header className="flex items-center justify-between h-10 mb-8 shrink-0 px-5">
+      <div className="flex flex-col pt-4 flex-1 min-h-0">
+        <header className="flex items-center justify-between h-8 shrink-0 px-5">
           {isConfirmPending ? (
             <div className="h-8 w-8" />
           ) : (
-            <button
-              onClick={() => {
-                if (onClose) {
-                  onClose();
-                }
-              }}
-              className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
-              aria-label="Close"
-            >
-              <img 
-                src="/assets/close.png" 
-                alt="" 
-                className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
-              />
-            </button>
+            <BackCloseButton onClose={() => onClose?.()} />
           )}
           <p className="font-medium text-xl text-white tracking-[-0.22px]">
             Confirm Send
@@ -872,6 +839,9 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             </button>
           )}
         </header>
+        <div className="px-5 shrink-0 mt-4">
+          <div className="h-px w-full bg-white/50 shrink-0" />
+        </div>
 
         {/* Content area */}
         <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">

@@ -171,7 +171,7 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
         // Local: Use localhost Internet Identity canister with query parameter format
         // This is more reliable than subdomain format on localhost
         // Use the actual canister ID from deployment, or fall back to default
-        const iiCanisterId = import.meta.env.VITE_CANISTER_ID_INTERNET_IDENTITY || 'uzt4z-lp777-77774-qaabq-cai';
+        const iiCanisterId = import.meta.env.VITE_CANISTER_ID_INTERNET_IDENTITY || 'rdmx6-jaaaa-aaaaa-aaadq-cai';
         identityProvider = `http://localhost:4943/?canisterId=${iiCanisterId}`;
         console.log('useInternetIdentity: Using LOCALHOST Internet Identity for local development');
       } else {

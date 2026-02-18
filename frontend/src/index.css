@@ -9,6 +9,10 @@
     0% { background-position: -200% 0; }
     100% { background-position: 200% 0; }
   }
+  @keyframes slideInFromRight {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
   .animate-shimmer {
     background: linear-gradient(
       90deg,

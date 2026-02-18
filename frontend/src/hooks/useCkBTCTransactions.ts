@@ -6,6 +6,9 @@ import { createCkBTCMinterIDL, CKBTC_MINTER_CANISTER_ID } from './useCkBTCMinter
 import { getSessionWithdrawal } from '../lib/sessionWithdrawalStore';
 import type { Transaction } from '../backend';
 
+const FEE_PARENT_TIME_WINDOW_SEC = 120;
+const FEE_TREASURY_PRINCIPAL = (import.meta.env.VITE_FEE_TREASURY_PRINCIPAL as string)?.trim() || 'c65im-m2qxx-7nvqc-fl62p-4xqmt-emdce-tmtqf-fggqq-3zh4d-yhdre-2qe';
+
 /** Parse ledger block index from burn tx id (e.g. icrc1-burn-12345 -> 12345). */
 function burnTxIdToBlockIndex(txId: string): string | null {
   if (!txId.startsWith('icrc1-burn-')) return null;
@@ -248,6 +251,53 @@ function convertICRC1TransactionToAppTransaction(
 }
 
 const BLOCKSTREAM_API = USE_TESTNET ? 'https://blockstream.info/testnet/api' : 'https://blockstream.info/api';
+
+function mergeFeeIntoParent(transactions: Transaction[]): Transaction[] {
+  if (!FEE_TREASURY_PRINCIPAL || transactions.length === 0) return transactions;
+
+  const feeTxIds = new Set<string>();
+  const parentFeeByAmount = new Map<string, bigint>();
+
+  const isFeeTransfer = (tx: Transaction) =>
+    tx.id.startsWith('icrc1-') &&
+    !tx.id.startsWith('icrc1-mint-') &&
+    !tx.id.startsWith('icrc1-burn-') &&
+    tx.toAddress === FEE_TREASURY_PRINCIPAL;
+
+  const isTransfer = (tx: Transaction) =>
+    tx.id.startsWith('icrc1-') &&
+    !tx.id.startsWith('icrc1-mint-') &&
+    !tx.id.startsWith('icrc1-burn-');
+
+  for (const tx of transactions) {
+    if (!isFeeTransfer(tx)) continue;
+
+    feeTxIds.add(tx.id);
+    const ts = Number(tx.timestamp);
+    const feeAmount = tx.amount;
+
+    const candidates = transactions.filter(
+      (p) => p.id !== tx.id && !feeTxIds.has(p.id) && isTransfer(p) && Math.abs(Number(p.timestamp) - ts) <= FEE_PARENT_TIME_WINDOW_SEC
+    );
+    const parent = candidates.length > 0
+      ? candidates.reduce((best, p) =>
+          Math.abs(Number(p.timestamp) - ts) < Math.abs(Number(best.timestamp) - ts) ? p : best
+        )
+      : null;
+
+    if (parent) {
+      const existing = parentFeeByAmount.get(parent.id) ?? parent.fee;
+      parentFeeByAmount.set(parent.id, existing + feeAmount);
+    }
+  }
+
+  return transactions
+    .filter((tx) => !feeTxIds.has(tx.id))
+    .map((tx) => {
+      const mergedFee = parentFeeByAmount.get(tx.id);
+      return mergedFee != null ? { ...tx, fee: mergedFee } : tx;
+    });
+}
 
 export function useCkBTCTransactions(userBitcoinAddress: string) {
   const { identity } = useInternetIdentity();
@@ -544,11 +594,13 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
           .filter((tx): tx is Transaction => tx !== null)
           .sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
 
-        console.log('useCkBTCTransactions: ✅ Found', convertedTransactions.length, 'converted transactions');
-        if (convertedTransactions.length > 0) {
-          console.log('useCkBTCTransactions: Sample transaction:', convertedTransactions[0]);
+        // Merge fee transfers into their parent transactions (fee tx = user sent to treasury)
+        const merged = mergeFeeIntoParent(convertedTransactions);
+        console.log('useCkBTCTransactions: ✅ Found', merged.length, 'transactions (after merging fees)');
+        if (merged.length > 0) {
+          console.log('useCkBTCTransactions: Sample transaction:', merged[0]);
         }
-        setTransactions(convertedTransactions);
+        setTransactions(merged);
       } catch (err: any) {
         console.error('useCkBTCTransactions: ⚠️ Error fetching transactions:', err.message || err);
         console.error('useCkBTCTransactions: Error details:', err);

@@ -1,0 +1,16 @@
+{
+  "name": "MOTO",
+  "short_name": "MOTO",
+  "description": "Minimal Bitcoin wallet",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#000000",
+  "icons": [
+    {
+      "src": "/assets/moto-logo-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
