@@ -1,6 +1,7 @@
 import { LANGUAGES } from '../data/languages';
 import { usePreferredLanguage } from '../hooks/usePreferredLanguage';
 import BackCloseButton from './BackCloseButton';
+import { useTranslation } from '../i18n';
 
 interface LanguageSelectorProps {
   onClose: () => void;
@@ -9,6 +10,7 @@ interface LanguageSelectorProps {
 
 export default function LanguageSelector({ onClose, embedded }: LanguageSelectorProps) {
   const { preferredLanguage, setPreferredLanguage } = usePreferredLanguage();
+  const { t } = useTranslation();
 
   const handleSelectLanguage = (code: string) => {
     setPreferredLanguage(code);
@@ -25,7 +27,7 @@ export default function LanguageSelector({ onClose, embedded }: LanguageSelector
         <header className="flex items-center justify-between h-8 shrink-0 px-5">
           <BackCloseButton onClose={onClose} />
           <p className="font-medium text-xl text-white tracking-[-0.22px]">
-            Language
+            {t('languageSelector.header')}
           </p>
           <div className="h-8 w-8" /> {/* Empty space for symmetry */}
         </header>

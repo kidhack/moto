@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import { useScreenTransitionGuard } from '../hooks/useScreenTransitionGuard';
-import { useBTCPrice, isPriceStale } from '../hooks/useQueries';
+import { useBTCPrice, isPriceStale, getBTCPriceInCurrency } from '../hooks/useQueries';
+import { formatFiatCompact, getCurrencyMeta } from '../data/currencies';
 import StalePriceIndicator from './StalePriceIndicator';
+import { useTranslation } from '../i18n';
 
 interface SetAmountProps {
   address: string;
@@ -17,11 +19,12 @@ type CurrencyMode = 'BTC' | 'SATS' | string;
 
 export default function SetAmount({ address: _address, onConfirm, onClose, initialCurrency, initialAmount }: SetAmountProps) {
   const { preferredCurrency } = usePreferredCurrency();
+  const { t } = useTranslation();
   const { data: btcPriceData } = useBTCPrice();
   const [currencyMode, setCurrencyMode] = useState<CurrencyMode>(initialCurrency || 'SATS');
   const [amount, setAmount] = useState<string>(initialAmount || '');
 
-  const BTC_PRICE_USD = btcPriceData?.usd ?? 101799;
+  const BTC_PRICE_FIAT = getBTCPriceInCurrency(btcPriceData, preferredCurrency);
   const priceIsStale = isPriceStale(btcPriceData);
 
   // Convert amount between currencies
@@ -39,8 +42,8 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
     } else if (fromCurrency === 'SATS') {
       btcValue = numValue / 100000000;
     } else {
-      // Fiat currency (USD, etc.) - convert to BTC
-      btcValue = numValue / BTC_PRICE_USD;
+      // Fiat currency — convert to BTC using that currency's price
+      btcValue = numValue / getBTCPriceInCurrency(btcPriceData, fromCurrency);
     }
 
     // Convert from BTC to target currency
@@ -54,10 +57,10 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
       // SATS should be whole numbers
       return Math.round(result).toString();
     } else {
-      // Fiat currency (USD, etc.) - convert from BTC
-      result = btcValue * BTC_PRICE_USD;
-      // Format fiat with 2 decimal places
-      return result.toFixed(2).replace(/\.?0+$/, '');
+      // Fiat currency — convert from BTC using that currency's price
+      result = btcValue * getBTCPriceInCurrency(btcPriceData, toCurrency);
+      const decimals = getCurrencyMeta(toCurrency).decimals;
+      return result.toFixed(decimals).replace(/\.?0+$/, '');
     }
   };
 
@@ -144,7 +147,7 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
           <button
             onClick={onClose}
             className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             <img 
               src="/assets/close.png" 
@@ -153,12 +156,12 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
             />
           </button>
           <p className="font-medium text-xl text-white tracking-[-0.22px]">
-            Set Amount
+            {t('setAmount.header')}
           </p>
           <button
             onClick={cycleCurrency}
             className="h-8 w-8 flex items-center justify-center cursor-pointer opacity-80 transition-opacity hover:opacity-100 active:opacity-100"
-            aria-label="Cycle currency"
+            aria-label={t('send.cycleCurrency')}
           >
             <img 
               src="/assets/cyclecurrency.svg" 
@@ -180,7 +183,7 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
               </p>
             </div>
             <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1" style={{ letterSpacing: '0.15px' }}>
-              1 BTC ≈ ${BTC_PRICE_USD.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              {t('price.btcApprox', { price: formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) })}
               <StalePriceIndicator isStale={priceIsStale} />
             </p>
           </div>
@@ -257,7 +260,7 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
             disabled={isConfirmDisabled}
             className="h-16 w-full border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span className="font-bold text-base text-white/80 tracking-[0.15px]">Set</span>
+            <span className="font-bold text-base text-white/80 tracking-[0.15px]">{t('setAmount.set')}</span>
           </button>
         </div>
       </div>

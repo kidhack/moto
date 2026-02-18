@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useWalletAddress, useCompleteOnboarding } from '../hooks/useQueries';
 import { toast } from 'sonner';
+import { useTranslation } from '../i18n';
 import { AlertCircle, Loader2, Copy, CheckCircle } from 'lucide-react';
 
 export default function OnboardingFlow() {
@@ -10,10 +11,11 @@ export default function OnboardingFlow() {
   const completeOnboarding = useCompleteOnboarding();
   const [isCopying, setIsCopying] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const { t } = useTranslation();
 
   const handleCopyAddress = async () => {
     if (!walletAddress) {
-      toast.error('Wallet address not available yet. Please wait.');
+      toast.error(t('onboarding.addressNotAvailable'));
       return;
     }
     
@@ -24,7 +26,7 @@ export default function OnboardingFlow() {
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (error) {
       console.error('Failed to copy address:', error);
-      toast.error('Failed to copy address. Please try again.');
+      toast.error(t('onboarding.failedToCopy'));
     } finally {
       setIsCopying(false);
     }
@@ -34,13 +36,13 @@ export default function OnboardingFlow() {
     completeOnboarding.mutate(undefined, {
       onError: (error) => {
         console.error('Failed to complete onboarding:', error);
-        toast.error('Failed to proceed. Please try again.');
+        toast.error(t('onboarding.failedToProceed'));
       }
     });
   };
 
   const handleRetry = () => {
-    toast.info('Retrying...');
+    toast.info(t('onboarding.retrying'));
     refetch();
   };
 
@@ -56,7 +58,7 @@ export default function OnboardingFlow() {
           className="text-center text-xl leading-normal font-medium"
           style={{ letterSpacing: '-0.22px' }}
         >
-          Deposit Bitcoin to fund your wallet.
+          {t('onboarding.depositBitcoin')}
         </h1>
       </div>
       
@@ -68,7 +70,7 @@ export default function OnboardingFlow() {
           <Alert variant="destructive" className="rounded-none border-red-500/50 bg-red-950/20">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="ml-2">
-              Failed to load wallet address. Please try again.
+              {t('onboarding.failedToLoadAddress')}
             </AlertDescription>
           </Alert>
         )}
@@ -78,13 +80,13 @@ export default function OnboardingFlow() {
           <div className="flex w-full items-center justify-center rounded-none border-2 border-[#1a1a1a] bg-[#1a1a1a] px-6 py-5">
             <Loader2 className="h-5 w-5 animate-spin text-[#CC8800]" />
             <p className="ml-3 text-center text-base text-white/60">
-              Loading wallet address...
+              {t('onboarding.loadingAddress')}
             </p>
           </div>
         ) : hasError ? (
           <div className="w-full rounded-none border-2 border-red-500/30 bg-[#1a1a1a] px-6 py-5">
             <p className="text-center text-base text-red-400">
-              Unable to load wallet address
+              {t('onboarding.unableToLoadAddress')}
             </p>
           </div>
         ) : hasAddress ? (
@@ -112,7 +114,7 @@ export default function OnboardingFlow() {
         ) : (
           <div className="w-full rounded-none border-2 border-[#1a1a1a] bg-[#1a1a1a] px-6 py-5">
             <p className="text-center text-base text-white/60">
-              No wallet address available
+              {t('onboarding.noAddressAvailable')}
             </p>
           </div>
         )}
@@ -129,10 +131,10 @@ export default function OnboardingFlow() {
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Retrying...
+                {t('onboarding.retrying')}
               </>
             ) : (
-              'Retry'
+              t('common.retry')
             )}
           </Button>
         ) : (
@@ -147,17 +149,17 @@ export default function OnboardingFlow() {
             {isCopying ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Copying...
+                {t('onboarding.copying')}
               </>
             ) : copySuccess ? (
               <>
                 <CheckCircle className="mr-2 h-4 w-4" />
-                Copied!
+                {t('onboarding.copied')}
               </>
             ) : (
               <>
                 <Copy className="mr-2 h-4 w-4" />
-                Copy my wallet address
+                {t('onboarding.copyAddress')}
               </>
             )}
           </Button>
@@ -175,10 +177,10 @@ export default function OnboardingFlow() {
           {completeOnboarding.isPending ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Loading...
+              {t('onboarding.loading')}
             </>
           ) : (
-            'Skip for now'
+            t('onboarding.skipForNow')
           )}
         </Button>
       </div>

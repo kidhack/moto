@@ -1,12 +1,14 @@
 import { type Transaction } from '../backend';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
-import { useBTCPrice, useBTCPriceAtTime, isPriceStale } from '../hooks/useQueries';
+import { useBTCPrice, useBTCPriceAtTime, isPriceStale, getBTCPriceInCurrency } from '../hooks/useQueries';
+import { formatFiat, formatFiatCompact } from '../data/currencies';
 import StalePriceIndicator from './StalePriceIndicator';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { vibrateLight } from '../utils/haptics';
+import { useTranslation } from '../i18n';
 
 interface TransactionDetailsProps {
   transactions: Transaction[];
@@ -31,12 +33,14 @@ interface TxCardProps {
   formatAddress: (a: string) => string;
   getBlockExplorerUrl: (id: string) => string;
   getStatusDisplay: (s: string) => string;
-  getUSDValue: (s: bigint) => string;
+  getFiatValue: (s: bigint) => string;
   copiedField: 'to' | null;
   copyToClipboard: (text: string, _label: string, field: 'to') => void;
   priceAtTimeLoading: boolean;
-  BTC_PRICE_USD: number;
+  BTC_PRICE_FIAT: number;
+  preferredCurrency: string;
   marketPriceStale: boolean;
+  t: (key: string, vars?: Record<string, string | number>) => string;
 }
 
 function TxCard({
@@ -52,12 +56,14 @@ function TxCard({
   formatAddress,
   getBlockExplorerUrl,
   getStatusDisplay,
-  getUSDValue,
+  getFiatValue,
   copiedField,
   copyToClipboard,
   priceAtTimeLoading,
-  BTC_PRICE_USD,
+  BTC_PRICE_FIAT,
+  preferredCurrency,
   marketPriceStale,
+  t,
 }: TxCardProps) {
   const isSent = transaction.fromAddress === walletAddress;
   const txType = isSent ? 'sent' : (transaction.toAddress === walletAddress ? 'received' : 'added');
@@ -78,17 +84,17 @@ function TxCard({
         <button
           onClick={onClose}
           className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
-          aria-label="Close"
+          aria-label={t('common.close')}
         >
           <img src="/assets/close.png" alt="" className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" />
         </button>
         <p className="font-medium text-lg text-white tracking-[-0.22px] truncate">
-          {txType === 'received' ? 'Received' : 'Sent'}
+          {txType === 'received' ? t('txDetails.received') : t('txDetails.sent')}
         </p>
         <button
           onClick={onCycleCurrency}
           className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity hover:opacity-100 shrink-0"
-          aria-label="Cycle currency"
+          aria-label={t('send.cycleCurrency')}
         >
           <img src="/assets/cyclecurrency.svg" alt="" className="h-8 w-8" />
         </button>
@@ -98,11 +104,11 @@ function TxCard({
       <div className="flex flex-col items-center px-5" style={{ marginTop: 64, gap: 24 }}>
           <div className="h-12 w-9 flex items-center justify-center">
             {txType === 'sent' ? (
-              <img src="/assets/tx-sent.svg" alt="Sent" className="h-12 w-9 object-contain opacity-60" />
+              <img src="/assets/tx-sent.svg" alt={t('txDetails.sent')} className="h-12 w-9 object-contain opacity-60" />
             ) : txType === 'received' ? (
-              <img src="/assets/tx-recieve.svg" alt="Received" className="h-12 w-9 object-contain opacity-60" />
+              <img src="/assets/tx-recieve.svg" alt={t('txDetails.received')} className="h-12 w-9 object-contain opacity-60" />
             ) : (
-              <img src="/assets/addfunds.svg" alt="Added" className="h-12 w-9 object-contain opacity-60" />
+              <img src="/assets/addfunds.svg" alt={t('txDetails.added')} className="h-12 w-9 object-contain opacity-60" />
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -133,15 +139,15 @@ function TxCard({
       <div className="mt-auto shrink-0 px-5 pb-5">
         <div className="flex flex-col gap-2 w-full">
           <div className="flex gap-2 items-center text-base">
-            <span className="text-white/80 shrink-0">Date</span>
+            <span className="text-white/80 shrink-0">{t('txDetails.date')}</span>
             <span className="font-mono text-white flex-1 text-right truncate">{formatDate(transaction.timestamp)}</span>
           </div>
           <div className="flex gap-2 items-center text-base">
-            <span className="text-white/80 shrink-0">{txType === 'received' ? 'From' : 'To'}</span>
+            <span className="text-white/80 shrink-0">{txType === 'received' ? t('txDetails.from') : t('txDetails.to')}</span>
             {txType === 'received' && (transaction.sourceBitcoinAddress ?? transaction.fromAddress) === 'Bitcoin Network' ? (
-              <span className="font-mono text-white flex-1 text-right">Pending</span>
+              <span className="font-mono text-white flex-1 text-right">{t('txDetails.pending')}</span>
             ) : txType === 'sent' && transaction.toAddress === 'Bitcoin Network' ? (
-              <span className="font-mono text-white flex-1 text-right">Pending</span>
+              <span className="font-mono text-white flex-1 text-right">{t('txDetails.pending')}</span>
             ) : (
               <button
                 onClick={() =>
@@ -153,31 +159,31 @@ function TxCard({
                 }
                 className="font-mono text-white flex-1 text-right truncate cursor-pointer"
               >
-                {copiedField === 'to' ? 'Copied!' : formatAddress(txType === 'received' ? (transaction.sourceBitcoinAddress ?? transaction.fromAddress) : transaction.toAddress)}
+                {copiedField === 'to' ? t('common.copied') : formatAddress(txType === 'received' ? (transaction.sourceBitcoinAddress ?? transaction.fromAddress) : transaction.toAddress)}
               </button>
             )}
           </div>
           <div className="flex gap-2 items-center text-base">
-            <span className="text-white/80 shrink-0">Value</span>
-            <span className="font-mono text-white flex-1 text-right">${getUSDValue(transaction.amount)}</span>
+            <span className="text-white/80 shrink-0">{t('txDetails.value')}</span>
+            <span className="font-mono text-white flex-1 text-right">{getFiatValue(transaction.amount)}</span>
           </div>
           {transaction.fee > 0n && (
             <div className="flex gap-2 items-center text-base">
-              <span className="text-white/80 shrink-0">Fee</span>
+              <span className="text-white/80 shrink-0">{t('txDetails.fee')}</span>
               <span className="font-mono text-white flex-1 text-right">
-                {currencyMode === 'BTC' ? `${formatBTC(transaction.fee)} BTC` : currencyMode === 'SATS' ? `${formatSats(transaction.fee)} sats` : `$${getUSDValue(transaction.fee)}`}
+                {currencyMode === 'BTC' ? `${formatBTC(transaction.fee)} BTC` : currencyMode === 'SATS' ? `${formatSats(transaction.fee)} sats` : getFiatValue(transaction.fee)}
               </span>
             </div>
           )}
           <div className="flex gap-2 items-center text-base">
-            <span className="text-white/80 shrink-0">Price</span>
+            <span className="text-white/80 shrink-0">{t('txDetails.price')}</span>
             <span className="font-mono text-white flex-1 text-right flex items-center justify-end gap-1">
-              {priceAtTimeLoading ? '…' : `$${BTC_PRICE_USD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              {priceAtTimeLoading ? '…' : formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency)}
               <StalePriceIndicator isStale={marketPriceStale} />
             </span>
           </div>
           <div className="flex gap-2 items-center text-base">
-            <span className="text-white/80 shrink-0">Tx</span>
+            <span className="text-white/80 shrink-0">{t('txDetails.tx')}</span>
             <a
               href={getBlockExplorerUrl(transaction.id)}
               target="_blank"
@@ -188,11 +194,11 @@ function TxCard({
             </a>
           </div>
           <div className="flex gap-2 items-center text-base">
-            <span className="text-white/80 shrink-0">Network</span>
+            <span className="text-white/80 shrink-0">{t('txDetails.network')}</span>
             <span className="font-mono text-white flex-1 text-right">{network}</span>
           </div>
           <div className="flex gap-2 items-center text-base">
-            <span className="text-white/80 shrink-0">Status</span>
+            <span className="text-white/80 shrink-0">{t('txDetails.status')}</span>
             <span className="font-mono text-white flex-1 text-right capitalize">{getStatusDisplay(transaction.status)}</span>
           </div>
         </div>
@@ -210,6 +216,8 @@ export default function TransactionDetails({
 }: TransactionDetailsProps) {
   const transaction = transactions[selectedIndex];
   if (!transaction) return null;
+
+  const { t } = useTranslation();
 
   const [localIndex, setLocalIndex] = useState(selectedIndex);
   const isTransitioningRef = useRef(false);
@@ -251,7 +259,7 @@ export default function TransactionDetails({
 
   const { handleTouchStart, handleTouchMove, handleTouchEnd, delta } = useSwipeGesture(handleSwipe);
 
-  const BTC_PRICE_USD = priceAtTxTime ?? currentPrice?.usd ?? 101799;
+  const BTC_PRICE_FIAT = priceAtTxTime != null ? priceAtTxTime : getBTCPriceInCurrency(currentPrice, preferredCurrency);
   const marketPriceStale = priceAtTxTime == null && isPriceStale(currentPrice);
 
   const cycleCurrency = () => {
@@ -267,15 +275,15 @@ export default function TransactionDetails({
 
   const formatSats = (satoshis: bigint) => satoshis.toString();
 
-  const getUSDValue = (satoshis: bigint) => {
+  const getFiatValue = (satoshis: bigint) => {
     const btc = Number(satoshis) / 100000000;
-    return (btc * BTC_PRICE_USD).toFixed(2);
+    return formatFiat(btc * BTC_PRICE_FIAT, preferredCurrency);
   };
 
   const formatAmount = (satoshis: bigint) => {
     if (currencyMode === 'BTC') return `${formatBTC(satoshis)} BTC`;
     if (currencyMode === 'SATS') return `${formatSats(satoshis)} sats`;
-    return `$${getUSDValue(satoshis)}`;
+    return formatFiat(Number(satoshis) / 100000000 * BTC_PRICE_FIAT, preferredCurrency);
   };
 
   const formatDate = (timestamp: bigint) => {
@@ -292,9 +300,9 @@ export default function TransactionDetails({
   };
 
   const getStatusDisplay = (status: string) => {
-    if (status === 'confirmed') return 'Complete';
-    if (status === 'pending') return 'Pending';
-    if (status === 'failed') return 'Failed';
+    if (status === 'confirmed') return t('txDetails.complete');
+    if (status === 'pending') return t('txDetails.pending');
+    if (status === 'failed') return t('txDetails.failed');
     return status;
   };
 
@@ -306,7 +314,7 @@ export default function TransactionDetails({
       setCopiedField(field);
       setTimeout(() => setCopiedField(null), 2000);
     } catch {
-      toast.error('Failed to copy to clipboard');
+      toast.error(t('common.failedToCopyClipboard'));
     }
   };
 
@@ -383,12 +391,14 @@ export default function TransactionDetails({
                     formatAddress={formatAddress}
                     getBlockExplorerUrl={getBlockExplorerUrl}
                     getStatusDisplay={getStatusDisplay}
-                    getUSDValue={getUSDValue}
+                    getFiatValue={getFiatValue}
                     copiedField={copiedField}
                     copyToClipboard={copyToClipboard}
                     priceAtTimeLoading={priceAtTimeLoading}
-                    BTC_PRICE_USD={BTC_PRICE_USD}
+                    BTC_PRICE_FIAT={BTC_PRICE_FIAT}
+                    preferredCurrency={preferredCurrency}
                     marketPriceStale={marketPriceStale}
+                    t={t}
                   />
                 </div>
               ))}

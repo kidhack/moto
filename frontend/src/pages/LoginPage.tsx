@@ -1,17 +1,19 @@
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { toast } from 'sonner';
+import { useTranslation } from '../i18n';
 
 const CONTENT_MAX_WIDTH = 320;
 
 export default function LoginPage() {
   const { login, isLoggingIn } = useInternetIdentity();
+  const { t } = useTranslation();
 
   const handleLogin = async () => {
     try {
       await login();
     } catch (error) {
       console.error('Login error:', error);
-      toast.error('Failed to sign in. Please try again.');
+      toast.error(t('login.failedToSignIn'));
     }
   };
 
@@ -36,17 +38,17 @@ export default function LoginPage() {
           style={{ letterSpacing: '-0.22px', width: CONTENT_MAX_WIDTH, maxWidth: '100%', fontSize: '1.1rem' }}
         >
           <p className="font-medium text-white leading-normal">
-            Welcome to MOTO,
+            {t('login.welcomeLine1')}
             <br aria-hidden="true" />
-            your minimal Bitcoin wallet.
+            {t('login.welcomeLine2')}
           </p>
           <div className="my-5 sm:my-6 h-px w-full bg-white/30" aria-hidden />
           <p className="leading-relaxed text-white/80">
-            Use for everyday transactions, not your life savings.
+            {t('login.description1')}
           </p>
           <div className="my-5 sm:my-6 h-px w-full bg-white/30" aria-hidden />
           <p className="leading-relaxed text-white/80">
-            MOTO to MOTO transfers are instant and powered by ckBTC.
+            {t('login.description2')}
           </p>
         </div>
       </div>
@@ -63,10 +65,10 @@ export default function LoginPage() {
               {isLoggingIn ? (
                 <>
                   <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/80 border-t-transparent" />
-                  Connecting...
+                  {t('login.connecting')}
                 </>
               ) : (
-                'Sign In'
+                t('login.signIn')
               )}
             </span>
           </button>

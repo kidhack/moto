@@ -26,6 +26,7 @@ import LanguageSelector from '../components/LanguageSelector';
 import TransactionDetails from '../components/TransactionDetails';
 import { SlideFromRight } from '../components/SlideFromRight';
 import { useBackButton } from '../hooks/useBackButton';
+import { useTranslation } from '../i18n';
 
 export default function WalletDashboard() {
   const { clear, identity } = useInternetIdentity();
@@ -37,6 +38,7 @@ export default function WalletDashboard() {
   const ensureWallet = useEnsureWallet();
   const walletAddressForTx = walletInfo?.bitcoinAddress || ckbtcAddress || '';
   const { transactions: ckbtcTransactions } = useCkBTCTransactions(walletAddressForTx);
+  const { t } = useTranslation();
   // Prefer merged list from walletInfo; fall back to ckBTC hook so history shows even if query hasn't merged yet
   const displayTransactions = (walletInfo?.transactions?.length ? walletInfo.transactions : ckbtcTransactions) ?? [];
   
@@ -168,12 +170,12 @@ export default function WalletDashboard() {
   const handleResetOnboarding = async () => {
     try {
       await resetOnboarding.mutateAsync();
-      toast.success('Onboarding reset successfully');
+      toast.success(t('menu.onboardingReset'));
       setTimeout(async () => {
         await clear();
       }, 1000);
     } catch (error) {
-      toast.error('Failed to reset onboarding');
+      toast.error(t('menu.failedToResetOnboarding'));
     }
   };
 
@@ -184,13 +186,13 @@ export default function WalletDashboard() {
       try {
         sessionStorage.setItem('moto_skip_splash', '1');
       } catch {}
-      toast.success('Signed out');
+      toast.success(t('menu.signedOut'));
       setTimeout(() => {
         window.location.href = window.location.origin + window.location.pathname;
       }, 300);
     } catch (error) {
       console.error('Sign out error:', error);
-      toast.error('Failed to sign out. Please refresh the page.');
+      toast.error(t('menu.failedToSignOut'));
     }
   };
 
@@ -208,7 +210,7 @@ export default function WalletDashboard() {
       try {
         sessionStorage.setItem('moto_skip_splash', '1');
       } catch {}
-      toast.success('Canister wiped and signed out');
+      toast.success(t('menu.canisterWiped'));
       setTimeout(() => {
         window.location.href = window.location.origin + window.location.pathname;
       }, 300);
@@ -222,7 +224,7 @@ export default function WalletDashboard() {
         window.location.href = window.location.origin + window.location.pathname;
       } catch (clearError) {
         console.error('Failed to clear identity:', clearError);
-        toast.error('Failed to complete. Please refresh the page.');
+        toast.error(t('menu.failedToComplete'));
       }
     }
   };
@@ -315,7 +317,7 @@ export default function WalletDashboard() {
             type="button"
             onClick={() => { setMenuOpen(true); setMenuEntering(true); }}
             className="cursor-pointer flex items-center justify-start -m-2 p-2 shrink-0 touch-manipulation"
-            aria-label="Open menu"
+            aria-label={t('dashboard.openMenu')}
           >
             <img src="/assets/moto-logo-mark.svg" alt="" className="h-8 w-8 object-left pointer-events-none select-none" />
           </button>
@@ -333,7 +335,7 @@ export default function WalletDashboard() {
               )}
             </div>
             {(ledgerBalance === null || ledgerBalance <= BigInt(0)) && (
-              <button onClick={() => setShowAddFundsModal(true)} className="h-8 w-8 flex items-center justify-center hover:bg-white/10 transition-colors" aria-label="Add funds">
+              <button onClick={() => setShowAddFundsModal(true)} className="h-8 w-8 flex items-center justify-center hover:bg-white/10 transition-colors" aria-label={t('dashboard.addFunds')}>
                 <img src="/assets/addfunds.svg" alt="" className="h-8 w-8" />
               </button>
             )}
@@ -361,7 +363,7 @@ export default function WalletDashboard() {
             {isRefreshing ? (
               <>
                 <div className="h-6 w-6 rounded-full border-2 border-white/60 border-t-white animate-spin" />
-                <span className="text-xs text-white/70">Refreshing…</span>
+                <span className="text-xs text-white/70">{t('dashboard.refreshing')}</span>
               </>
             ) : pullDistance >= 20 ? (
               <>
@@ -369,7 +371,7 @@ export default function WalletDashboard() {
                   <path d="M23 4v6h-6M1 20v-6h6" />
                   <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
                 </svg>
-                <span className="text-xs text-white/70">{pullProgress >= 1 ? 'Release to refresh' : 'Pull to refresh'}</span>
+                <span className="text-xs text-white/70">{pullProgress >= 1 ? t('dashboard.releaseToRefresh') : t('dashboard.pullToRefresh')}</span>
               </>
             ) : null}
           </div>
@@ -377,23 +379,27 @@ export default function WalletDashboard() {
         <div className="flex flex-col gap-6 pt-4 pb-5 transition-[transform] duration-75 ease-out" style={{ transform: `translateY(${pullDistance}px)` }}>
         {import.meta.env.VITE_USE_TESTNET === 'true' && (
           <div className="bg-yellow-500/20 border border-yellow-500/50 rounded px-4 py-2 text-center">
-            <p className="text-yellow-500 text-sm font-medium">⚠️ TESTNET</p>
+            <p className="text-yellow-500 text-sm font-medium">{t('dashboard.testnet')}</p>
           </div>
         )}
         {/* Transactions List */}
         <div className="flex flex-col" style={{ gap: 19 }}>
           {isLoadingBalance ? (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col" style={{ gap: 19 }}>
               {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center justify-between py-2 px-5">
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-6 bg-white/20 animate-pulse rounded" />
-                    <div className="h-6 w-32 bg-white/20 animate-pulse rounded" />
+                <div key={i} className="flex items-center justify-between h-8">
+                  <div className="flex items-center gap-[8px]">
+                    <div className="h-4 w-4 flex items-center justify-center shrink-0">
+                      <div className="h-2 w-2 rounded-full animate-shimmer" />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="h-5 w-4 rounded animate-shimmer" />
+                      <div className="h-5 w-24 rounded animate-shimmer" />
+                    </div>
                   </div>
-                  <div className="h-6 w-24 bg-white/20 animate-pulse rounded" />
+                  <div className="h-5 w-32 rounded animate-shimmer" />
                 </div>
               ))}
-              <div className="h-[1px] w-full bg-white/50" />
             </div>
           ) : displayTransactions.length > 0 && walletAddressForTx ? (
             <>
@@ -432,7 +438,7 @@ export default function WalletDashboard() {
           ) : (
             <>
               <div className="flex flex-1 items-center justify-center">
-                <p className="text-center text-lg text-white/60">No transactions yet</p>
+                <p className="text-center text-lg text-white/60">{t('dashboard.noTransactions')}</p>
               </div>
             </>
           )}
@@ -451,13 +457,13 @@ export default function WalletDashboard() {
           onClick={() => setShowSendModal(true)}
           className="flex-1 h-16 border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center opacity-80 hover:opacity-100"
         >
-          <span className="font-bold text-base text-white/80 tracking-[0.15px]">Send</span>
+          <span className="font-bold text-base text-white/80 tracking-[0.15px]">{t('dashboard.send')}</span>
         </button>
         <button
           onClick={() => setShowReceiveModal(true)}
           className="flex-1 h-16 border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center opacity-80 hover:opacity-100"
         >
-          <span className="font-bold text-base text-white/80 tracking-[0.15px]">Receive</span>
+          <span className="font-bold text-base text-white/80 tracking-[0.15px]">{t('dashboard.receive')}</span>
         </button>
         </div>
       </div>
@@ -486,26 +492,26 @@ export default function WalletDashboard() {
           <div className="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center px-5">
             {isLoadingAddress ? (
               <>
-                <p className="text-white text-center text-lg mb-4">Loading Bitcoin address...</p>
-                <p className="text-white/60 text-center text-sm mb-8">Please wait</p>
+                <p className="text-white text-center text-lg mb-4">{t('dashboard.loadingAddress')}</p>
+                <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseWait')}</p>
               </>
             ) : walletAddressError ? (
               <>
-                <p className="text-white text-center text-lg mb-4">Unable to load Bitcoin address</p>
+                <p className="text-white text-center text-lg mb-4">{t('dashboard.unableToLoadAddress')}</p>
                 <p className="text-white/60 text-center text-sm mb-4">{walletAddressError.message}</p>
-                <p className="text-white/60 text-center text-sm mb-8">Please try again later</p>
+                <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseRetryLater')}</p>
               </>
             ) : (
               <>
-                <p className="text-white text-center text-lg mb-4">Unable to load Bitcoin address</p>
-                <p className="text-white/60 text-center text-sm mb-8">Please try again later</p>
+                <p className="text-white text-center text-lg mb-4">{t('dashboard.unableToLoadAddress')}</p>
+                <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseRetryLater')}</p>
               </>
             )}
             <button
               onClick={() => setShowReceiveModal(false)}
               className="h-16 border-2 border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center px-8"
             >
-              <span className="font-bold text-base text-white/80 tracking-[0.15px]">Close</span>
+              <span className="font-bold text-base text-white/80 tracking-[0.15px]">{t('common.close')}</span>
             </button>
           </div>
         )
@@ -524,26 +530,26 @@ export default function WalletDashboard() {
           <div className="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center px-5">
             {isLoadingAddress ? (
               <>
-                <p className="text-white text-center text-lg mb-4">Loading Bitcoin address...</p>
-                <p className="text-white/60 text-center text-sm mb-8">Please wait</p>
+                <p className="text-white text-center text-lg mb-4">{t('dashboard.loadingAddress')}</p>
+                <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseWait')}</p>
               </>
             ) : walletAddressError ? (
               <>
-                <p className="text-white text-center text-lg mb-4">Unable to load Bitcoin address</p>
+                <p className="text-white text-center text-lg mb-4">{t('dashboard.unableToLoadAddress')}</p>
                 <p className="text-white/60 text-center text-sm mb-4">{walletAddressError.message}</p>
-                <p className="text-white/60 text-center text-sm mb-8">Please try again later</p>
+                <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseRetryLater')}</p>
               </>
             ) : (
               <>
-                <p className="text-white text-center text-lg mb-4">Unable to load Bitcoin address</p>
-                <p className="text-white/60 text-center text-sm mb-8">Please try again later</p>
+                <p className="text-white text-center text-lg mb-4">{t('dashboard.unableToLoadAddress')}</p>
+                <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseRetryLater')}</p>
               </>
             )}
             <button
               onClick={() => setShowAddFundsModal(false)}
               className="h-16 border-2 border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center px-8"
             >
-              <span className="font-bold text-base text-white/80 tracking-[0.15px]">Close</span>
+              <span className="font-bold text-base text-white/80 tracking-[0.15px]">{t('common.close')}</span>
             </button>
           </div>
         )
@@ -638,7 +644,7 @@ export default function WalletDashboard() {
                        className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
                      >
                        <img src="/assets/currency.svg" alt="" className="size-5 shrink-0 opacity-80" />
-                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">Currency</span>
+                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.currency')}</span>
                      </button>
 
                      {/* Language */}
@@ -647,7 +653,7 @@ export default function WalletDashboard() {
                        className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
                      >
                        <img src="/assets/language.svg" alt="" className="size-5 shrink-0 opacity-80" />
-                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">Language</span>
+                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.language')}</span>
                      </button>
 
                      <div className="w-full border-t border-white/30 shrink-0" />
@@ -658,7 +664,7 @@ export default function WalletDashboard() {
                        className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
                      >
                        <img src="/assets/logout.svg" alt="" className="size-5 shrink-0 opacity-80" />
-                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">Sign Out</span>
+                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.signOut')}</span>
                      </button>
 
                      <div className="w-full border-t border-white/30 shrink-0" />
@@ -666,7 +672,7 @@ export default function WalletDashboard() {
                      {/* Principal ID + blurb */}
                      {currentPrincipal && (
                        <div className="flex flex-col gap-3">
-                         <p className="text-white/60 text-xs font-medium">Your Principal ID</p>
+                         <p className="text-white/60 text-xs font-medium">{t('menu.yourPrincipalId')}</p>
                          <div
                            onClick={async () => {
                              try {
@@ -674,7 +680,7 @@ export default function WalletDashboard() {
                                setPrincipalCopied(true);
                                setTimeout(() => setPrincipalCopied(false), 2000);
                              } catch {
-                               toast.error('Failed to copy');
+                               toast.error(t('common.failedToCopy'));
                              }
                            }}
                            className="bg-zinc-900/90 p-3 cursor-pointer flex items-center justify-center relative"
@@ -684,12 +690,12 @@ export default function WalletDashboard() {
                            </p>
                            {principalCopied && (
                              <p className="absolute inset-0 flex items-center justify-center bg-zinc-900/90 text-white/80 font-sans text-sm font-medium">
-                               Copied!
+                               {t('common.copied')}
                              </p>
                            )}
                          </div>
 <p className="text-white/50 text-xs leading-relaxed">
-                          MOTO is 100% decentralized and on-chain. App settings are stored in your private canister and all financial data is stored on ledger.
+                          {t('menu.motoDescription')}
                         </p>
                        </div>
                      )}
@@ -707,7 +713,7 @@ export default function WalletDashboard() {
                          style={{ filter: 'brightness(0) saturate(100%) invert(27%) sepia(98%) saturate(1000%) hue-rotate(346deg) brightness(104%) contrast(97%)' }}
                        />
                        <span className="font-medium text-base text-red-500 tracking-[0.8px]">
-                         {signOutAndReset.isPending ? 'Wiping...' : 'Wipe Canister & Sign Out'}
+                         {signOutAndReset.isPending ? t('menu.wiping') : t('menu.wipeCanister')}
                        </span>
                      </button>
 
@@ -750,15 +756,15 @@ export default function WalletDashboard() {
       <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reset Onboarding?</AlertDialogTitle>
+            <AlertDialogTitle>{t('menu.resetOnboardingTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will reset your onboarding state and you'll see the first-time user experience again on your next login. You will be signed out after the reset.
+              {t('menu.resetOnboardingDesc')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleResetOnboarding} disabled={resetOnboarding.isPending}>
-              {resetOnboarding.isPending ? 'Resetting...' : 'Reset Onboarding'}
+              {resetOnboarding.isPending ? t('menu.resetting') : t('menu.resetOnboarding')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

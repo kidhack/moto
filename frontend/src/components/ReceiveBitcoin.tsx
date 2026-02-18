@@ -5,11 +5,14 @@ import { useScreenTransitionGuard } from '../hooks/useScreenTransitionGuard';
 import { vibrateLight } from '../utils/haptics';
 import { SlideFromRight } from './SlideFromRight';
 import SetAmount from './SetAmount';
-import { useBTCPrice, isPriceStale } from '../hooks/useQueries';
+import { useBTCPrice, isPriceStale, getBTCPriceInCurrency } from '../hooks/useQueries';
+import { formatFiatCompact } from '../data/currencies';
+import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import StalePriceIndicator from './StalePriceIndicator';
 import { useActor } from '../hooks/useActor';
 import { isValidBitcoinAddress, isBech32AddressForStorage } from '../utils/addressValidation';
 import BackCloseButton from './BackCloseButton';
+import { useTranslation } from '../i18n';
 
 interface ReceiveBitcoinProps {
   address: string;
@@ -18,15 +21,17 @@ interface ReceiveBitcoinProps {
 
 export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps) {
   const [amount, setAmount] = useState<string>('');
+  const { t } = useTranslation();
   const [showSetAmount, setShowSetAmount] = useState(false);
   const { data: btcPriceData } = useBTCPrice();
+  const { preferredCurrency } = usePreferredCurrency();
   const { actor } = useActor();
 
   // Validate address is real - NEVER display fake addresses
   useEffect(() => {
     if (address && !isValidBitcoinAddress(address)) {
       console.error('ReceiveBitcoin: Invalid Bitcoin address detected:', address);
-      toast.error('Invalid Bitcoin address. Please try again.');
+      toast.error(t('receive.invalidAddress'));
       if (onClose) {
         onClose();
       }
@@ -47,13 +52,13 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
   if (!address || !isValidBitcoinAddress(address)) {
     return (
       <div className="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center px-5">
-        <p className="text-white text-center text-lg mb-4">Unable to load Bitcoin address</p>
-        <p className="text-white/60 text-center text-sm mb-8">Please try again later</p>
+        <p className="text-white text-center text-lg mb-4">{t('receive.unableToLoadAddress')}</p>
+        <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseRetryLater')}</p>
         <button
           onClick={onClose}
           className="h-16 border-2 border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center px-8"
         >
-          <span className="font-bold text-base text-white/80 tracking-[0.15px]">Close</span>
+          <span className="font-bold text-base text-white/80 tracking-[0.15px]">{t('common.close')}</span>
         </button>
       </div>
     );
@@ -62,7 +67,7 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
   // Store both amount and currency to properly display and convert
   const [amountCurrency, setAmountCurrency] = useState<string>('BTC');
 
-  const BTC_PRICE_USD = btcPriceData?.usd ?? 101799;
+  const BTC_PRICE_FIAT = getBTCPriceInCurrency(btcPriceData, preferredCurrency);
   const priceIsStale = isPriceStale(btcPriceData);
 
   // Convert amount to BTC for QR code (if amount is in SATS or fiat, convert to BTC)
@@ -77,7 +82,7 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
     } else {
       // For fiat currencies, convert to BTC using live price
       const fiatAmount = parseFloat(amountValue.replace(/,/g, ''));
-      const btc = fiatAmount / BTC_PRICE_USD;
+      const btc = fiatAmount / getBTCPriceInCurrency(btcPriceData, currency);
       return btc.toString();
     }
   };
@@ -119,14 +124,14 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
       setTimeout(() => setAddressCopied(false), 2000);
     } catch (error) {
       console.error('Failed to copy:', error);
-      toast.error('Failed to copy to clipboard');
+      toast.error(t('common.failedToCopyClipboard'));
     }
   };
 
   const shareAddress = async () => {
     const currencyLabel = amountCurrency === 'BTC' ? 'BTC' : amountCurrency === 'SATS' ? 'sats' : amountCurrency;
     const amountText = amount ? `${amount} ${currencyLabel} ` : '';
-    const text = `MOTO user requests ${amountText}sent to ${address}`;
+    const text = t('receive.shareRequest', { amount: amountText, address });
 
     if (navigator.share) {
       try {
@@ -138,9 +143,9 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
       try {
         await navigator.clipboard.writeText(text);
         vibrateLight();
-        toast.success('Copied to clipboard');
+        toast.success(t('common.copiedToClipboard'));
       } catch {
-        toast.error('Failed to copy to clipboard');
+        toast.error(t('common.failedToCopyClipboard'));
       }
     }
   };
@@ -167,7 +172,7 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
         <header className="flex items-center justify-between h-8 shrink-0 px-5">
           <BackCloseButton onClose={() => onClose?.()} />
           <p className="font-medium text-xl text-white tracking-[-0.22px]">
-            Receive Bitcoin
+            {t('receive.header')}
           </p>
           <div className="h-8 w-8" /> {/* Empty space for symmetry */}
         </header>
@@ -199,7 +204,7 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
               </p>
               {addressCopied && (
                 <p className="absolute inset-0 flex items-center justify-center bg-zinc-900/90 text-white/80 font-sans text-base font-medium" style={{ letterSpacing: '0.32px' }}>
-                  Copied!
+                  {t('common.copied')}
                 </p>
               )}
             </button>
@@ -214,7 +219,7 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
       >
         <div className="flex flex-col pt-4 pb-4 gap-2">
           <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1 pb-1" style={{ letterSpacing: '0.15px' }}>
-            1 BTC ≈ ${BTC_PRICE_USD.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+            {t('price.btcApprox', { price: formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) })}
             <StalePriceIndicator isStale={priceIsStale} />
           </p>
           {amount ? (
@@ -232,7 +237,7 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
                 disabled={isGuardDisabled}
                 className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors px-8 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span className="font-bold text-base text-white/80 tracking-[0.15px]">Edit</span>
+                <span className="font-bold text-base text-white/80 tracking-[0.15px]">{t('receive.edit')}</span>
               </button>
             </div>
           ) : (
@@ -241,7 +246,7 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
               disabled={isGuardDisabled}
               className="h-16 border-2 border-white/40 bg-transparent flex items-center justify-center hover:border-white/60 transition-colors w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span className="font-bold text-base text-white/80 tracking-[0.15px]">Set Amount</span>
+              <span className="font-bold text-base text-white/80 tracking-[0.15px]">{t('receive.setAmount')}</span>
             </button>
           )}
           <button
@@ -249,7 +254,7 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
             disabled={isGuardDisabled}
             className="h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors w-full disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span className="font-bold text-base text-white/80 tracking-[0.15px]">Share</span>
+            <span className="font-bold text-base text-white/80 tracking-[0.15px]">{t('receive.share')}</span>
           </button>
         </div>
       </div>

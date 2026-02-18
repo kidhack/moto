@@ -1,6 +1,7 @@
 import { CURRENCIES } from '../data/currencies';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import BackCloseButton from './BackCloseButton';
+import { useTranslation } from '../i18n';
 
 interface CurrencySelectorProps {
   onClose: () => void;
@@ -9,6 +10,7 @@ interface CurrencySelectorProps {
 
 export default function CurrencySelector({ onClose, embedded }: CurrencySelectorProps) {
   const { preferredCurrency, setPreferredCurrency } = usePreferredCurrency();
+  const { t } = useTranslation();
 
   const handleSelectCurrency = (code: string) => {
     setPreferredCurrency(code);
@@ -25,7 +27,7 @@ export default function CurrencySelector({ onClose, embedded }: CurrencySelector
         <header className="flex items-center justify-between h-8 shrink-0 px-5">
           <BackCloseButton onClose={onClose} />
           <p className="font-medium text-xl text-white tracking-[-0.22px]">
-            Currency
+            {t('currencySelector.header')}
           </p>
           <div className="h-8 w-8" /> {/* Empty space for symmetry */}
         </header>

@@ -14,20 +14,29 @@ import { isValidBitcoinAddress, isBech32AddressForStorage } from '../utils/addre
 import { checkPendingDeposits } from '../utils/bitcoinTestnetChecker';
 
 export interface BTCPriceData {
+  /** BTC price in each fiat currency, keyed by lowercase CoinGecko code (e.g. 'usd', 'eur') */
+  prices: Record<string, number>;
+  /** Convenience accessor — always returns the USD price (or fallback) */
   usd: number;
   lastUpdated: number;
 }
 
-const BTC_PRICE_STORAGE_KEY = 'moto_btc_price';
+const BTC_PRICE_STORAGE_KEY = 'moto_btc_price_v2';
 const STALE_PRICE_THRESHOLD_SEC = 5 * 60; // 5 min
 
 function getStoredBtcPrice(): BTCPriceData | null {
   try {
     const raw = localStorage.getItem(BTC_PRICE_STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { usd?: number; lastUpdated?: number };
+    const parsed = JSON.parse(raw);
+    if (parsed?.prices && typeof parsed.prices === 'object' && typeof parsed.lastUpdated === 'number') {
+      return { prices: parsed.prices, usd: parsed.prices.usd ?? FALLBACK_BTC_USD, lastUpdated: parsed.lastUpdated };
+    }
+    // Migrate from old v1 format { usd, lastUpdated }
     if (typeof parsed?.usd === 'number' && typeof parsed?.lastUpdated === 'number') {
-      return { usd: parsed.usd, lastUpdated: parsed.lastUpdated };
+      const migrated: BTCPriceData = { prices: { usd: parsed.usd }, usd: parsed.usd, lastUpdated: parsed.lastUpdated };
+      setStoredBtcPrice(migrated);
+      return migrated;
     }
   } catch {
     // ignore
@@ -37,7 +46,7 @@ function getStoredBtcPrice(): BTCPriceData | null {
 
 function setStoredBtcPrice(data: BTCPriceData): void {
   try {
-    localStorage.setItem(BTC_PRICE_STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(BTC_PRICE_STORAGE_KEY, JSON.stringify({ prices: data.prices, lastUpdated: data.lastUpdated }));
   } catch {
     // ignore
   }
@@ -711,8 +720,14 @@ export function useRetrieveBtc() {
 
 const FALLBACK_BTC_USD = 101799;
 
+import { LIVE_CURRENCY_CG_KEYS } from '../data/currencies';
+
 const COINGECKO_PRICE_URL =
-  'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_last_updated_at=true';
+  `https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=${LIVE_CURRENCY_CG_KEYS.join(',')}&include_last_updated_at=true`;
+
+function makeFallbackPriceData(): BTCPriceData {
+  return { prices: { usd: FALLBACK_BTC_USD }, usd: FALLBACK_BTC_USD, lastUpdated: Date.now() / 1000 };
+}
 
 async function fetchBtcPriceFromUrl(url: string): Promise<BTCPriceData> {
   const response = await fetch(url);
@@ -721,8 +736,15 @@ async function fetchBtcPriceFromUrl(url: string): Promise<BTCPriceData> {
   if (!data.bitcoin || typeof data.bitcoin.usd !== 'number') {
     throw new Error('Invalid response format from CoinGecko API');
   }
+  const prices: Record<string, number> = {};
+  for (const [key, val] of Object.entries(data.bitcoin)) {
+    if (typeof val === 'number' && key !== 'last_updated_at') {
+      prices[key] = val;
+    }
+  }
   return {
-    usd: data.bitcoin.usd,
+    prices,
+    usd: prices.usd ?? FALLBACK_BTC_USD,
     lastUpdated: data.bitcoin.last_updated_at ?? Date.now() / 1000,
   };
 }
@@ -745,16 +767,24 @@ export function useBTCPrice() {
         } catch {
           const stored = getStoredBtcPrice();
           if (stored) return stored;
-          return { usd: FALLBACK_BTC_USD, lastUpdated: Date.now() / 1000 };
+          return makeFallbackPriceData();
         }
       }
     },
-    refetchInterval: 60 * 1000, // 1 min (avoids 429 when CORS works)
-    staleTime: 2 * 60 * 1000, // 2 min
+    refetchInterval: 60 * 1000,
+    staleTime: 2 * 60 * 1000,
     retry: 1,
     retryDelay: 2000,
-    placeholderData: (previousData) => previousData ?? getStoredBtcPrice() ?? { usd: FALLBACK_BTC_USD, lastUpdated: Date.now() / 1000 },
+    placeholderData: (previousData) => previousData ?? getStoredBtcPrice() ?? makeFallbackPriceData(),
   });
+}
+
+/** Get BTC price in a specific fiat currency from the price data. Falls back to USD conversion. */
+export function getBTCPriceInCurrency(priceData: BTCPriceData | undefined, currencyCode: string): number {
+  if (!priceData) return FALLBACK_BTC_USD;
+  const key = currencyCode.toLowerCase();
+  if (priceData.prices[key] != null) return priceData.prices[key];
+  return priceData.usd;
 }
 
 /** BTC price at the time of a transaction. Uses CoinGecko market_chart/range and picks the closest point to the tx timestamp. */

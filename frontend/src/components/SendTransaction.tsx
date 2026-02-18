@@ -5,12 +5,14 @@ import { vibrateLight } from '../utils/haptics';
 import { useRetrieveBtc, useTransferCkBTC, usePrincipalByBitcoinAddress, computeFeeSats } from '../hooks/useQueries';
 import { useQRScanner } from '../qr-code/useQRScanner';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
-import { useBTCPrice, isPriceStale } from '../hooks/useQueries';
+import { useBTCPrice, isPriceStale, getBTCPriceInCurrency } from '../hooks/useQueries';
+import { formatFiatCompact, getCurrencyMeta } from '../data/currencies';
 import StalePriceIndicator from './StalePriceIndicator';
 import BackCloseButton from './BackCloseButton';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { toast } from 'sonner';
 import { isValidBitcoinAddress } from '../utils/addressValidation';
+import { useTranslation } from '../i18n';
 import type { UserWallet } from '../backend';
 
 /** If text is a valid ICP principal, return its string form; otherwise null. */
@@ -63,6 +65,8 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   const [toAddress, setToAddress] = useState('');
   const [amount, setAmount] = useState('');
   const [amountCurrency, setAmountCurrency] = useState<CurrencyMode>('SATS');
+  const { t } = useTranslation();
+  const { preferredCurrency } = usePreferredCurrency();
   const pasteInputRef = useRef<HTMLInputElement>(null);
 
   const ESTIMATED_FEE = BigInt(1000); // 0.00001 BTC network fee estimate (withdraw only)
@@ -86,7 +90,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             : 'btc'
           : null;
   const { data: btcPriceData } = useBTCPrice();
-  const BTC_PRICE_USD = btcPriceData?.usd ?? 101799;
+  const BTC_PRICE_FIAT = getBTCPriceInCurrency(btcPriceData, preferredCurrency);
   const priceIsStale = isPriceStale(btcPriceData);
 
   // Parse current amount input to satoshis (used for fee and balance)
@@ -99,16 +103,16 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     if (amountCurrency === 'SATS') {
       return BigInt(parseInt(cleanAmount, 10) || 0);
     }
-    const btc = parseFloat(cleanAmount) / BTC_PRICE_USD;
+    const btc = parseFloat(cleanAmount) / BTC_PRICE_FIAT;
     return BigInt(Math.floor(btc * 100000000));
   };
   const currentAmountSatoshis = getCurrentAmountSatoshis();
-  const appFeeSats = computeFeeSats(currentAmountSatoshis, BTC_PRICE_USD);
+  const btcPriceUsdForFee = btcPriceData?.usd ?? 101799;
+  const appFeeSats = computeFeeSats(currentAmountSatoshis, btcPriceUsdForFee);
   const effectiveFee = sendMode === 'ckbtc' ? appFeeSats : ESTIMATED_FEE + appFeeSats;
   const isWithdrawPending = retrieveBtc.isPending;
   const isTransferPending = transferCkBTC.isPending;
   const isConfirmPending = isWithdrawPending || isTransferPending;
-  const { preferredCurrency } = usePreferredCurrency();
   const isPrimaryButtonDisabled = useScreenTransitionGuard(500, step);
 
   const qrScanner = useQRScanner({
@@ -226,7 +230,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
       setToAddress(trimmed);
       setStep('amount');
     } else {
-      toast.error('Enter a Bitcoin address or Principal ID');
+      toast.error(t('send.enterAddress'));
     }
   };
 
@@ -286,7 +290,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     } else if (fromCurrency === 'SATS') {
       btcValue = numValue / 100000000;
     } else {
-      btcValue = numValue / BTC_PRICE_USD;
+      btcValue = numValue / getBTCPriceInCurrency(btcPriceData, fromCurrency);
     }
 
     let result: number;
@@ -297,8 +301,9 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
       result = btcValue * 100000000;
       return Math.round(result).toString();
     } else {
-      result = btcValue * BTC_PRICE_USD;
-      return result.toFixed(2).replace(/\.?0+$/, '');
+      result = btcValue * getBTCPriceInCurrency(btcPriceData, toCurrency);
+      const decimals = getCurrencyMeta(toCurrency).decimals;
+      return result.toFixed(decimals).replace(/\.?0+$/, '');
     }
   };
 
@@ -387,7 +392,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   // Handle next to confirmation
   const handleNext = () => {
     if (!amount || amount === '0') {
-      toast.error('Please enter an amount');
+      toast.error(t('send.pleaseEnterAmount'));
       return;
     }
     setStep('confirm');
@@ -422,27 +427,27 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     const { amountSatoshis } = getTransactionDetails();
 
     if (amountSatoshis > wallet.balance) {
-      toast.error('Insufficient balance');
+      toast.error(t('send.insufficientBalance'));
       return;
     }
 
     if (sendMode === 'ckbtc') {
       if (!recipientPrincipal) return;
       if (identity && identity.getPrincipal().toText() === recipientPrincipal) {
-        toast.error("You can't send to yourself");
+        toast.error(t('send.cantSendToYourself'));
         return;
       }
       if (amountSatoshis > wallet.balance) {
-        toast.error('Insufficient balance');
+        toast.error(t('send.insufficientBalance'));
         return;
       }
       try {
         await transferCkBTC.mutateAsync({
           toPrincipal: recipientPrincipal,
           amount: amountSatoshis,
-          btcPriceUsd: BTC_PRICE_USD,
+          btcPriceUsd: btcPriceUsdForFee,
         });
-        toast.success('Sent! Instant transfer to MOTO user.');
+        toast.success(t('send.sentInstant'));
         if (onSuccess) {
           setTimeout(() => onSuccess(), 1000);
         }
@@ -453,23 +458,23 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             ? error.message
             : typeof error === 'object' && error !== null && 'message' in error
               ? String((error as { message: unknown }).message)
-              : 'Transfer failed';
+              : t('send.transferFailed');
         toast.error(message.length > 80 ? message.slice(0, 80) + '…' : message);
       }
       return;
     }
 
     if (amountSatoshis + effectiveFee > wallet.balance) {
-      toast.error('Insufficient balance (including fee)');
+      toast.error(t('send.insufficientBalanceFee'));
       return;
     }
     try {
       await retrieveBtc.mutateAsync({
         toAddress,
         amount: amountSatoshis,
-        btcPriceUsd: BTC_PRICE_USD,
+        btcPriceUsd: btcPriceUsdForFee,
       });
-      toast.success('Withdrawal submitted. Bitcoin will be sent to the address once the network processes it.');
+      toast.success(t('send.withdrawalSubmitted'));
       if (onSuccess) {
         setTimeout(() => onSuccess(), 1000);
       }
@@ -479,9 +484,9 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
           ? error.message
           : typeof error === 'object' && error !== null && 'message' in error
             ? String((error as { message: unknown }).message)
-            : 'Failed to send transaction';
+            : t('send.failedToSend');
       if (message.includes('Insufficient balance')) {
-        message = 'Insufficient balance';
+        message = t('send.insufficientBalance');
       } else if (message.length > 80) {
         const match = message.match(/trap` with message: '([^']+)'/);
         message = match ? match[1] : message.slice(0, 80) + '…';
@@ -506,7 +511,9 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
       return satoshis.toString();
     } else {
       // Fiat currency
-      const fiat = (btc * BTC_PRICE_USD).toFixed(2);
+      const fiatPrice = getBTCPriceInCurrency(btcPriceData, amountCurrency);
+      const decimals = getCurrencyMeta(amountCurrency).decimals;
+      const fiat = (btc * fiatPrice).toFixed(decimals);
       return fiat.replace(/\.?0+$/, '');
     }
   };
@@ -536,7 +543,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
           <header className="flex items-center justify-between h-8 shrink-0 px-5">
             <BackCloseButton onClose={() => onClose?.()} />
             <p className="font-medium text-xl text-white tracking-[-0.22px]">
-              Send Bitcoin
+              {t('send.header')}
             </p>
             <div className="h-8 w-8" />
           </header>
@@ -574,47 +581,47 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                     <>
                       {qrScanner.isLoading ? (
                         <div className="w-full h-full flex items-center justify-center">
-                          <p className="text-white/60 text-sm">Starting camera...</p>
+                          <p className="text-white/60 text-sm">{t('send.startingCamera')}</p>
                         </div>
                       ) : qrScanner.error ? (
                         <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-4">
                           <p className="text-white/60 text-sm text-center">
-                            {(qrScanner.error as any)?.message || 'Camera error. Please allow camera access.'}
+                            {(qrScanner.error as any)?.message || t('send.cameraError')}
                           </p>
                           <button
                             onClick={() => qrScanner.retry()}
                             className="h-12 px-6 border-2 border-white/40 bg-transparent hover:border-white/60 transition-colors"
                           >
-                            <span className="font-bold text-sm text-white/80">Retry</span>
+                            <span className="font-bold text-sm text-white/80">{t('common.retry')}</span>
                           </button>
                         </div>
                       ) : qrScanner.isSupported === false ? (
                         <div className="w-full h-full flex items-center justify-center">
-                          <p className="text-white/60 text-sm text-center">Camera not supported on this device</p>
+                          <p className="text-white/60 text-sm text-center">{t('send.cameraNotSupported')}</p>
                         </div>
                       ) : qrScanner.isSupported === null ? (
                         <div className="w-full h-full flex items-center justify-center">
-                          <p className="text-white/60 text-sm text-center">Checking camera support...</p>
+                          <p className="text-white/60 text-sm text-center">{t('send.checkingCamera')}</p>
                         </div>
                       ) : !qrScanner.jsQRLoaded ? (
                         <div className="w-full h-full flex items-center justify-center">
-                          <p className="text-white/60 text-sm text-center">Loading QR scanner...</p>
+                          <p className="text-white/60 text-sm text-center">{t('send.loadingQR')}</p>
                         </div>
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-4">
-                          <p className="text-white/60 text-sm text-center">Camera not started</p>
+                          <p className="text-white/60 text-sm text-center">{t('send.cameraNotStarted')}</p>
                           <button
                             onClick={async () => {
                               console.log('Manual camera start clicked');
                               const success = await qrScanner.startScanning();
                               console.log('Manual start result:', success, 'isActive:', qrScanner.isActive);
                               if (!success) {
-                                toast.error('Failed to start camera. Please check permissions.');
+                                toast.error(t('send.failedToStartCamera'));
                               }
                             }}
                             className="h-12 px-6 border-2 border-white/40 bg-transparent hover:border-white/60 transition-colors"
                           >
-                            <span className="font-bold text-sm text-white/80">Start Camera</span>
+                            <span className="font-bold text-sm text-white/80">{t('send.startCamera')}</span>
                           </button>
                         </div>
                       )}
@@ -646,7 +653,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
               className="h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors w-full select-none"
               style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
             >
-              <span className="font-bold text-base text-white/80 tracking-[0.15px] pointer-events-none">Paste Address</span>
+              <span className="font-bold text-base text-white/80 tracking-[0.15px] pointer-events-none">{t('send.pasteAddress')}</span>
             </button>
           </div>
         </div>
@@ -662,12 +669,12 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
           <header className="flex items-center justify-between h-8 shrink-0 px-5">
             <BackCloseButton onClose={() => onClose?.()} />
             <p className="font-medium text-xl text-white tracking-[-0.22px]">
-              Set Amount
+              {t('send.setAmount')}
             </p>
             <button
               onClick={cycleCurrency}
               className="h-8 w-8 flex items-center justify-center cursor-pointer opacity-80 transition-opacity hover:opacity-100 active:opacity-100"
-              aria-label="Cycle currency"
+              aria-label={t('send.cycleCurrency')}
             >
               <img 
                 src="/assets/cyclecurrency.svg" 
@@ -697,11 +704,11 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                 className={`font-normal text-sm text-center ${isInsufficient ? 'text-red-400' : 'text-white/60'}`}
                 style={{ letterSpacing: '0.15px' }}
               >
-                {`Remaining balance: ${isInsufficient ? '-' : ''}${formatDisplayAmount(remainingFormatted)} ${getCurrencyLabel()}`}
+                {isInsufficient ? t('send.remainingBalanceNeg', { amount: formatDisplayAmount(remainingFormatted), currency: getCurrencyLabel() }) : t('send.remainingBalance', { amount: formatDisplayAmount(remainingFormatted), currency: getCurrencyLabel() })}
               </p>
               {/* Current market rate when converting currency */}
               <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1" style={{ letterSpacing: '0.15px' }}>
-                1 BTC ≈ ${BTC_PRICE_USD.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                {t('price.btcApprox', { price: formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) })}
                 <StalePriceIndicator isStale={priceIsStale} />
               </p>
             </div>
@@ -715,7 +722,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                   className="w-full h-12 bg-white/10 hover:bg-white/15 transition-colors flex items-center justify-center"
                 >
                   <span className="font-bold text-sm text-white/80 tracking-[0.15px]">
-                    max {formatDisplayAmount(maxSendableFormatted)} {getCurrencyLabel()}
+                    {t('send.max', { amount: formatDisplayAmount(maxSendableFormatted), currency: getCurrencyLabel() })}
                   </span>
                 </button>
 
@@ -794,7 +801,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                 disabled={!amount || amount === '0' || isInsufficient || isPrimaryButtonDisabled}
                 className="h-16 w-full border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span className="font-bold text-base text-white/80 tracking-[0.15px]">Next</span>
+                <span className="font-bold text-base text-white/80 tracking-[0.15px]">{t('send.next')}</span>
               </button>
             </div>
           </div>
@@ -825,7 +832,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             <BackCloseButton onClose={() => onClose?.()} />
           )}
           <p className="font-medium text-xl text-white tracking-[-0.22px]">
-            Confirm Send
+            {t('send.confirmSend')}
           </p>
           {isConfirmPending ? (
             <div className="h-8 w-8" />
@@ -833,7 +840,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             <button
               onClick={cycleCurrency}
               className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity hover:opacity-100"
-              aria-label="Cycle currency"
+              aria-label={t('send.cycleCurrency')}
             >
               <img 
                 src="/assets/cyclecurrency.svg" 
@@ -852,7 +859,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             <div className="h-16 w-12 flex items-center justify-center shrink-0">
               <img 
                 src="/assets/sent.svg" 
-                alt="Send" 
+                alt={t('txDetails.sent')} 
                 className="h-16 w-12 object-contain"
               />
             </div>
@@ -878,11 +885,11 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                 {/* Recipient */}
                 <div className="flex gap-2.5 items-center w-full">
                   <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
-                    Recipient
+                    {t('send.recipient')}
                   </p>
                   <div className="flex-1 flex justify-end text-right">
                     {principalByAddress.isLoading ? (
-                      <p className="font-mono text-base font-medium text-white/60 tracking-[0.32px]">Looking up...</p>
+                      <p className="font-mono text-base font-medium text-white/60 tracking-[0.32px]">{t('send.lookingUp')}</p>
                     ) : (
                       <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px] break-all">
                         {toAddress.length > 20 ? `${toAddress.slice(0, 7)}...${toAddress.slice(-7)}` : toAddress}
@@ -894,15 +901,15 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                 {/* Network */}
                 <div className="flex gap-2.5 items-center w-full">
                   <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
-                    Network
+                    {t('send.network')}
                   </p>
                   <div className="flex-1 flex justify-end">
                     <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
                       {isNetworkResolving
-                        ? 'Checking…'
+                        ? t('send.checking')
                         : sendMode === 'ckbtc'
                           ? 'ckBTC'
-                          : 'Bitcoin'}
+                          : t('send.bitcoin')}
                     </p>
                   </div>
                 </div>
@@ -910,11 +917,11 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                 {/* Estimated time */}
                 <div className="flex gap-2.5 items-center w-full">
                   <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
-                    Estimated time
+                    {t('send.estimatedTime')}
                   </p>
                   <div className="flex-1 flex justify-end">
                     <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
-                      {isNetworkResolving ? '—' : sendMode === 'ckbtc' ? 'Instant' : '~30 min'}
+                      {isNetworkResolving ? '—' : sendMode === 'ckbtc' ? t('send.instant') : t('send.thirtyMin')}
                     </p>
                   </div>
                 </div>
@@ -922,7 +929,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                 {/* Amount (send amount) */}
                 <div className="flex gap-2.5 items-center w-full">
                   <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
-                    Amount
+                    {t('send.amount')}
                   </p>
                   <div className="flex-1 flex justify-end">
                     <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
@@ -934,7 +941,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                 {/* Fee */}
                 <div className="flex gap-2.5 items-center w-full">
                   <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
-                    Fee
+                    {t('send.fee')}
                   </p>
                   <div className="flex-1 flex justify-end">
                     <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
@@ -946,7 +953,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                 {/* Total */}
                 <div className="flex gap-2.5 items-center w-full">
                   <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
-                    Total
+                    {t('send.total')}
                   </p>
                   <div className="flex-1 flex justify-end">
                     <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
@@ -963,7 +970,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                 <button
                   onClick={() => setStep('amount')}
                   className="h-16 w-16 flex items-center justify-center shrink-0 opacity-80 hover:opacity-100 transition-opacity"
-                  aria-label="Back"
+                  aria-label={t('common.back')}
                 >
                   <img 
                     src="/assets/back.svg" 
@@ -980,7 +987,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                 className={`h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isConfirmPending ? 'w-full' : 'flex-1'}`}
               >
                 <span className="font-bold text-base text-white/80 tracking-[0.15px]">
-                  {isConfirmPending ? 'Sending...' : isSelfSend ? "Can't send to yourself" : 'Confirm'}
+                  {isConfirmPending ? t('send.sending') : isSelfSend ? t('send.cantSendToYourself') : t('send.confirm')}
                 </span>
               </button>
             </div>
