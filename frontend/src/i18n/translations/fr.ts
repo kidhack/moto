@@ -26,7 +26,7 @@ const fr: Record<string, string> = {
   'menu.language': 'Langue',
   'menu.signOut': 'Déconnexion',
   'menu.yourPrincipalId': 'Votre Principal ID',
-  'menu.motoDescription': 'MOTO fonctionne entièrement on-chain, propulsé par Internet Computer. Les paramètres sont stockés en toute sécurité dans un canister privé. L\'activité financière est uniquement enregistrée sur la blockchain.',
+  'menu.motoDescription': 'MOTO fonctionne entièrement on-chain, propulsé par Internet Computer.\nLes paramètres sont stockés en toute sécurité dans un canister privé.\nL\'activité financière est uniquement enregistrée sur la blockchain.',
   'menu.wiping': 'Suppression…',
   'menu.wipeCanister': 'Supprimer les données et se déconnecter',
   'menu.signedOut': 'Déconnecté',

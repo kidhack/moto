@@ -26,7 +26,7 @@ const zh: Record<string, string> = {
   'menu.language': '语言',
   'menu.signOut': '退出登录',
   'menu.yourPrincipalId': '您的 Principal ID',
-  'menu.motoDescription': 'MOTO 完全在链上运行，由 Internet Computer 驱动。设置安全存储在私有容器中。财务活动仅记录在区块链上。',
+  'menu.motoDescription': 'MOTO 完全在链上运行，由 Internet Computer 驱动。\n设置安全存储在私有容器中。\n财务活动仅记录在区块链上。',
   'menu.wiping': '删除中…',
   'menu.wipeCanister': '删除数据并退出',
   'menu.signedOut': '已退出登录',

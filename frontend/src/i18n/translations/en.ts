@@ -29,7 +29,7 @@ const en: Record<string, string> = {
   'menu.language': 'Language',
   'menu.signOut': 'Sign Out',
   'menu.yourPrincipalId': 'Your Principal ID',
-  'menu.motoDescription': 'MOTO runs fully on-chain, powered by Internet Computer. Settings are stored securely in a private canister. Financial activity is only recorded on blockchain.',
+  'menu.motoDescription': 'MOTO runs fully on-chain, powered by Internet Computer.\nSettings are stored securely in a private canister.\nFinancial activity is only recorded on blockchain.',
   'menu.wiping': 'Erasing...',
   'menu.wipeCanister': 'Erase Data & Sign Out',
   'menu.signedOut': 'Signed out',

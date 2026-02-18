@@ -704,7 +704,7 @@ export default function WalletDashboard() {
                              </p>
                            )}
                          </div>
-<p className="text-white/50 text-xs leading-relaxed">
+<p className="text-white/50 text-xs leading-relaxed whitespace-pre-line">
                           {t('menu.motoDescription')}
                         </p>
                        </div>
