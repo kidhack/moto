@@ -6,7 +6,6 @@ import Array "mo:base/Array";
 import Time "mo:base/Time";
 import Text "mo:base/Text";
 import Char "mo:base/Char";
-
 persistent actor BitcoinWallet {
   transient let principalMap = OrderedMap.Make<Principal>(Principal.compare);
 
