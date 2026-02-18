@@ -160,7 +160,9 @@ export function useWalletInfo() {
         console.log('useWalletInfo: Fetching wallet info...');
         let wallet: UserWallet | null = null;
         try {
-          wallet = await actor.getWalletInfo();
+          const raw = await actor.getWalletInfo();
+          // Candid opt returns [value] for Some, [] for None in @dfinity/agent
+          wallet = Array.isArray(raw) ? (raw.length > 0 ? raw[0] as UserWallet : null) : (raw ?? null);
         } catch (error) {
           // Wallet might not exist in custom canister yet - that's OK, we can still show balance from ledger
           console.log('useWalletInfo: Wallet not found in custom canister (this is OK if we have ledger balance)');
