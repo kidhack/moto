@@ -44,7 +44,19 @@ Do **not** run `dfx canister create`—that would create new canisters and break
 
 If your existing canisters have different IDs, edit `canister_ids.json` so that the `moto` and `moto_frontend` entries under `"ic"` match your canister IDs.
 
-### Step 3: Build the Canisters
+### Step 3: Build the Frontend (required for frontend changes)
+
+**If you changed frontend code**, you must build it first. `dfx build` only packages whatever is already in `frontend/dist`; it does not run Vite.
+
+From the project root:
+
+```bash
+cd frontend && npm run build && cd ..
+```
+
+This creates/updates `frontend/dist` with your latest React app. Skip this only if you changed **only** the backend.
+
+### Step 4: Build the Canisters
 
 From the project root (the directory containing `dfx.json`):
 
@@ -52,9 +64,9 @@ From the project root (the directory containing `dfx.json`):
 dfx build --network ic
 ```
 
-This builds both `moto` (from `backend/main.mo`) and `moto_frontend` (from `frontend/dist`).
+This builds `moto` (from `backend/main.mo`) and packages `moto_frontend` from the existing `frontend/dist` folder.
 
-### Step 4: Deploy Canisters
+### Step 5: Deploy Canisters
 
 Deploy **only** the MOTO canisters, one at a time (do not deploy `internet_identity` — it's a shared system canister on mainnet):
 
@@ -68,7 +80,7 @@ dfx deploy moto_frontend --network ic
 
 **Note:** Some `dfx` versions accept only one canister per `dfx deploy`; if you get "unexpected argument", run the two commands above separately.
 
-### Step 5: Get Production Canister IDs
+### Step 6: Get Production Canister IDs
 
 After deployment, get the canister IDs:
 
@@ -80,7 +92,7 @@ dfx canister id moto --network ic
 dfx canister id moto_frontend --network ic
 ```
 
-### Step 6: Update Frontend Environment Variables
+### Step 7: Update Frontend Environment Variables
 
 The frontend needs the backend canister ID. Create or update `frontend/.env.production` (using the backend ID from `canister_ids.json`, e.g. `2en3s-2iaaa-aaaad-qhqja-cai`):
 
@@ -99,7 +111,7 @@ EOF
 
 **Note:** If you're accessing the app via the production URL (`.ic0.app` or `.icp0.io`), the app will automatically detect it's on production and use the correct settings.
 
-### Step 7: Redeploy Frontend (if needed)
+### Step 8: Redeploy Frontend (if needed)
 
 If you updated environment variables, rebuild and redeploy the frontend:
 
@@ -108,7 +120,7 @@ cd ..
 dfx deploy moto_frontend --network ic
 ```
 
-### Step 8: Access Your App
+### Step 9: Access Your App
 
 After deployment, you'll see URLs in the output:
 
@@ -148,6 +160,15 @@ Open the frontend URL in your browser to use your app!
    ```
 
 ## Troubleshooting
+
+**Recent frontend changes aren’t showing after deploy:**
+- `dfx build` does **not** run the frontend build; it only packages `frontend/dist`. Run the frontend build first, then dfx:
+  ```bash
+  cd frontend && npm run build && cd ..
+  dfx build --network ic
+  dfx deploy moto --network ic
+  dfx deploy moto_frontend --network ic
+  ```
 
 **"Cannot find canister id" when running `dfx build --network ic`:**
 - Ensure `canister_ids.json` exists at the project root and has `moto` and `moto_frontend` with an `"ic"` entry and your existing canister IDs. Do not create new canisters—that would break production URLs.

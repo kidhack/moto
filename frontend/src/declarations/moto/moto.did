@@ -38,5 +38,7 @@ service : {
   resetOnboarding: () -> ();
   sendTransaction: (toAddress: BitcoinAddress, amount: int) ->
    (TransactionId);
+  setBitcoinAddress: (BitcoinAddress) -> ();
+  getPrincipalByBitcoinAddress: (text) -> (opt principal) query;
   signOutAndReset: () -> ();
 }

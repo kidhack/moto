@@ -187,12 +187,18 @@ export function InternetIdentityProvider({ children }: { children: ReactNode }) 
         identityProvider
       });
 
-      // AuthClient.login() uses callbacks, not a Promise
-      // Wrap it in a Promise to handle errors properly
+      // Canonical origin for principal derivation — ensures the same principal
+      // regardless of whether the user is on the canister URL or a custom domain.
+      const CANONICAL_ORIGIN = 'https://2rkk7-3aaaa-aaaad-qhqkq-cai.icp0.io';
+
+      // Only set derivationOrigin when on mainnet (not local dev)
+      const derivationOrigin = (network !== 'local') ? CANONICAL_ORIGIN : undefined;
+
       return new Promise<void>((resolve, reject) => {
         try {
           authClient.login({
             identityProvider,
+            derivationOrigin,
             onSuccess: async (message) => {
               console.log('Login successful');
               try {

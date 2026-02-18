@@ -191,6 +191,8 @@ persistent actor BitcoinWallet {
   /// Returns the principal whose stored bitcoinAddress equals the given address, or null if none.
   /// Used by the send flow to decide instant ckBTC transfer vs Bitcoin withdrawal.
   /// Bech32 (bc1/tb1) is normalized to lowercase so pasted addresses match.
+  /// Query for fast (~200ms) lookups. The receiver's address is synced via setBitcoinAddress
+  /// well before the sender pastes it, so replica lag is not a practical concern.
   public query func getPrincipalByBitcoinAddress(address : Text) : async ?Principal {
     let normalized = normalizeBech32Address(address);
     for ((principal, wallet) in principalMap.entries(userWallets)) {

@@ -3,7 +3,8 @@ import { toast } from 'sonner';
 import SetAmount from './SetAmount';
 import { useBTCPrice, isPriceStale } from '../hooks/useQueries';
 import StalePriceIndicator from './StalePriceIndicator';
-import { isValidBitcoinAddress } from '../utils/addressValidation';
+import { useActor } from '../hooks/useActor';
+import { isValidBitcoinAddress, isBech32AddressForStorage } from '../utils/addressValidation';
 
 interface ReceiveBitcoinProps {
   address: string;
@@ -14,6 +15,7 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
   const [amount, setAmount] = useState<string>('');
   const [showSetAmount, setShowSetAmount] = useState(false);
   const { data: btcPriceData } = useBTCPrice();
+  const { actor } = useActor();
 
   // Validate address is real - NEVER display fake addresses
   useEffect(() => {
@@ -25,6 +27,16 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
       }
     }
   }, [address, onClose]);
+
+  // Sync this address to the MOTO canister when user opens Receive, so getPrincipalByBitcoinAddress
+  // can resolve it for senders (MOTO-to-MOTO). Uses bech32 check so testnet (tb1) is stored too.
+  useEffect(() => {
+    if (!actor || !address || !isBech32AddressForStorage(address)) return;
+    actor
+      .setBitcoinAddress(address)
+      .then(() => console.log('ReceiveBitcoin: setBitcoinAddress synced for MOTO-to-MOTO'))
+      .catch((err) => console.warn('ReceiveBitcoin: setBitcoinAddress failed (wallet may not exist yet):', err));
+  }, [actor, address]);
 
   // Don't render if address is invalid
   if (!address || !isValidBitcoinAddress(address)) {

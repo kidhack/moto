@@ -10,7 +10,7 @@ import { useCkBTCTransactions } from './useCkBTCTransactions';
 import { useInternetIdentity } from './useInternetIdentity';
 import type { UserWallet, BitcoinAddress, TransactionId, Transaction } from '../backend';
 import { setSessionWithdrawal } from '../lib/sessionWithdrawalStore';
-import { isValidBitcoinAddress } from '../utils/addressValidation';
+import { isValidBitcoinAddress, isBech32AddressForStorage } from '../utils/addressValidation';
 import { checkPendingDeposits } from '../utils/bitcoinTestnetChecker';
 
 export interface BTCPriceData {
@@ -176,9 +176,10 @@ export function useWalletInfo() {
           console.log('useWalletInfo: No balance available from ledger or canister');
         }
         
-        // Sync canister's stored Bitcoin address whenever we have a wallet and real ckBTC address,
-        // so getPrincipalByBitcoinAddress works for other users (even if our balance hasn't loaded yet).
-        if (wallet && ckbtcAddress && isValidBitcoinAddress(ckbtcAddress)) {
+        // Sync canister's stored Bitcoin address whenever we have a wallet and a bech32 ckBTC address,
+        // so getPrincipalByBitcoinAddress works for other users (MOTO-to-MOTO). Use isBech32AddressForStorage
+        // so we store the address for both mainnet (bc1) and testnet (tb1) regardless of VITE_USE_TESTNET.
+        if (wallet && ckbtcAddress && isBech32AddressForStorage(ckbtcAddress)) {
           try {
             await actor.setBitcoinAddress(ckbtcAddress);
           } catch (addrErr) {
@@ -559,28 +560,35 @@ export function usePrincipalByBitcoinAddress(address: string | null) {
     queryKey: ['principalByBitcoinAddress', normalized || ''],
     queryFn: async () => {
       if (!actor || !normalized) return null;
+      console.log('getPrincipalByBitcoinAddress: looking up', normalized.slice(0, 14) + '...');
       try {
-        const principal = await actor.getPrincipalByBitcoinAddress(normalized);
-        if (!principal) return null;
-        // Canister may return Principal (object with toText) or string depending on Candid/agent
+        const raw = await actor.getPrincipalByBitcoinAddress(normalized);
+        console.log('getPrincipalByBitcoinAddress: raw response', raw);
+        // Candid Opt returns [] for None, [value] for Some. Agent may also return null or Principal directly.
+        const principal = Array.isArray(raw) ? (raw.length > 0 ? raw[0] : null) : raw;
+        if (!principal) {
+          console.log('getPrincipalByBitcoinAddress: no MOTO user for this address');
+          return null;
+        }
         const principalText =
           typeof principal === 'string'
             ? principal
-            : typeof (principal as Principal).toText === 'function'
-              ? (principal as Principal).toText()
-              : null;
-        if (principalText) {
-          console.log('getPrincipalByBitcoinAddress: found MOTO user', { address: normalized.slice(0, 12) + '...', principal: principalText });
+            : typeof principal?.toText === 'function'
+              ? principal.toText()
+              : String(principal);
+        if (principalText && principalText !== 'null' && principalText !== 'undefined') {
+          console.log('getPrincipalByBitcoinAddress: found MOTO user →', principalText.slice(0, 10) + '...');
           return principalText;
         }
+        console.log('getPrincipalByBitcoinAddress: could not extract principal text from', principal);
         return null;
       } catch (e) {
-        console.warn('getPrincipalByBitcoinAddress: backend call failed (canister may not have this method yet)', e);
+        console.warn('getPrincipalByBitcoinAddress: backend call failed', e);
         return null;
       }
     },
     enabled: Boolean(actor && normalized.length > 0),
-    staleTime: 60 * 1000, // 1 min cache per address
+    staleTime: 0, // always refetch so we never show stale "Bitcoin" after receiver syncs
   });
 }
 

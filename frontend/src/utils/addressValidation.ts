@@ -66,6 +66,14 @@ export function isValidBitcoinAddress(address: string | null | undefined): boole
   return true;
 }
 
-
-
-
+/**
+ * Accepts any bech32 (bc1/tb1) address that looks valid for storing in the canister.
+ * Use this when deciding whether to call setBitcoinAddress with the ckBTC minter's address,
+ * so MOTO-to-MOTO lookup works for both mainnet and testnet regardless of VITE_USE_TESTNET at build time.
+ * (isValidBitcoinAddress rejects tb1 in mainnet builds, so testnet users' addresses were never stored.)
+ */
+export function isBech32AddressForStorage(address: string | null | undefined): boolean {
+  if (!address || address.length < 26 || address.length > 62) return false;
+  if (address.includes('_')) return false;
+  return /^(bc1|tb1)[a-z0-9]+$/.test(address);
+}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Principal } from '@dfinity/principal';
 import { useRetrieveBtc, useTransferCkBTC, usePrincipalByBitcoinAddress, computeFeeSats } from '../hooks/useQueries';
 import { useQRScanner } from '../qr-code/useQRScanner';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
@@ -13,6 +14,19 @@ import type { UserWallet } from '../backend';
 function shortenPrincipal(principal: string): string {
   if (principal.length <= 20) return principal;
   return `${principal.slice(0, 5)}...${principal.slice(-4)}`;
+}
+
+/** If text is a valid ICP principal, return its string form; otherwise null. */
+function parsePrincipalInput(text: string): string | null {
+  const t = text.trim();
+  if (!t) return null;
+  try {
+    const p = Principal.fromText(t);
+    if (p.toText() === Principal.anonymous().toText()) return null;
+    return p.toText();
+  } catch {
+    return null;
+  }
 }
 
 interface SendTransactionProps {
@@ -60,14 +74,21 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   const retrieveBtc = useRetrieveBtc();
   const transferCkBTC = useTransferCkBTC();
   const { identity } = useInternetIdentity();
-  const principalByAddress = usePrincipalByBitcoinAddress(toAddress.trim() || null);
-  const recipientPrincipal = principalByAddress.data ?? null;
+  const input = toAddress.trim();
+  const pastedPrincipal = parsePrincipalInput(input);
+  const addressForLookup = input && !pastedPrincipal ? input : null;
+  const principalByAddress = usePrincipalByBitcoinAddress(addressForLookup);
+  const recipientPrincipal = pastedPrincipal ?? principalByAddress.data ?? null;
   const sendMode: 'ckbtc' | 'btc' | null =
-    toAddress.trim() && principalByAddress.data !== undefined
-      ? recipientPrincipal
+    !input
+      ? null
+      : pastedPrincipal
         ? 'ckbtc'
-        : 'btc'
-      : null;
+        : principalByAddress.data !== undefined
+          ? recipientPrincipal
+            ? 'ckbtc'
+            : 'btc'
+          : null;
   const { data: btcPriceData } = useBTCPrice();
   const BTC_PRICE_USD = btcPriceData?.usd ?? 101799;
   const priceIsStale = isPriceStale(btcPriceData);
@@ -186,14 +207,17 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     qrScanner.isLoading,
   ]);
 
-  // Handle address detection and validation
+  // Handle address or principal detection (paste / QR)
   const handleAddressDetected = (address: string) => {
     const trimmed = address.trim();
-    if (isValidBitcoinAddress(trimmed)) {
+    if (parsePrincipalInput(trimmed)) {
+      setToAddress(trimmed);
+      setStep('amount');
+    } else if (isValidBitcoinAddress(trimmed)) {
       setToAddress(trimmed);
       setStep('amount');
     } else {
-      toast.error('Invalid Bitcoin address');
+      toast.error('Enter a Bitcoin address or Principal ID');
     }
   };
 
@@ -232,21 +256,17 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
       const pastedText = e.clipboardData?.getData('text');
       if (pastedText) {
         const trimmed = pastedText.trim();
-        if (isValidBitcoinAddress(trimmed)) {
+        if (parsePrincipalInput(trimmed) || isValidBitcoinAddress(trimmed)) {
           setToAddress(trimmed);
           setStep('amount');
         } else {
-          toast.error('Invalid Bitcoin address');
+          toast.error('Enter a Bitcoin address or Principal ID');
         }
       }
     };
 
-    // Add paste listener to document
     document.addEventListener('paste', handleGlobalPaste);
-    
-    return () => {
-      document.removeEventListener('paste', handleGlobalPaste);
-    };
+    return () => document.removeEventListener('paste', handleGlobalPaste);
   }, [step]);
 
   // Convert amount between currencies (same logic as SetAmount)
@@ -798,12 +818,13 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   // CONFIRMATION STEP
   const isSelfSend = Boolean(sendMode === 'ckbtc' && identity && recipientPrincipal === identity.getPrincipal().toText());
   const isNetworkResolving = Boolean(toAddress.trim() && sendMode === null);
-  const confirmDisabled =
+  const confirmDisabled = Boolean(
     isConfirmPending ||
     isInsufficient ||
     isSelfSend ||
     (sendMode === 'ckbtc' && principalByAddress.isLoading) ||
-    (toAddress.trim() && sendMode === null);
+    (toAddress.trim() && sendMode === null)
+  );
 
   return (
     <div className="fixed inset-0 bg-black z-[9999] flex flex-col">
@@ -886,11 +907,6 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                   <div className="flex-1 flex justify-end text-right">
                     {principalByAddress.isLoading ? (
                       <p className="font-mono text-base font-medium text-white/60 tracking-[0.32px]">Looking up...</p>
-                    ) : sendMode === 'ckbtc' && recipientPrincipal ? (
-                      <p className="font-mono text-base font-medium text-white tracking-[0.32px]">
-                        MOTO user (instant)
-                        <span className="block text-white/70 text-sm mt-0.5">{shortenPrincipal(recipientPrincipal)}</span>
-                      </p>
                     ) : (
                       <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px] break-all">
                         {toAddress.length > 20 ? `${toAddress.slice(0, 7)}...${toAddress.slice(-7)}` : toAddress}
@@ -909,7 +925,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                       {isNetworkResolving
                         ? 'Checking…'
                         : sendMode === 'ckbtc'
-                          ? 'Instant (IC)'
+                          ? 'ckBTC'
                           : 'Bitcoin'}
                     </p>
                   </div>

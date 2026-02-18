@@ -4,6 +4,7 @@ import { useActor } from '../hooks/useActor';
 import { useWalletInfo, useEnsureWallet, useResetOnboarding, useSignOutAndReset, useWalletAddress } from '../hooks/useQueries';
 import { useCkBTCMinter } from '../hooks/useCkBTCMinter';
 import { useCkBTCLedger } from '../hooks/useCkBTCLedger';
+import { isBech32AddressForStorage } from '../utils/addressValidation';
 import { useCkBTCTransactions } from '../hooks/useCkBTCTransactions';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import type { Transaction } from '../backend';
@@ -119,16 +120,30 @@ export default function WalletDashboard() {
   }, [menuOpen, currentPrincipal]);
 
   // Ensure wallet exists in the canister so we can store this user's Bitcoin address for MOTO-to-MOTO lookup.
-  // Must run even when walletInfo is already populated, because walletInfo can come from ledger-only data
-  // (useWalletInfo returns a synthetic wallet when we have ckbtcAddress but no canister wallet yet).
-  // If we only ran when !walletInfo, the receiver would never get a canister wallet or setBitcoinAddress,
-  // so getPrincipalByBitcoinAddress would never find them and send would default to BTC instead of ckBTC.
+  // Do NOT wait for isCkbtcFetching: the minter can be slow; we need the canister wallet to exist first.
   useEffect(() => {
-    if (!actor || isCkbtcFetching) return;
+    if (!actor) return;
     if (!ensureWallet.isPending && !ensureWallet.isSuccess) {
       ensureWallet.mutate();
     }
-  }, [actor, isCkbtcFetching, ensureWallet]);
+  }, [actor, ensureWallet]);
+
+  // Explicitly sync this user's ckBTC address to the canister as soon as we have both wallet and address.
+  // This guarantees getPrincipalByBitcoinAddress can resolve our address for senders (MOTO-to-MOTO),
+  // independent of useWalletInfo query timing.
+  useEffect(() => {
+    if (!actor || !ensureWallet.isSuccess || !ckbtcAddress || !isBech32AddressForStorage(ckbtcAddress)) return;
+    let cancelled = false;
+    actor
+      .setBitcoinAddress(ckbtcAddress)
+      .then(() => {
+        if (!cancelled) console.log('WalletDashboard: setBitcoinAddress synced for MOTO-to-MOTO', ckbtcAddress.slice(0, 12) + '...');
+      })
+      .catch((err) => {
+        if (!cancelled) console.warn('WalletDashboard: setBitcoinAddress failed:', err);
+      });
+    return () => { cancelled = true; };
+  }, [actor, ensureWallet.isSuccess, ckbtcAddress]);
 
   const handleResetOnboarding = async () => {
     try {
@@ -353,7 +368,7 @@ export default function WalletDashboard() {
               ))}
               <div className="h-[1px] w-full bg-white/50" />
             </div>
-          ) : displayTransactions.length > 0 ? (
+          ) : displayTransactions.length > 0 && walletAddressForTx ? (
             <>
               {[...displayTransactions]
                 .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
@@ -408,13 +423,13 @@ export default function WalletDashboard() {
           onClick={() => setShowSendModal(true)}
           className="flex-1 h-16 border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center opacity-80 hover:opacity-100"
         >
-          <img src="/assets/sent.svg" alt="Send" className="h-8 w-8" />
+          <span className="font-bold text-base text-white/80 tracking-[0.15px]">Send</span>
         </button>
         <button
           onClick={() => setShowReceiveModal(true)}
           className="flex-1 h-16 border-2 border-white/80 bg-transparent hover:border-white transition-colors flex items-center justify-center opacity-80 hover:opacity-100"
         >
-          <img src="/assets/recieved.svg" alt="Receive" className="h-8 w-8" />
+          <span className="font-bold text-base text-white/80 tracking-[0.15px]">Receive</span>
         </button>
         </div>
       </div>
@@ -634,7 +649,7 @@ export default function WalletDashboard() {
                    {/* Close button - bottom, full width */}
                    <button
                      onClick={() => setMenuOpen(false)}
-                     className="w-full h-14 mt-6 border border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center shrink-0"
+                     className="w-full h-16 mt-6 border border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center shrink-0"
                    >
                      <span className="font-bold text-base text-white/80 tracking-[0.15px]">Close</span>
                    </button>
