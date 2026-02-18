@@ -30,8 +30,8 @@ export default function LoginPage() {
       {/* Text block: bottom-aligned, same width as button */}
       <div className="flex-1 flex items-end justify-center w-full px-5 min-h-0">
         <div
-          className="w-full text-left py-4"
-          style={{ letterSpacing: '-0.22px', width: '372px', maxWidth: '100%', fontSize: '1.2rem' }}
+          className="w-full text-left p-8"
+          style={{ letterSpacing: '-0.22px', width: '372px', maxWidth: '100%', fontSize: '1.1rem' }}
         >
           <p className="font-medium text-white leading-normal">
             Welcome to MOTO,
@@ -40,11 +40,11 @@ export default function LoginPage() {
           </p>
           <div className="my-5 sm:my-6 h-px w-full bg-white/30" aria-hidden />
           <p className="leading-relaxed text-white/80">
-            Like a cash wallet, use MOTO for everyday transactions, not your life savings.
+            Use for everyday transactions, not your life savings.
           </p>
           <div className="my-5 sm:my-6 h-px w-full bg-white/30" aria-hidden />
           <p className="leading-relaxed text-white/80">
-            MOTO to MOTO transactions are instant and powered by ckBTC.
+            MOTO to MOTO transfers are instant and powered by ckBTC.
           </p>
         </div>
       </div>
