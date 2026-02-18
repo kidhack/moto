@@ -26,7 +26,7 @@ const hi: Record<string, string> = {
   'menu.language': 'भाषा',
   'menu.signOut': 'साइन आउट',
   'menu.yourPrincipalId': 'आपका Principal ID',
-  'menu.motoDescription': 'MOTO पूरी तरह से विकेंद्रीकृत और ऑन-चेन है। सेटिंग्स डेटा एक निजी कैनिस्टर में संग्रहीत है। सभी वित्तीय डेटा लेजर पर संग्रहीत है।',
+  'menu.motoDescription': 'MOTO पूरी तरह से ऑन-चेन चलता है, Internet Computer द्वारा संचालित। सेटिंग्स एक निजी कैनिस्टर में सुरक्षित रूप से संग्रहीत हैं। वित्तीय गतिविधि केवल ब्लॉकचेन पर दर्ज होती है।',
   'menu.wiping': 'मिटाया जा रहा है…',
   'menu.wipeCanister': 'डेटा मिटाएं और साइन आउट',
   'menu.signedOut': 'साइन आउट हो गया',
