@@ -24,6 +24,7 @@ import SendTransaction from '../components/SendTransaction';
 import ReceiveBitcoin from '../components/ReceiveBitcoin';
 import CurrencySelector from '../components/CurrencySelector';
 import LanguageSelector from '../components/LanguageSelector';
+import FAQPage from '../components/FAQPage';
 import TransactionDetails from '../components/TransactionDetails';
 import { SlideFromRight } from '../components/SlideFromRight';
 import { useBackButton } from '../hooks/useBackButton';
@@ -84,6 +85,7 @@ export default function WalletDashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showCurrencySelector, setShowCurrencySelector] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
+  const [showFAQ, setShowFAQ] = useState(false);
   const [settingsExiting, setSettingsExiting] = useState(false);
   const [principalCopied, setPrincipalCopied] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
@@ -94,6 +96,7 @@ export default function WalletDashboard() {
   useBackButton(showReceiveModal, () => setShowReceiveModal(false));
   useBackButton(showAddFundsModal, () => setShowAddFundsModal(false));
   useBackButton(menuOpen, () => { setMenuClosing(true); });
+  useBackButton(showFAQ, () => setShowFAQ(false));
   useBackButton(selectedTransaction !== null, () => setSelectedTransaction(null));
 
   const DEFAULT_WALLET_NAME = "Nakamoto's Wallet";
@@ -525,6 +528,13 @@ export default function WalletDashboard() {
         )
       )}
 
+      {/* FAQ Modal */}
+      {showFAQ && (
+        <SlideFromRight open={showFAQ} onClose={() => setShowFAQ(false)}>
+          <FAQPage onClose={() => setShowFAQ(false)} />
+        </SlideFromRight>
+      )}
+
       {/* Add Funds Modal (same as Receive) - slide from right */}
       {showAddFundsModal && (
         walletAddress ? (
@@ -666,6 +676,17 @@ export default function WalletDashboard() {
                        <img src="/assets/language.svg" alt="" className="size-5 shrink-0 opacity-80" />
                        <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.language')}</span>
                        <span className="ml-auto font-medium text-base text-white/50 tracking-[0.8px]">{languageName}</span>
+                     </button>
+
+                     {/* FAQ */}
+                     <button
+                       onClick={() => { setMenuClosing(true); setShowFAQ(true); }}
+                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
+                     >
+                       <svg className="size-5 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                         <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                       </svg>
+                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.faq')}</span>
                      </button>
 
                      <div className="w-full border-t border-white/30 shrink-0" />

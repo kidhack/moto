@@ -251,6 +251,146 @@ function convertICRC1TransactionToAppTransaction(
 }
 
 const BLOCKSTREAM_API = USE_TESTNET ? 'https://blockstream.info/testnet/api' : 'https://blockstream.info/api';
+const MEMPOOL_API = USE_TESTNET ? 'https://mempool.space/testnet/api' : 'https://mempool.space/api';
+
+const TX_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const TX_CACHE_KEY_PREFIX = 'moto_btc_tx_';
+
+interface BitcoinTxData {
+  vin?: Array<{ prevout?: { scriptpubkey_address?: string } }>;
+  vout?: Array<{ scriptpubkey_address?: string }>;
+}
+
+function getFirstInputAddress(tx: BitcoinTxData): string | undefined {
+  const first = tx.vin?.[0]?.prevout;
+  return first?.scriptpubkey_address;
+}
+
+function getFirstOutputAddress(tx: BitcoinTxData): string | undefined {
+  const vouts = tx.vout ?? [];
+  for (const v of vouts) {
+    if (v.scriptpubkey_address) return v.scriptpubkey_address;
+  }
+  return undefined;
+}
+
+function getPrimaryIndexer(): 'blockstream' | 'mempool' {
+  try {
+    const key = 'moto_primary_indexer';
+    let primary = sessionStorage.getItem(key) as 'blockstream' | 'mempool' | null;
+    if (!primary || (primary !== 'blockstream' && primary !== 'mempool')) {
+      primary = Math.random() < 0.5 ? 'blockstream' : 'mempool';
+      sessionStorage.setItem(key, primary);
+    }
+    return primary;
+  } catch {
+    return Math.random() < 0.5 ? 'blockstream' : 'mempool';
+  }
+}
+
+const txCache = new Map<string, { data: BitcoinTxData; ts: number }>();
+
+function getCachedTx(txidHex: string): BitcoinTxData | null {
+  let entry = txCache.get(txidHex);
+  if (!entry) {
+    try {
+      const raw = localStorage.getItem(TX_CACHE_KEY_PREFIX + txidHex);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.data && parsed?.ts && Date.now() - parsed.ts < TX_CACHE_TTL_MS) {
+          entry = { data: parsed.data, ts: parsed.ts };
+          txCache.set(txidHex, entry);
+          return entry.data;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+  if (Date.now() - entry.ts > TX_CACHE_TTL_MS) {
+    txCache.delete(txidHex);
+    try {
+      localStorage.removeItem(TX_CACHE_KEY_PREFIX + txidHex);
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+  return entry.data;
+}
+
+function setCachedTx(txidHex: string, data: BitcoinTxData): void {
+  txCache.set(txidHex, { data, ts: Date.now() });
+  try {
+    localStorage.setItem(TX_CACHE_KEY_PREFIX + txidHex, JSON.stringify({ data, ts: Date.now() }));
+  } catch {
+    // ignore
+  }
+}
+
+async function fetchFromIndexer(
+  txidHex: string,
+  baseUrl: string,
+  retries = 2
+): Promise<BitcoinTxData | null> {
+  const url = `${baseUrl}/tx/${txidHex}`;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data?.vin || data?.vout) return data as BitcoinTxData;
+      return null;
+    } catch {
+      if (i < retries) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+    }
+  }
+  return null;
+}
+
+const indexerListeners = new Set<() => void>();
+let lastIndexerUsed: 'blockstream' | 'mempool' | null = null;
+
+function setIndexerUsed(source: 'blockstream' | 'mempool'): void {
+  lastIndexerUsed = source;
+  indexerListeners.forEach((l) => l());
+}
+
+export function useIndexerUsed(): 'blockstream' | 'mempool' | null {
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    const listener = () => forceUpdate((n) => n + 1);
+    indexerListeners.add(listener);
+    return () => {
+      indexerListeners.delete(listener);
+    };
+  }, []);
+  return lastIndexerUsed;
+}
+
+async function fetchBitcoinTx(txidHex: string): Promise<BitcoinTxData | null> {
+  const cached = getCachedTx(txidHex);
+  if (cached) return cached;
+
+  const primary = getPrimaryIndexer();
+  const first = primary === 'blockstream' ? BLOCKSTREAM_API : MEMPOOL_API;
+  const second = primary === 'blockstream' ? MEMPOOL_API : BLOCKSTREAM_API;
+
+  let data = await fetchFromIndexer(txidHex, first);
+  if (data) {
+    setCachedTx(txidHex, data);
+    setIndexerUsed(primary);
+    return data;
+  }
+  data = await fetchFromIndexer(txidHex, second);
+  if (data) {
+    setCachedTx(txidHex, data);
+    setIndexerUsed(primary === 'blockstream' ? 'mempool' : 'blockstream');
+    return data;
+  }
+  return null;
+}
 
 function mergeFeeIntoParent(transactions: Transaction[]): Transaction[] {
   if (!FEE_TREASURY_PRINCIPAL || transactions.length === 0) return transactions;
@@ -307,7 +447,7 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
   const resolvedTxIdsRef = useRef<Set<string>>(new Set());
   const resolvedBurnTxIdsRef = useRef<Set<string>>(new Set());
   const resolvedBurnStatusRef = useRef<Set<string>>(new Set());
-  const failedBlockstreamTxIdsRef = useRef<Set<string>>(new Set());
+  const failedTxIdsRef = useRef<Set<string>>(new Set());
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -341,15 +481,13 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
           const arr = Array.from(txidBytes as Uint8Array);
           if (arr.length !== 32) continue;
           const txidHex = arr.reverse().map(b => b.toString(16).padStart(2, '0')).join('');
-          if (failedBlockstreamTxIdsRef.current.has(txidHex)) continue;
-          const res = await fetch(`${BLOCKSTREAM_API}/tx/${txidHex}`);
-          if (!res.ok) {
-            failedBlockstreamTxIdsRef.current.add(txidHex);
+          if (failedTxIdsRef.current.has(txidHex)) continue;
+          const data = await fetchBitcoinTx(txidHex);
+          if (!data) {
+            failedTxIdsRef.current.add(txidHex);
             continue;
           }
-          const data = await res.json();
-          const firstVin = data.vin?.[0];
-          const addr = firstVin?.prevout?.scriptpubkey_address;
+          const addr = getFirstInputAddress(data);
           if (addr && !cancelled) {
             resolvedTxIdsRef.current.add(tx.id);
             setSourceAddressByTxId(prev => ({ ...prev, [tx.id]: addr }));
@@ -428,16 +566,13 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
           const arr = Array.from(txidBlob as Uint8Array);
           if (arr.length !== 32) continue;
           const txidHex = [...arr].reverse().map(b => b.toString(16).padStart(2, '0')).join('');
-          if (failedBlockstreamTxIdsRef.current.has(txidHex)) continue;
-          const res = await fetch(`${BLOCKSTREAM_API}/tx/${txidHex}`);
-          if (!res.ok) {
-            failedBlockstreamTxIdsRef.current.add(txidHex);
+          if (failedTxIdsRef.current.has(txidHex)) continue;
+          const data = await fetchBitcoinTx(txidHex);
+          if (!data) {
+            failedTxIdsRef.current.add(txidHex);
             continue;
           }
-          const data = await res.json();
-          const vouts = data.vout ?? [];
-          const payout = vouts.find((v: { scriptpubkey_address?: string }) => v.scriptpubkey_address);
-          const addr = payout?.scriptpubkey_address;
+          const addr = getFirstOutputAddress(data);
           if (addr && !cancelled) {
             resolvedBurnStatusRef.current.add(tx.id);
             setDestinationAddressByTxId(prev => ({ ...prev, [tx.id]: addr }));
@@ -475,7 +610,7 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
       resolvedTxIdsRef.current = new Set();
       resolvedBurnTxIdsRef.current = new Set();
       resolvedBurnStatusRef.current = new Set();
-      failedBlockstreamTxIdsRef.current = new Set();
+      failedTxIdsRef.current = new Set();
       setIsFetching(false);
       return;
     }

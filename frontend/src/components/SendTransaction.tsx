@@ -68,6 +68,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   const { t } = useTranslation();
   const { preferredCurrency } = usePreferredCurrency();
   const pasteInputRef = useRef<HTMLInputElement>(null);
+  const lastPasteTouchRef = useRef<number>(0);
 
   const ESTIMATED_FEE = BigInt(1000); // 0.00001 BTC network fee estimate (withdraw only)
 
@@ -234,21 +235,20 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     }
   };
 
-  // Handle paste from clipboard
-  const handlePasteFromClipboard = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      handleAddressDetected(text);
-    } catch (error) {
-      // If clipboard API fails, focus hidden input to allow manual paste
-      if (pasteInputRef.current) {
-        pasteInputRef.current.focus();
-        // Trigger a click to ensure focus works on mobile
-        setTimeout(() => {
-          pasteInputRef.current?.focus();
-        }, 100);
+  // Handle paste from clipboard (runs in user gesture to preserve iOS Safari support)
+  const handlePasteFromClipboard = () => {
+    const fallback = () => {
+      const el = pasteInputRef.current;
+      if (el) {
+        el.focus();
+        document.execCommand('paste');
       }
-    }
+    };
+
+    navigator.clipboard
+      .readText()
+      .then((text) => handleAddressDetected(text))
+      .catch(() => fallback());
   };
 
   // Handle paste event on hidden input
@@ -649,9 +649,25 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             />
             <button
               type="button"
-              onClick={handlePasteFromClipboard}
+              onClick={() => {
+                if (Date.now() - lastPasteTouchRef.current < 400) return;
+                handlePasteFromClipboard();
+              }}
+              onPointerUp={(e) => {
+                if (e.pointerType === 'touch') {
+                  e.preventDefault();
+                  lastPasteTouchRef.current = Date.now();
+                  handlePasteFromClipboard();
+                }
+              }}
               className="h-16 border-2 border-white/80 bg-transparent flex items-center justify-center hover:border-white transition-colors w-full select-none"
-              style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+              style={{
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                userSelect: 'none',
+                touchAction: 'manipulation',
+                WebkitTapHighlightColor: 'transparent',
+              }}
             >
               <span className="font-bold text-base text-white/80 tracking-[0.15px] pointer-events-none">{t('send.pasteAddress')}</span>
             </button>

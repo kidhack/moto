@@ -13,12 +13,22 @@ import { setSessionWithdrawal } from '../lib/sessionWithdrawalStore';
 import { isValidBitcoinAddress, isBech32AddressForStorage } from '../utils/addressValidation';
 import { checkPendingDeposits } from '../utils/bitcoinTestnetChecker';
 
+/** Which price sources contributed (for transparency / FAQ system status) */
+export interface PriceSourceStatus {
+  coinGecko: boolean;
+  mempool: boolean;
+  /** True when proxy (allorigins) was used - indicates degraded source */
+  proxyUsed?: boolean;
+}
+
 export interface BTCPriceData {
-  /** BTC price in each fiat currency, keyed by lowercase CoinGecko code (e.g. 'usd', 'eur') */
+  /** BTC price in each fiat currency, keyed by lowercase code (e.g. 'usd', 'eur') */
   prices: Record<string, number>;
   /** Convenience accessor — always returns the USD price (or fallback) */
   usd: number;
   lastUpdated: number;
+  /** Which sources contributed to this price (undefined when using cached/stale data) */
+  priceSourceStatus?: PriceSourceStatus;
 }
 
 const BTC_PRICE_STORAGE_KEY = 'moto_btc_price_v2';
@@ -30,7 +40,15 @@ function getStoredBtcPrice(): BTCPriceData | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed?.prices && typeof parsed.prices === 'object' && typeof parsed.lastUpdated === 'number') {
-      return { prices: parsed.prices, usd: parsed.prices.usd ?? FALLBACK_BTC_USD, lastUpdated: parsed.lastUpdated };
+      const priceSourceStatus = parsed.priceSourceStatus && typeof parsed.priceSourceStatus.coinGecko === 'boolean' && typeof parsed.priceSourceStatus.mempool === 'boolean'
+        ? parsed.priceSourceStatus as PriceSourceStatus
+        : undefined;
+      return {
+        prices: parsed.prices,
+        usd: parsed.prices.usd ?? FALLBACK_BTC_USD,
+        lastUpdated: parsed.lastUpdated,
+        priceSourceStatus,
+      };
     }
     // Migrate from old v1 format { usd, lastUpdated }
     if (typeof parsed?.usd === 'number' && typeof parsed?.lastUpdated === 'number') {
@@ -46,7 +64,11 @@ function getStoredBtcPrice(): BTCPriceData | null {
 
 function setStoredBtcPrice(data: BTCPriceData): void {
   try {
-    localStorage.setItem(BTC_PRICE_STORAGE_KEY, JSON.stringify({ prices: data.prices, lastUpdated: data.lastUpdated }));
+    localStorage.setItem(BTC_PRICE_STORAGE_KEY, JSON.stringify({
+      prices: data.prices,
+      lastUpdated: data.lastUpdated,
+      priceSourceStatus: data.priceSourceStatus,
+    }));
   } catch {
     // ignore
   }
@@ -726,14 +748,36 @@ const FALLBACK_BTC_USD = 101799;
 
 import { LIVE_CURRENCY_CG_KEYS } from '../data/currencies';
 
+const USE_TESTNET = import.meta.env.VITE_USE_TESTNET === 'true';
+const ENABLE_PROXY_FALLBACK = import.meta.env.VITE_ENABLE_PROXY_FALLBACK === 'true';
+
 const COINGECKO_PRICE_URL =
   `https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=${LIVE_CURRENCY_CG_KEYS.join(',')}&include_last_updated_at=true`;
+const MEMPOOL_PRICE_URL = USE_TESTNET
+  ? 'https://mempool.space/testnet/api/v1/prices'
+  : 'https://mempool.space/api/v1/prices';
+
+/** Mempool currencies: USD, EUR, GBP, CAD, CHF, AUD, JPY (lowercase keys) */
+const MEMPOOL_CURRENCY_KEYS = ['usd', 'eur', 'gbp', 'cad', 'chf', 'aud', 'jpy'] as const;
+
+const PRICE_AGREEMENT_THRESHOLD = 0.02;   // 2% max divergence
+const PRICE_SANITY_JUMP_THRESHOLD = 0.20; // 20% max jump from last good
 
 function makeFallbackPriceData(): BTCPriceData {
   return { prices: { usd: FALLBACK_BTC_USD }, usd: FALLBACK_BTC_USD, lastUpdated: Date.now() / 1000 };
 }
 
-async function fetchBtcPriceFromUrl(url: string): Promise<BTCPriceData> {
+function isPriceValid(price: number): boolean {
+  return typeof price === 'number' && !Number.isNaN(price) && price > 0 && Number.isFinite(price);
+}
+
+function isPriceWithinBounds(price: number, lastGoodUsd: number | undefined): boolean {
+  if (lastGoodUsd == null || lastGoodUsd <= 0) return true;
+  const ratio = price / lastGoodUsd;
+  return ratio >= 1 - PRICE_SANITY_JUMP_THRESHOLD && ratio <= 1 + PRICE_SANITY_JUMP_THRESHOLD;
+}
+
+async function fetchBtcPriceFromCoinGecko(url: string): Promise<BTCPriceData> {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Failed to fetch BTC price: ${response.statusText}`);
   const data = await response.json();
@@ -742,15 +786,30 @@ async function fetchBtcPriceFromUrl(url: string): Promise<BTCPriceData> {
   }
   const prices: Record<string, number> = {};
   for (const [key, val] of Object.entries(data.bitcoin)) {
-    if (typeof val === 'number' && key !== 'last_updated_at') {
-      prices[key] = val;
+    if (typeof val === 'number' && key !== 'last_updated_at' && isPriceValid(val as number)) {
+      prices[key.toLowerCase()] = val as number;
     }
   }
-  return {
-    prices,
-    usd: prices.usd ?? FALLBACK_BTC_USD,
-    lastUpdated: data.bitcoin.last_updated_at ?? Date.now() / 1000,
-  };
+  const usd = prices.usd ?? FALLBACK_BTC_USD;
+  const lastUpdated = data.bitcoin.last_updated_at ?? Date.now() / 1000;
+  return { prices, usd, lastUpdated };
+}
+
+/** Mempool.space returns { time, USD, EUR, ... } with flat numbers */
+async function fetchBtcPriceFromMempool(): Promise<{ usd: number; prices: Record<string, number>; lastUpdated: number }> {
+  const response = await fetch(MEMPOOL_PRICE_URL);
+  if (!response.ok) throw new Error(`Failed to fetch from Mempool: ${response.statusText}`);
+  const data = await response.json();
+  const lastUpdated = typeof data.time === 'number' ? data.time : Date.now() / 1000;
+  const prices: Record<string, number> = {};
+  for (const k of MEMPOOL_CURRENCY_KEYS) {
+    const val = data[k.toUpperCase()];
+    if (typeof val === 'number' && isPriceValid(val)) {
+      prices[k] = val;
+    }
+  }
+  const usd = prices.usd ?? (typeof data.USD === 'number' && isPriceValid(data.USD) ? data.USD : FALLBACK_BTC_USD);
+  return { usd, prices, lastUpdated };
 }
 
 export function useBTCPrice() {
@@ -758,22 +817,87 @@ export function useBTCPrice() {
     queryKey: ['btcPrice'],
     initialData: () => getStoredBtcPrice() ?? undefined,
     queryFn: async () => {
-      try {
-        const result = await fetchBtcPriceFromUrl(COINGECKO_PRICE_URL);
-        setStoredBtcPrice(result);
-        return result;
-      } catch {
-        try {
-          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(COINGECKO_PRICE_URL)}`;
-          const result = await fetchBtcPriceFromUrl(proxyUrl);
-          setStoredBtcPrice(result);
-          return result;
-        } catch {
-          const stored = getStoredBtcPrice();
-          if (stored) return stored;
-          return makeFallbackPriceData();
+      const lastStored = getStoredBtcPrice();
+      const lastGoodUsd = lastStored?.usd;
+
+      const runCoinGecko = (url: string) =>
+        fetchBtcPriceFromCoinGecko(url).then((r) => ({ source: 'coinGecko' as const, data: r, proxy: false }));
+      const runCoinGeckoProxy = () =>
+        fetchBtcPriceFromCoinGecko(`https://api.allorigins.win/raw?url=${encodeURIComponent(COINGECKO_PRICE_URL)}`)
+          .then((r) => ({ source: 'coinGecko' as const, data: r, proxy: true }));
+      const runMempool = () =>
+        fetchBtcPriceFromMempool().then((r) => ({ source: 'mempool' as const, data: r, proxy: false }));
+
+      const [cgResult, mempoolResult] = await Promise.allSettled([
+        runCoinGecko(COINGECKO_PRICE_URL),
+        runMempool(),
+      ]);
+
+      const cgOk = cgResult.status === 'fulfilled' ? cgResult.value : null;
+      const mempoolOk = mempoolResult.status === 'fulfilled' ? mempoolResult.value : null;
+
+      let cgValid = false;
+      let mempoolValid = false;
+
+      if (cgOk) {
+        const cg = cgOk.data;
+        cgValid = isPriceValid(cg.usd) && isPriceWithinBounds(cg.usd, lastGoodUsd);
+        if (cgValid && mempoolOk) {
+          const mp = mempoolOk.data;
+          const diverged = isPriceValid(mp.usd) && Math.abs(cg.usd - mp.usd) / Math.max(cg.usd, mp.usd) > PRICE_AGREEMENT_THRESHOLD;
+          if (diverged && cg.lastUpdated < mp.lastUpdated) cgValid = false;
         }
       }
+
+      if (mempoolOk) {
+        const mp = mempoolOk.data;
+        mempoolValid = isPriceValid(mp.usd) && isPriceWithinBounds(mp.usd, lastGoodUsd);
+      }
+
+      if (cgValid && cgOk?.data) {
+        const result: BTCPriceData = {
+          ...cgOk.data,
+          priceSourceStatus: {
+            coinGecko: true,
+            mempool: mempoolValid,
+            proxyUsed: cgOk.proxy,
+          },
+        };
+        setStoredBtcPrice(result);
+        return result;
+      }
+
+      if (mempoolValid && mempoolOk?.data) {
+        const mp = mempoolOk.data;
+        const result: BTCPriceData = {
+          prices: mp.prices,
+          usd: mp.usd,
+          lastUpdated: mp.lastUpdated,
+          priceSourceStatus: { coinGecko: false, mempool: true },
+        };
+        setStoredBtcPrice(result);
+        return result;
+      }
+
+      if (ENABLE_PROXY_FALLBACK) {
+        try {
+          const proxyRes = await runCoinGeckoProxy();
+          if (proxyRes.data && isPriceValid(proxyRes.data.usd) && isPriceWithinBounds(proxyRes.data.usd, lastGoodUsd)) {
+            const result: BTCPriceData = {
+              ...proxyRes.data,
+              priceSourceStatus: { coinGecko: true, mempool: false, proxyUsed: true },
+            };
+            setStoredBtcPrice(result);
+            return result;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const stored = getStoredBtcPrice();
+      if (stored) return stored;
+      return makeFallbackPriceData();
     },
     refetchInterval: 60 * 1000,
     staleTime: 2 * 60 * 1000,
@@ -824,12 +948,15 @@ export function useBTCPriceAtTime(timestampSeconds: number | bigint, currencyCod
       try {
         return await tryFetch(historicalUrl);
       } catch {
-        try {
-          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(historicalUrl)}`;
-          return await tryFetch(proxyUrl);
-        } catch {
-          return FALLBACK_BTC_USD;
+        if (ENABLE_PROXY_FALLBACK) {
+          try {
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(historicalUrl)}`;
+            return await tryFetch(proxyUrl);
+          } catch {
+            // fall through
+          }
         }
+        return FALLBACK_BTC_USD;
       }
     },
     enabled: ts > 0,
