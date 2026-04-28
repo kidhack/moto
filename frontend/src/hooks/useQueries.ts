@@ -17,6 +17,8 @@ import { checkPendingDeposits } from '../utils/bitcoinTestnetChecker';
 export interface PriceSourceStatus {
   coinGecko: boolean;
   mempool: boolean;
+  coinDesk?: boolean;
+  binance?: boolean;
   /** True when proxy (allorigins) was used - indicates degraded source */
   proxyUsed?: boolean;
 }
@@ -627,7 +629,7 @@ export function usePrincipalByBitcoinAddress(address: string | null) {
   });
 }
 
-/** Instant ckBTC transfer to another principal (ICRC-1; no minter approval). App fee (0.5%, max $100) sent to treasury when configured. */
+/** Instant ckBTC transfer to another principal (ICRC-1; no minter approval). App fee (0.5%, max $100) is charged on top when configured. */
 export function useTransferCkBTC() {
   const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
@@ -654,7 +656,6 @@ export function useTransferCkBTC() {
         canisterId: Principal.fromText(CKBTC_LEDGER_CANISTER_ID),
       });
       const feeSats = FEE_TREASURY_PRINCIPAL ? computeFeeSats(amount, btcPriceUsd) : 0n;
-      const toRecipient = amount - feeSats;
 
       if (FEE_TREASURY_PRINCIPAL && feeSats > 0n) {
         await ledger.transfer({
@@ -664,7 +665,7 @@ export function useTransferCkBTC() {
       }
       const blockIndex = await ledger.transfer({
         to: { owner: Principal.fromText(toPrincipal), subaccount: [] },
-        amount: toRecipient,
+        amount,
       });
       return { block_index: blockIndex };
     },
@@ -744,6 +745,49 @@ export function useRetrieveBtc() {
   });
 }
 
+export interface CkBTCWithdrawalInfo {
+  kytFee: bigint;
+  minConfirmations: number;
+}
+
+/** Live ckBTC withdrawal info from minter canister. */
+export function useCkBTCWithdrawalFee() {
+  return useQuery<CkBTCWithdrawalInfo>({
+    queryKey: ['ckbtcWithdrawalFee'],
+    queryFn: async () => {
+      const host = 'https://ic0.app';
+      const agent = new HttpAgent({ host });
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (isLocal) {
+        try {
+          await agent.fetchRootKey();
+        } catch {
+          // ignore
+        }
+      }
+      const minterIDLFactory = createCkBTCMinterIDL();
+      const minterActor = Actor.createActor(minterIDLFactory, {
+        agent,
+        canisterId: CKBTC_MINTER_CANISTER_ID,
+      }) as unknown as CkBTCMinter;
+      const info = await minterActor.get_minter_info();
+      return {
+        kytFee: info.kyt_fee,
+        minConfirmations: Number(info.min_confirmations),
+      };
+    },
+    staleTime: 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    retry: 2,
+    retryDelay: 1500,
+    // Keep current behavior if fetch fails; caller can apply fallback.
+    placeholderData: {
+      kytFee: 1000n,
+      minConfirmations: 3,
+    },
+  });
+}
+
 const FALLBACK_BTC_USD = 101799;
 
 import { LIVE_CURRENCY_CG_KEYS } from '../data/currencies';
@@ -756,6 +800,8 @@ const COINGECKO_PRICE_URL =
 const MEMPOOL_PRICE_URL = USE_TESTNET
   ? 'https://mempool.space/testnet/api/v1/prices'
   : 'https://mempool.space/api/v1/prices';
+const COINDESK_PRICE_URL = 'https://api.coindesk.com/v1/bpi/currentprice.json';
+const BINANCE_PRICE_URL = 'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT';
 
 /** Mempool currencies: USD, EUR, GBP, CAD, CHF, AUD, JPY (lowercase keys) */
 const MEMPOOL_CURRENCY_KEYS = ['usd', 'eur', 'gbp', 'cad', 'chf', 'aud', 'jpy'] as const;
@@ -764,7 +810,8 @@ const PRICE_AGREEMENT_THRESHOLD = 0.02;   // 2% max divergence
 const PRICE_SANITY_JUMP_THRESHOLD = 0.20; // 20% max jump from last good
 
 function makeFallbackPriceData(): BTCPriceData {
-  return { prices: { usd: FALLBACK_BTC_USD }, usd: FALLBACK_BTC_USD, lastUpdated: Date.now() / 1000 };
+  // Mark synthetic fallback as stale so UI can show "price may be outdated".
+  return { prices: { usd: FALLBACK_BTC_USD }, usd: FALLBACK_BTC_USD, lastUpdated: 0 };
 }
 
 function isPriceValid(price: number): boolean {
@@ -812,6 +859,42 @@ async function fetchBtcPriceFromMempool(): Promise<{ usd: number; prices: Record
   return { usd, prices, lastUpdated };
 }
 
+/** CoinDesk returns { bpi: { USD: { rate_float }, EUR: { rate_float }, ... }, time: { updatedISO } } */
+async function fetchBtcPriceFromCoinDesk(): Promise<{ usd: number; prices: Record<string, number>; lastUpdated: number }> {
+  const response = await fetch(COINDESK_PRICE_URL);
+  if (!response.ok) throw new Error(`Failed to fetch from CoinDesk: ${response.statusText}`);
+  const data = await response.json();
+  const bpi = data?.bpi;
+  if (!bpi || typeof bpi !== 'object') throw new Error('Invalid CoinDesk response format');
+
+  const prices: Record<string, number> = {};
+  for (const [code, entry] of Object.entries(bpi as Record<string, { rate_float?: number }>)) {
+    const value = (entry as { rate_float?: number })?.rate_float;
+    if (typeof value === 'number' && isPriceValid(value)) {
+      prices[code.toLowerCase()] = value;
+    }
+  }
+  const usd = prices.usd ?? FALLBACK_BTC_USD;
+  const updatedIso = data?.time?.updatedISO;
+  const parsedTs = typeof updatedIso === 'string' ? Date.parse(updatedIso) : NaN;
+  const lastUpdated = Number.isFinite(parsedTs) ? parsedTs / 1000 : Date.now() / 1000;
+  return { usd, prices, lastUpdated };
+}
+
+/** Binance returns { price: string } in USD for BTCUSDT. */
+async function fetchBtcPriceFromBinance(): Promise<{ usd: number; prices: Record<string, number>; lastUpdated: number }> {
+  const response = await fetch(BINANCE_PRICE_URL);
+  if (!response.ok) throw new Error(`Failed to fetch from Binance: ${response.statusText}`);
+  const data = await response.json();
+  const usd = Number(data?.price);
+  if (!isPriceValid(usd)) throw new Error('Invalid Binance response format');
+  return {
+    usd,
+    prices: { usd },
+    lastUpdated: Date.now() / 1000,
+  };
+}
+
 export function useBTCPrice() {
   return useQuery<BTCPriceData>({
     queryKey: ['btcPrice'],
@@ -822,58 +905,62 @@ export function useBTCPrice() {
 
       const runCoinGecko = (url: string) =>
         fetchBtcPriceFromCoinGecko(url).then((r) => ({ source: 'coinGecko' as const, data: r, proxy: false }));
-      const runCoinGeckoProxy = () =>
-        fetchBtcPriceFromCoinGecko(`https://api.allorigins.win/raw?url=${encodeURIComponent(COINGECKO_PRICE_URL)}`)
-          .then((r) => ({ source: 'coinGecko' as const, data: r, proxy: true }));
       const runMempool = () =>
         fetchBtcPriceFromMempool().then((r) => ({ source: 'mempool' as const, data: r, proxy: false }));
+      const runCoinDesk = () =>
+        fetchBtcPriceFromCoinDesk().then((r) => ({ source: 'coinDesk' as const, data: r, proxy: false }));
+      const runBinance = () =>
+        fetchBtcPriceFromBinance().then((r) => ({ source: 'binance' as const, data: r, proxy: false }));
 
-      const [cgResult, mempoolResult] = await Promise.allSettled([
+      const [cgResult, mempoolResult, coinDeskResult, binanceResult] = await Promise.allSettled([
         runCoinGecko(COINGECKO_PRICE_URL),
         runMempool(),
+        runCoinDesk(),
+        runBinance(),
       ]);
 
       const cgOk = cgResult.status === 'fulfilled' ? cgResult.value : null;
       const mempoolOk = mempoolResult.status === 'fulfilled' ? mempoolResult.value : null;
+      const coinDeskOk = coinDeskResult.status === 'fulfilled' ? coinDeskResult.value : null;
+      const binanceOk = binanceResult.status === 'fulfilled' ? binanceResult.value : null;
 
-      let cgValid = false;
-      let mempoolValid = false;
+      type SourceResult = {
+        source: 'coinGecko' | 'mempool' | 'coinDesk' | 'binance';
+        data: { usd: number; prices: Record<string, number>; lastUpdated: number };
+      };
 
-      if (cgOk) {
-        const cg = cgOk.data;
-        cgValid = isPriceValid(cg.usd) && isPriceWithinBounds(cg.usd, lastGoodUsd);
-        if (cgValid && mempoolOk) {
+      const candidates: SourceResult[] = [];
+      if (cgOk?.data) candidates.push({ source: 'coinGecko', data: cgOk.data });
+      if (mempoolOk?.data) candidates.push({ source: 'mempool', data: mempoolOk.data });
+      if (coinDeskOk?.data) candidates.push({ source: 'coinDesk', data: coinDeskOk.data });
+      if (binanceOk?.data) candidates.push({ source: 'binance', data: binanceOk.data });
+
+      const chosen = candidates.find((candidate) => {
+        const price = candidate.data.usd;
+        if (!isPriceValid(price)) return false;
+        if (!isPriceWithinBounds(price, lastGoodUsd)) return false;
+        if (candidate.source === 'coinGecko' && mempoolOk?.data) {
           const mp = mempoolOk.data;
-          const diverged = isPriceValid(mp.usd) && Math.abs(cg.usd - mp.usd) / Math.max(cg.usd, mp.usd) > PRICE_AGREEMENT_THRESHOLD;
-          if (diverged && cg.lastUpdated < mp.lastUpdated) cgValid = false;
+          const diverged =
+            isPriceValid(mp.usd) &&
+            Math.abs(price - mp.usd) / Math.max(price, mp.usd) > PRICE_AGREEMENT_THRESHOLD;
+          if (diverged && candidate.data.lastUpdated < mp.lastUpdated) return false;
         }
-      }
+        return true;
+      });
 
-      if (mempoolOk) {
-        const mp = mempoolOk.data;
-        mempoolValid = isPriceValid(mp.usd) && isPriceWithinBounds(mp.usd, lastGoodUsd);
-      }
-
-      if (cgValid && cgOk?.data) {
+      if (chosen) {
         const result: BTCPriceData = {
-          ...cgOk.data,
+          prices: chosen.data.prices,
+          usd: chosen.data.usd,
+          lastUpdated: chosen.data.lastUpdated,
           priceSourceStatus: {
-            coinGecko: true,
-            mempool: mempoolValid,
-            proxyUsed: cgOk.proxy,
+            coinGecko: chosen.source === 'coinGecko',
+            mempool: chosen.source === 'mempool',
+            coinDesk: chosen.source === 'coinDesk',
+            binance: chosen.source === 'binance',
+            proxyUsed: false,
           },
-        };
-        setStoredBtcPrice(result);
-        return result;
-      }
-
-      if (mempoolValid && mempoolOk?.data) {
-        const mp = mempoolOk.data;
-        const result: BTCPriceData = {
-          prices: mp.prices,
-          usd: mp.usd,
-          lastUpdated: mp.lastUpdated,
-          priceSourceStatus: { coinGecko: false, mempool: true },
         };
         setStoredBtcPrice(result);
         return result;
@@ -881,11 +968,13 @@ export function useBTCPrice() {
 
       if (ENABLE_PROXY_FALLBACK) {
         try {
-          const proxyRes = await runCoinGeckoProxy();
-          if (proxyRes.data && isPriceValid(proxyRes.data.usd) && isPriceWithinBounds(proxyRes.data.usd, lastGoodUsd)) {
+          const proxyRes = await fetchBtcPriceFromCoinGecko(
+            `https://api.allorigins.win/raw?url=${encodeURIComponent(COINGECKO_PRICE_URL)}`
+          );
+          if (proxyRes && isPriceValid(proxyRes.usd) && isPriceWithinBounds(proxyRes.usd, lastGoodUsd)) {
             const result: BTCPriceData = {
-              ...proxyRes.data,
-              priceSourceStatus: { coinGecko: true, mempool: false, proxyUsed: true },
+              ...proxyRes,
+              priceSourceStatus: { coinGecko: true, mempool: false, coinDesk: false, binance: false, proxyUsed: true },
             };
             setStoredBtcPrice(result);
             return result;

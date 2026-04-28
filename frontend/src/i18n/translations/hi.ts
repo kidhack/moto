@@ -1,3 +1,5 @@
+import legalTermsAndPrivacyEn from './legalTermsAndPrivacyEn';
+
 const hi: Record<string, string> = {
   'common.close': 'बंद करें',
   'common.cancel': 'रद्द करें',
@@ -26,7 +28,7 @@ const hi: Record<string, string> = {
   'menu.language': 'भाषा',
   'menu.signOut': 'साइन आउट',
   'menu.yourPrincipalId': 'आपका Principal ID',
-  'menu.motoDescription': 'MOTO पूरी तरह से ऑन-चेन चलता है, Internet Computer द्वारा संचालित।\nसेटिंग्स एक निजी कैनिस्टर में सुरक्षित रूप से संग्रहीत हैं।\nवित्तीय गतिविधि केवल ब्लॉकचेन पर दर्ज होती है।',
+  'menu.motoDescription': 'MOTO पूरी तरह से ऑन-चेन चलता है, Internet Computer द्वारा संचालित।\nसेटिंग्स MOTO कैनिस्टर में संग्रहीत हैं, आपके Principal से अलग।\nवित्तीय गतिविधि सार्वजनिक लेजर पर दर्ज होती है।',
   'menu.wiping': 'मिटाया जा रहा है…',
   'menu.wipeCanister': 'डेटा मिटाएं और साइन आउट',
   'menu.signedOut': 'साइन आउट हो गया',
@@ -40,6 +42,8 @@ const hi: Record<string, string> = {
   'menu.resetting': 'रीसेट हो रहा है…',
   'menu.resetOnboarding': 'ऑनबोर्डिंग रीसेट',
   'menu.faq': 'सामान्य प्रश्न',
+  'menu.terms': 'सेवा की शर्तें',
+  'menu.privacy': 'गोपनीयता नीति',
 
   'faq.header': 'सामान्य प्रश्न',
   'faq.systemStatus': 'सिस्टम स्थिति',
@@ -49,20 +53,35 @@ const hi: Record<string, string> = {
   'faq.statusPriceCoinGecko': 'CoinGecko',
   'faq.statusPriceCoinGeckoDegraded': 'CoinGecko (अवनत)',
   'faq.statusPriceMempool': 'Mempool',
+  'faq.statusPriceCoinDesk': 'CoinDesk',
+  'faq.statusPriceBinance': 'Binance',
   'faq.statusPriceUnknown': '—',
   'faq.statusIndexerBlockstream': 'Blockstream',
   'faq.statusIndexerMempool': 'Mempool',
+  'faq.statusIndexerMixed': 'Blockstream + Mempool',
   'faq.statusIndexerUnknown': '—',
   'faq.howItWorksTitle': 'MOTO कैसे काम करता है',
-  'faq.howItWorksBody': 'MOTO Internet Computer पर चलता है। ऐप और फ्रंटएंड ऑन-चेन कैनिस्टर से दिया जाता है।\n\nआपकी सेटिंग्स (वॉलेट नाम, मुद्रा, भाषा) प्रति उपयोगकर्ता कैनिस्टर में निजी तौर पर संग्रहीत हैं, व्यक्तिगत पहचान से जुड़ी नहीं।\n\nपहचान Internet Identity (विकेंद्रीकृत) द्वारा संभाली जाती है।\n\nशेष और ट्रांसफर बिटकॉइन और ckBTC लेजर पर रहते हैं।',
+  'faq.howItWorksBody': 'MOTO Internet Computer पर चलता है। ऐप और फ्रंटएंड ऑन-चेन कैनिस्टर से दिया जाता है।\n\nआपकी सेटिंग्स (वॉलेट नाम, मुद्रा, भाषा) MOTO बैकएंड कैनिस्टर में Internet Identity Principal से जुड़े रिकॉर्ड में संग्रहीत हैं — साझा कैनिस्टर कोड, प्रति उपयोगकर्ता अलगाव; प्रति व्यक्ति अलग कैनिस्टर नहीं।\n\nपहचान Internet Identity (विकेंद्रीकृत) द्वारा संभाली जाती है।\n\nशेष और ट्रांसफर बिटकॉइन और ckBTC लेजर पर रहते हैं।',
   'faq.servicesTitle': 'हम जिन सेवाओं का उपयोग करते हैं',
   'faq.servicesBody': '• फिएट कीमतें: CoinGecko और Mempool.space (दो स्वतंत्र स्रोत)\n• बिटकॉइन ट्रांजैक्शन डेटा: Blockstream और Mempool.space (दो स्वतंत्र इंडेक्सर)\n• लॉगिन के लिए Internet Identity\n• Internet Computer पर ckBTC मिंटर और लेजर कैनिस्टर',
   'faq.notOnChainTitle': 'जो ऑन-चेन नहीं है / तृतीय पक्ष निर्भरता',
   'faq.notOnChainBody': '• फिएट कीमतें सार्वजनिक API से आती हैं (CoinGecko, Mempool.space)\n• UI में दिखाए गए बिटकॉइन tx विवरण सार्वजनिक इंडेक्सर (Blockstream, Mempool.space) का उपयोग कर सकते हैं\n• ऐप अपडेट: MOTO कैनिस्टर प्रोजेक्ट द्वारा अपग्रेड योग्य हैं। आज अपग्रेड अथॉरिटी प्रोजेक्ट द्वारा नियंत्रित है। आपका डेटा Principal के अनुसार अलग है। हम अपग्रेड को समुदाय शासन (जैसे SNS, मल्टी-सिग) की ओर ले जाना चाहते हैं।',
   'faq.disclaimersTitle': 'अस्वीकरण',
-  'faq.disclaimersBody': '• गैर-हिरासत: आप अपनी कुंजी नियंत्रित करते हैं। MOTO धन रखता नहीं है।\n• वित्तीय सलाह नहीं। कीमतें अस्थिर हैं। अपना शोध करें।\n• शुल्क: भेजने पर ऐप शुल्क (0.5%, सीमित); नेटवर्क शुल्क लागू।',
+  'faq.disclaimersBody': '• गैर-हिरासत: Internet Identity के माध्यम से पहुंच; संपत्ति सार्वजनिक लेजर पर। MOTO एक वॉलेट इंटरफ़ेस है, बैंक नहीं।\n• वित्तीय सलाह नहीं। कीमतें अस्थिर हैं। अपना शोध करें।\n• शुल्क: डिफ़ॉल्ट ऐप शुल्क राशि का 0.5%, भेजने के समय लगभग USD $100 के बराबर BTC तक सीमित (डिप्लॉयमेंट कॉन्फ़िगर कर सकता है); नेटवर्क/लेजर शुल्क अलग। MOTO से MOTO ckBTC भेजने पर ऐप शुल्क दिखता है; बिटकॉइन निकासी पर ऐप में अनुमानित ऑन-चेन लागत।',
   'faq.networksTitle': 'नेटवर्क',
   'faq.networksBody': 'MOTO बिटकॉइन मेननेट (ckBTC) और टेस्टनेट (ckTESTBTC) का समर्थन करता है। जब टेस्टनेट सक्रिय होता है, डैशबोर्ड पर बैनर दिखता है।',
+
+  'faq.hostingTitle': 'MOTO कहाँ होस्ट है?',
+  'faq.hostingBody':
+    'MOTO पूरी तरह Internet Computer (ICP) पर चलता है। फ्रंटएंड और बैकएंड लॉजिक ICP पर कैनिस्टर (स्मार्ट कॉन्ट्रैक्ट) के रूप में तैनात हैं, AWS या Cloudflare जैसे किराए के पारंपरिक ऐप सर्वर पर नहीं। निष्पादन और स्टोरेज प्रोटोकॉल के अनुसार ICP नोड नेटवर्क पर वितरित होते हैं।',
+  'faq.canisterTitle': 'कैनिस्टर क्या है और मेरा डेटा कैसे संग्रहीत है?',
+  'faq.canisterBody':
+    'ICP पर कैनिस्टर कोड और स्टेट रखते हैं। MOTO आपका प्रदर्शन नाम, पसंदीदा मुद्रा और भाषा, ऑनबोर्डिंग स्थिति, और ऐप में उपयोग होने वाला बिटकॉइन पता, आपके Internet Identity Principal से कुंजी वाले मैप में बैकएंड कैनिस्टर में संग्रहीत करता है। अन्य उपयोगकर्ता ऐप की सार्वजनिक API से आपकी प्रविष्टि नहीं पढ़ सकते। धनराशि और ckBTC शेष ckBTC लेजर और बिटकॉइन नेटवर्क पर हैं।',
+  'faq.txFeesTitle': 'भेजने के शुल्क में क्या शामिल है?',
+  'faq.txFeesBody':
+    'आउटगोइंग भेजने में शामिल हो सकता है:\n\n• ऐप शुल्क — डिफ़ॉल्ट राशि का 0.5%, भेजने के समय लगभग USD $100 के बराबर BTC तक अधिकतम (डिप्लॉयमेंट कॉन्फ़िगरेशन से बदल सकता है)। पुष्टि स्क्रीन पर दिखता है।\n• लेजर / नेटवर्क लागत — MOTO से MOTO ckBTC ट्रांसफर ICP पर निपटते हैं; शुल्क ऐप में दिखते हैं। मूल बिटकॉइन पते पर निकासी में अतिरिक्त अनुमानित ऑन-चेन लागत (ऐप रूढ़िवादी सैट अनुमान लगाता है; वास्तविक माइनर शुल्क बिटकॉइन नेटवर्क तय करता है)।',
+
+  ...legalTermsAndPrivacyEn,
 
   'send.header': 'बिटकॉइन भेजें',
   'send.enterAddress': 'बिटकॉइन पता या Principal ID दर्ज करें',

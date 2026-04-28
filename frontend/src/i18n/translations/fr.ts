@@ -1,3 +1,5 @@
+import legalTermsAndPrivacyEn from './legalTermsAndPrivacyEn';
+
 const fr: Record<string, string> = {
   'common.close': 'Fermer',
   'common.cancel': 'Annuler',
@@ -26,7 +28,7 @@ const fr: Record<string, string> = {
   'menu.language': 'Langue',
   'menu.signOut': 'Déconnexion',
   'menu.yourPrincipalId': 'Votre Principal ID',
-  'menu.motoDescription': 'MOTO fonctionne entièrement on-chain, propulsé par Internet Computer.\nLes paramètres sont stockés en toute sécurité dans un canister privé.\nL\'activité financière est uniquement enregistrée sur la blockchain.',
+  'menu.motoDescription': 'MOTO fonctionne entièrement on-chain, propulsé par Internet Computer.\nLes paramètres sont enregistrés dans le canister MOTO, isolés par votre Principal.\nL\'activité financière est portée sur des registres publics.',
   'menu.wiping': 'Suppression…',
   'menu.wipeCanister': 'Supprimer les données et se déconnecter',
   'menu.signedOut': 'Déconnecté',
@@ -40,6 +42,8 @@ const fr: Record<string, string> = {
   'menu.resetting': 'Réinitialisation…',
   'menu.resetOnboarding': 'Réinitialiser l\'intégration',
   'menu.faq': 'FAQ',
+  'menu.terms': 'Conditions d\'utilisation',
+  'menu.privacy': 'Politique de confidentialité',
 
   'faq.header': 'FAQ',
   'faq.systemStatus': 'État du système',
@@ -49,20 +53,35 @@ const fr: Record<string, string> = {
   'faq.statusPriceCoinGecko': 'CoinGecko',
   'faq.statusPriceCoinGeckoDegraded': 'CoinGecko (dégradé)',
   'faq.statusPriceMempool': 'Mempool',
+  'faq.statusPriceCoinDesk': 'CoinDesk',
+  'faq.statusPriceBinance': 'Binance',
   'faq.statusPriceUnknown': '—',
   'faq.statusIndexerBlockstream': 'Blockstream',
   'faq.statusIndexerMempool': 'Mempool',
+  'faq.statusIndexerMixed': 'Blockstream + Mempool',
   'faq.statusIndexerUnknown': '—',
   'faq.howItWorksTitle': 'Comment fonctionne MOTO',
-  'faq.howItWorksBody': 'MOTO fonctionne sur Internet Computer. L\'app et le frontend sont servis par des canisters on-chain.\n\nVos paramètres (nom de portefeuille, devise, langue) sont stockés de manière privée dans un canister par utilisateur, non liés à l\'identité personnelle.\n\nL\'identité est gérée par Internet Identity (décentralisé).\n\nSoldes et transferts vivent sur les registres Bitcoin et ckBTC.',
+  'faq.howItWorksBody': 'MOTO fonctionne sur Internet Computer. L\'app et le frontend sont servis par des canisters on-chain.\n\nVos paramètres (nom de portefeuille, devise, langue) sont stockés dans le canister backend MOTO, dans un enregistrement lié à votre Principal Internet Identity — code de canister partagé avec isolation par utilisateur, pas un canister dédié par personne.\n\nL\'identité est gérée par Internet Identity (décentralisé).\n\nSoldes et transferts vivent sur les registres Bitcoin et ckBTC.',
   'faq.servicesTitle': 'Services utilisés',
   'faq.servicesBody': '• Prix fiat : CoinGecko et Mempool.space (deux sources indépendantes)\n• Données tx Bitcoin : Blockstream et Mempool.space (deux indexeurs indépendants)\n• Internet Identity pour la connexion\n• Canisters minter et ledger ckBTC sur Internet Computer',
   'faq.notOnChainTitle': 'Ce qui n\'est pas on-chain / Dépendances tierces',
   'faq.notOnChainBody': '• Les prix fiat proviennent d\'APIs publiques (CoinGecko, Mempool.space)\n• Les détails des tx Bitcoin affichés peuvent utiliser des indexeurs publics (Blockstream, Mempool.space)\n• Mises à jour app : les canisters MOTO sont mis à jour par le projet. Aujourd\'hui l\'autorité de mise à jour est contrôlée par le projet. Vos données sont isolées par Principal. Nous entendons faire évoluer les mises à jour vers une gouvernance communautaire (ex. SNS, multi-sig).',
   'faq.disclaimersTitle': 'Avertissements',
-  'faq.disclaimersBody': '• Non garde : Vous contrôlez vos clés. MOTO ne détient pas les fonds.\n• Pas de conseil financier. Les prix sont volatils. Faites vos propres recherches.\n• Frais : commission app (0,5 %, plafonnée) sur les envois ; frais réseau applicables.',
+  'faq.disclaimersBody': '• Non garde : vous contrôlez l\'accès via Internet Identity ; les actifs sont sur des registres publics. MOTO est une interface de portefeuille, pas une banque.\n• Pas de conseil financier. Les prix sont volatils. Faites vos propres recherches.\n• Frais : commission d\'app par défaut 0,5 % du montant, plafonnée à l\'équivalent BTC d\'environ 100 USD au moment de l\'envoi (configurable par déploiement), plus coûts réseau/registre. Les envois ckBTC MOTO à MOTO affichent la commission d\'app ; les retraits vers Bitcoin incluent un coût on-chain estimé dans l\'app.',
   'faq.networksTitle': 'Réseaux',
   'faq.networksBody': 'MOTO supporte le mainnet Bitcoin (ckBTC) et le testnet (ckTESTBTC). Quand le testnet est actif, une bannière apparaît sur le dashboard.',
+
+  'faq.hostingTitle': 'Comment MOTO est-il hébergé ?',
+  'faq.hostingBody':
+    'MOTO fonctionne entièrement sur Internet Computer (ICP). Le frontend et la logique backend sont déployés sous forme de canisters (contrats intelligents sur ICP), et non comme une application classique sur des serveurs loués tels qu\'AWS ou Cloudflare. L\'exécution et le stockage sont répartis sur le réseau de nœuds ICP selon le protocole.',
+  'faq.canisterTitle': 'Qu\'est-ce qu\'un canister et comment mes données sont-elles stockées ?',
+  'faq.canisterBody':
+    'Sur ICP, les canisters contiennent du code et de l\'état. MOTO stocke votre nom d\'affichage, devise et langue préférés, l\'état d\'intégration et une adresse Bitcoin utilisée par l\'app dans son canister backend, dans une table indexée par votre Principal Internet Identity. Les autres utilisateurs ne peuvent pas lire votre entrée via l\'API publique de l\'app. Les fonds et soldes ckBTC sont sur le registre ckBTC et le réseau Bitcoin.',
+  'faq.txFeesTitle': 'Que couvrent les frais d\'envoi ?',
+  'faq.txFeesBody':
+    'Les envois peuvent inclure :\n\n• Commission d\'application — par défaut 0,5 % du montant, plafonnée à l\'équivalent BTC d\'environ 100 USD au moment de l\'envoi (un déploiement peut modifier ces valeurs par configuration). Affichée à l\'écran de confirmation.\n• Coûts de registre / réseau — les transferts ckBTC MOTO vers MOTO sont réglés sur ICP avec les frais indiqués dans l\'app. Les retraits vers une adresse Bitcoin native incluent un coût on-chain estimé supplémentaire (l\'app utilise une estimation conservatrice en sats ; les frais de mineur Bitcoin sont fixés par le réseau Bitcoin).',
+
+  ...legalTermsAndPrivacyEn,
 
   'send.header': 'Envoyer du Bitcoin',
   'send.enterAddress': 'Entrez une adresse Bitcoin ou un Principal ID',

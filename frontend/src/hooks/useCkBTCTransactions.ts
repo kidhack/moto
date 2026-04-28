@@ -358,15 +358,20 @@ function setIndexerUsed(source: 'blockstream' | 'mempool'): void {
 }
 
 export function useIndexerUsed(): 'blockstream' | 'mempool' | null {
-  const [, forceUpdate] = useState(0);
+  const [current, setCurrent] = useState<'blockstream' | 'mempool'>(() => {
+    if (lastIndexerUsed) return lastIndexerUsed;
+    return getPrimaryIndexer();
+  });
   useEffect(() => {
-    const listener = () => forceUpdate((n) => n + 1);
+    const listener = () => {
+      setCurrent(lastIndexerUsed ?? getPrimaryIndexer());
+    };
     indexerListeners.add(listener);
     return () => {
       indexerListeners.delete(listener);
     };
   }, []);
-  return lastIndexerUsed;
+  return current;
 }
 
 async function fetchBitcoinTx(txidHex: string): Promise<BitcoinTxData | null> {

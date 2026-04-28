@@ -25,6 +25,8 @@ import ReceiveBitcoin from '../components/ReceiveBitcoin';
 import CurrencySelector from '../components/CurrencySelector';
 import LanguageSelector from '../components/LanguageSelector';
 import FAQPage from '../components/FAQPage';
+import TermsPage from '../components/TermsPage';
+import PrivacyPage from '../components/PrivacyPage';
 import TransactionDetails from '../components/TransactionDetails';
 import { SlideFromRight } from '../components/SlideFromRight';
 import { useBackButton } from '../hooks/useBackButton';
@@ -86,6 +88,8 @@ export default function WalletDashboard() {
   const [showCurrencySelector, setShowCurrencySelector] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [showFAQ, setShowFAQ] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const [settingsExiting, setSettingsExiting] = useState(false);
   const [principalCopied, setPrincipalCopied] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
@@ -97,6 +101,8 @@ export default function WalletDashboard() {
   useBackButton(showAddFundsModal, () => setShowAddFundsModal(false));
   useBackButton(menuOpen, () => { setMenuClosing(true); });
   useBackButton(showFAQ, () => setShowFAQ(false));
+  useBackButton(showTerms, () => setShowTerms(false));
+  useBackButton(showPrivacy, () => setShowPrivacy(false));
   useBackButton(selectedTransaction !== null, () => setSelectedTransaction(null));
 
   const DEFAULT_WALLET_NAME = "Nakamoto's Wallet";
@@ -535,6 +541,18 @@ export default function WalletDashboard() {
         </SlideFromRight>
       )}
 
+      {showTerms && (
+        <SlideFromRight open={showTerms} onClose={() => setShowTerms(false)}>
+          <TermsPage onClose={() => setShowTerms(false)} />
+        </SlideFromRight>
+      )}
+
+      {showPrivacy && (
+        <SlideFromRight open={showPrivacy} onClose={() => setShowPrivacy(false)}>
+          <PrivacyPage onClose={() => setShowPrivacy(false)} />
+        </SlideFromRight>
+      )}
+
       {/* Add Funds Modal (same as Receive) - slide from right */}
       {showAddFundsModal && (
         walletAddress ? (
@@ -687,6 +705,26 @@ export default function WalletDashboard() {
                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                        </svg>
                        <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.faq')}</span>
+                     </button>
+
+                     <button
+                       onClick={() => { setMenuClosing(true); setShowTerms(true); }}
+                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
+                     >
+                       <svg className="size-5 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                       </svg>
+                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.terms')}</span>
+                     </button>
+
+                     <button
+                       onClick={() => { setMenuClosing(true); setShowPrivacy(true); }}
+                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
+                     >
+                       <svg className="size-5 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                       </svg>
+                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.privacy')}</span>
                      </button>
 
                      <div className="w-full border-t border-white/30 shrink-0" />

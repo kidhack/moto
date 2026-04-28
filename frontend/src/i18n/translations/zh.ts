@@ -1,3 +1,5 @@
+import legalTermsAndPrivacyEn from './legalTermsAndPrivacyEn';
+
 const zh: Record<string, string> = {
   'common.close': '关闭',
   'common.cancel': '取消',
@@ -26,7 +28,7 @@ const zh: Record<string, string> = {
   'menu.language': '语言',
   'menu.signOut': '退出登录',
   'menu.yourPrincipalId': '您的 Principal ID',
-  'menu.motoDescription': 'MOTO 完全在链上运行，由 Internet Computer 驱动。\n设置安全存储在私有容器中。\n财务活动仅记录在区块链上。',
+  'menu.motoDescription': 'MOTO 完全在链上运行，由 Internet Computer 驱动。\n设置保存在 MOTO 容器中，并按您的 Principal 隔离。\n资金活动记录在公开账本上。',
   'menu.wiping': '删除中…',
   'menu.wipeCanister': '删除数据并退出',
   'menu.signedOut': '已退出登录',
@@ -40,6 +42,8 @@ const zh: Record<string, string> = {
   'menu.resetting': '重置中…',
   'menu.resetOnboarding': '重置引导',
   'menu.faq': '常见问题',
+  'menu.terms': '服务条款',
+  'menu.privacy': '隐私政策',
 
   'faq.header': '常见问题',
   'faq.systemStatus': '系统状态',
@@ -49,20 +53,35 @@ const zh: Record<string, string> = {
   'faq.statusPriceCoinGecko': 'CoinGecko',
   'faq.statusPriceCoinGeckoDegraded': 'CoinGecko (降级)',
   'faq.statusPriceMempool': 'Mempool',
+  'faq.statusPriceCoinDesk': 'CoinDesk',
+  'faq.statusPriceBinance': 'Binance',
   'faq.statusPriceUnknown': '—',
   'faq.statusIndexerBlockstream': 'Blockstream',
   'faq.statusIndexerMempool': 'Mempool',
+  'faq.statusIndexerMixed': 'Blockstream + Mempool',
   'faq.statusIndexerUnknown': '—',
   'faq.howItWorksTitle': 'MOTO 如何运作',
-  'faq.howItWorksBody': 'MOTO 在 Internet Computer 上运行。应用和前端由链上容器提供服务。\n\n您的设置（钱包名称、货币、语言）私有地存储在每用户容器中，与个人身份无关。\n\n身份由 Internet Identity（去中心化）处理。\n\n余额和转账记录在比特币和 ckBTC 账本上。',
+  'faq.howItWorksBody': 'MOTO 在 Internet Computer（IC）上运行。应用与前端由链上容器提供服务。\n\n您的设置（钱包名称、货币、语言）保存在 MOTO 后端容器中，以 Internet Identity 的 Principal 为键隔离——同一容器代码、多租户分区，并非每位用户单独一个容器。\n\n身份由 Internet Identity（去中心化）处理。\n\n余额与转账在比特币与 ckBTC 账本上。',
   'faq.servicesTitle': '我们使用的服务',
   'faq.servicesBody': '• 法币价格：CoinGecko 和 Mempool.space（两个独立来源）\n• 比特币交易数据：Blockstream 和 Mempool.space（两个独立索引器）\n• Internet Identity 用于登录\n• ckBTC 铸币和账本容器在 Internet Computer 上',
   'faq.notOnChainTitle': '未上链 / 第三方依赖',
   'faq.notOnChainBody': '• 法币价格来自公共 API（CoinGecko、Mempool.space）\n• 界面中显示的比特币交易详情可能使用公共索引器（Blockstream、Mempool.space）\n• 应用更新：MOTO 容器由项目方升级。目前升级权限由项目控制。您的数据按 Principal 隔离。我们计划将升级权限向社区治理（如 SNS、多重签名）推进。',
   'faq.disclaimersTitle': '免责声明',
-  'faq.disclaimersBody': '• 非托管：您控制私钥。MOTO 不持有资金。\n• 非财务建议。价格波动。请自行研究。\n• 费用：发送收取应用费（0.5%，有上限）；网络费另计。',
+  'faq.disclaimersBody': '• 非托管：您通过 Internet Identity 控制访问；资产在公开账本上。MOTO 是钱包界面，不是银行。\n• 非财务建议。价格波动。请自行研究。\n• 费用：默认应用费为发送金额的 0.5%，上限为发送时点约等值 100 美元的比特币（部署可配置）；另加网络/账本费用。MOTO 用户间 ckBTC 转账显示应用费；提现到比特币地址时应用中另有链上成本估算。',
   'faq.networksTitle': '网络',
   'faq.networksBody': 'MOTO 支持比特币主网（ckBTC）和测试网（ckTESTBTC）。测试网启用时，仪表板会显示横幅。',
+
+  'faq.hostingTitle': 'MOTO 如何托管？',
+  'faq.hostingBody':
+    'MOTO 完全运行在 Internet Computer（ICP）上。前端与后端逻辑以容器（链上智能合约）部署，而非传统意义上租用的应用服务器（如 AWS、Cloudflare）。执行与存储按协议分布在 ICP 节点网络中。',
+  'faq.canisterTitle': '什么是容器？我的数据如何存储？',
+  'faq.canisterBody':
+    '在 ICP 上，容器保存代码与状态。MOTO 将您的显示名称、首选货币与语言、是否完成引导，以及应用内使用的比特币地址，保存在后端容器中，以 Internet Identity Principal 为键映射。其他用户无法通过应用的公开接口读取您的条目。资金与 ckBTC 余额在 ckBTC 账本与比特币网络上。',
+  'faq.txFeesTitle': '发送费用包含什么？',
+  'faq.txFeesBody':
+    '对外发送可能包括：\n\n• 应用费——默认为金额的 0.5%，上限为发送时点约等值 100 美元的比特币数量（部署可通过环境变量覆盖）。在确认界面显示。\n• 账本/网络费用——MOTO 用户间 ckBTC 转账在 IC 上结算，费用见应用所示。提现到原生比特币地址时另有估算的链上成本（应用使用保守的聪估算；实际比特币矿工费由比特币网络决定）。',
+
+  ...legalTermsAndPrivacyEn,
 
   'send.header': '发送比特币',
   'send.enterAddress': '请输入比特币地址或 Principal ID',

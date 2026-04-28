@@ -1,3 +1,5 @@
+import legalTermsAndPrivacyEn from './legalTermsAndPrivacyEn';
+
 const es: Record<string, string> = {
   'common.close': 'Cerrar',
   'common.cancel': 'Cancelar',
@@ -26,7 +28,7 @@ const es: Record<string, string> = {
   'menu.language': 'Idioma',
   'menu.signOut': 'Cerrar sesión',
   'menu.yourPrincipalId': 'Tu Principal ID',
-  'menu.motoDescription': 'MOTO funciona completamente on-chain, impulsado por Internet Computer.\nLos ajustes se almacenan de forma segura en un canister privado.\nLa actividad financiera solo se registra en blockchain.',
+  'menu.motoDescription': 'MOTO funciona completamente on-chain, impulsado por Internet Computer.\nLos ajustes se guardan en el canister de MOTO, aislados por tu Principal.\nLa actividad financiera queda registrada en ledgers públicos.',
   'menu.wiping': 'Borrando…',
   'menu.wipeCanister': 'Borrar datos y cerrar sesión',
   'menu.signedOut': 'Sesión cerrada',
@@ -40,6 +42,8 @@ const es: Record<string, string> = {
   'menu.resetting': 'Restableciendo…',
   'menu.resetOnboarding': 'Restablecer incorporación',
   'menu.faq': 'Preguntas frecuentes',
+  'menu.terms': 'Términos del servicio',
+  'menu.privacy': 'Política de privacidad',
 
   'faq.header': 'Preguntas frecuentes',
   'faq.systemStatus': 'Estado del sistema',
@@ -49,20 +53,35 @@ const es: Record<string, string> = {
   'faq.statusPriceCoinGecko': 'CoinGecko',
   'faq.statusPriceCoinGeckoDegraded': 'CoinGecko (degradado)',
   'faq.statusPriceMempool': 'Mempool',
+  'faq.statusPriceCoinDesk': 'CoinDesk',
+  'faq.statusPriceBinance': 'Binance',
   'faq.statusPriceUnknown': '—',
   'faq.statusIndexerBlockstream': 'Blockstream',
   'faq.statusIndexerMempool': 'Mempool',
+  'faq.statusIndexerMixed': 'Blockstream + Mempool',
   'faq.statusIndexerUnknown': '—',
   'faq.howItWorksTitle': 'Cómo funciona MOTO',
-  'faq.howItWorksBody': 'MOTO funciona en Internet Computer. La app y el frontend se sirven desde canisters on-chain.\n\nTus ajustes (nombre de billetera, moneda, idioma) se almacenan de forma privada en un canister por usuario, no vinculados a identidad personal.\n\nLa identidad la gestiona Internet Identity (descentralizado).\n\nSaldos y transferencias viven en los ledgers de Bitcoin y ckBTC.',
+  'faq.howItWorksBody': 'MOTO funciona en Internet Computer. La app y el frontend se sirven desde canisters on-chain.\n\nTus ajustes (nombre de billetera, moneda, idioma) se guardan en el canister backend de MOTO, en un registro asociado a tu Principal de Internet Identity: código de canister compartido con aislamiento por usuario, no un canister dedicado por persona.\n\nLa identidad la gestiona Internet Identity (descentralizado).\n\nSaldos y transferencias viven en los ledgers de Bitcoin y ckBTC.',
   'faq.servicesTitle': 'Servicios que usamos',
   'faq.servicesBody': '• Precios fiat: CoinGecko y Mempool.space (dos fuentes independientes)\n• Datos de transacciones Bitcoin: Blockstream y Mempool.space (dos indexadores independientes)\n• Internet Identity para login\n• Canisters minter y ledger ckBTC en Internet Computer',
   'faq.notOnChainTitle': 'Qué no está on-chain / Dependencias de terceros',
   'faq.notOnChainBody': '• Los precios fiat vienen de APIs públicas (CoinGecko, Mempool.space)\n• Los detalles de tx Bitcoin mostrados pueden usar indexadores públicos (Blockstream, Mempool.space)\n• Actualizaciones de app: los canisters MOTO son actualizables por el proyecto. Hoy la autoridad de actualización está controlada por el proyecto. Tus datos están aislados por Principal. Pretendemos llevar las actualizaciones hacia gobernanza comunitaria (p. ej. SNS, multi-firma).',
   'faq.disclaimersTitle': 'Avisos legales',
-  'faq.disclaimersBody': '• No custodia: Tú controlas tus llaves. MOTO no tiene fondos.\n• No es asesoramiento financiero. Los precios son volátiles. Haz tu propia investigación.\n• Comisiones: comisión de app (0.5%, máximo) en envíos; comisiones de red aplicables.',
+  'faq.disclaimersBody': '• No custodia: controlas el acceso con Internet Identity; los activos están en ledgers públicos. MOTO es una interfaz de billetera, no un banco.\n• No es asesoramiento financiero. Los precios son volátiles. Haz tu propia investigación.\n• Comisiones: comisión de app por defecto 0.5% del monto, con tope en BTC equivalente a USD $100 al momento del envío (configurable por despliegue), más costos de red/ledger. Los envíos ckBTC MOTO-a-MOTO muestran la comisión de app; retiros a Bitcoin incluyen un coste on-chain estimado en la app.',
   'faq.networksTitle': 'Redes',
   'faq.networksBody': 'MOTO soporta mainnet Bitcoin (ckBTC) y testnet (ckTESTBTC). Cuando testnet está activo, aparece un banner en el dashboard.',
+
+  'faq.hostingTitle': '¿Cómo se aloja MOTO?',
+  'faq.hostingBody':
+    'MOTO funciona por completo en Internet Computer (ICP). El frontend y la lógica de backend se despliegan como canisters (contratos inteligentes en ICP), no como una app clásica en servidores alquilados tipo AWS o Cloudflare. La ejecución y el almacenamiento se distribuyen en la red de nodos de ICP según el protocolo.',
+  'faq.canisterTitle': '¿Qué es un canister y cómo se guardan mis datos?',
+  'faq.canisterBody':
+    'En ICP, los canisters contienen código y estado. MOTO guarda tu nombre para mostrar, moneda e idioma preferidos, el estado de incorporación y una dirección Bitcoin usada por la app en su canister backend, en un mapa indexado por tu Principal de Internet Identity. Otros usuarios no pueden leer tu entrada a través de la API pública de la app. Los fondos y saldos ckBTC están en el ledger ckBTC y en la red Bitcoin.',
+  'faq.txFeesTitle': '¿Qué cubren las comisiones de envío?',
+  'faq.txFeesBody':
+    'Los envíos pueden incluir:\n\n• Comisión de app — por defecto 0.5% del monto, con tope en BTC equivalente a USD $100 al momento del envío (un despliegue puede cambiarlo por configuración). Se muestra en la pantalla de confirmación.\n• Costes de ledger/red — las transferencias ckBTC MOTO-a-MOTO se liquidan en ICP con las comisiones mostradas en la app. Los retiros a una dirección Bitcoin nativa incluyen un coste on-chain estimado adicional (la app usa una estimación conservadora en sats; las comisiones de minero las fija la red Bitcoin).',
+
+  ...legalTermsAndPrivacyEn,
 
   'send.header': 'Enviar Bitcoin',
   'send.enterAddress': 'Ingresa una dirección Bitcoin o Principal ID',
