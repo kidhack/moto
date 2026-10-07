@@ -33,8 +33,9 @@ export default function TransactionList({ isLoading, transactions, walletAddress
     selectedRef.current?.scrollIntoView({ block: 'nearest' });
   }, [selectedId]);
 
+  // Only exceptions get a label; completed rows stay clean.
   const statusLabel = (status: TransactionStatus) =>
-    status === 'pending' ? t('txDetails.pending') : status === 'failed' ? t('txDetails.failed') : t('txDetails.complete');
+    status === 'pending' ? t('txDetails.pending') : status === 'failed' ? t('txDetails.failed') : null;
 
   return (
     <div className="flex flex-col" style={{ gap: 19 }}>
@@ -86,7 +87,7 @@ export default function TransactionList({ isLoading, transactions, walletAddress
                     </div>
                   </div>
                   {desktop && (
-                    <p className={`flex-1 min-w-0 truncate text-left text-sm ${tx.status === 'confirmed' ? 'text-white/40' : 'text-white/70'}`}>
+                    <p className="flex-1 min-w-0 truncate text-left text-sm text-white/60">
                       {statusLabel(tx.status)}
                     </p>
                   )}
