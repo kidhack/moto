@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useKeypadKeys } from '../hooks/useKeypadKeys';
 import { trimTrailingZeros } from '../lib/utils';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import { useScreenTransitionGuard } from '../hooks/useScreenTransitionGuard';
@@ -131,6 +132,8 @@ export default function SetAmount({ onConfirm, onClose, initialCurrency, initial
       return prev.slice(0, -1);
     });
   };
+
+  useKeypadKeys(true, { onDigit: handleNumberPress, onBackspace: handleBackspace, onEnter: () => handleConfirm() });
 
   // Handle confirm — zero or empty clears the set amount
   const handleConfirm = () => {

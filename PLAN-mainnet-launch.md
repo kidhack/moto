@@ -177,6 +177,13 @@ Add `vitest`; unit-test `computeFeeSats`, the debit/receive table above, max-sen
 
 ## Phase 5 — Desktop Layout
 
+> **Status: implemented** (branch `mainnet-launch`). Differences from the notes below, decided while building it:
+> - No `useWalletDashboard` hook or prop drilling. Instead the shared pieces became components (`MenuPanel`, `BalanceDisplay`, `TransactionList`) used by both layouts; state stays in `WalletDashboard`, and mobile DOM is unchanged (verified side by side).
+> - No `embedded` prop on Send/Receive. `ContainedPanel` gives them a transformed ancestor, which becomes the containing block for their `fixed inset-0` layers, so they fill the right column unchanged. Legal pages and Currency/Language open in a centered `ContainedModal`.
+> - Columns: 290 / flexible / 400 px (240 / flexible / 340 below 1280px). The plan's 280px right column was too narrow for the Send keypad.
+> - Right column idle state shows the deposit QR + address (scan from a phone wallet), with Send/Receive below. Transaction details open in the right column with the row highlighted.
+> - Desktop extras: keyboard amount entry (digits, Backspace, Enter), Esc closes panels/modals, refresh button, no camera auto-start (webcam prompt on open was jarring).
+
 Follows `PLAN-desktop-layout.md`, with these changes:
 
 1. **Extract state first.** Move `WalletDashboard`'s 21 `useState`s + handlers into `hooks/useWalletDashboard.ts`. Mobile and desktop both call it → no 35-prop drilling into `DesktopLayout`. Do this as its own commit with **zero visual change**, and check mobile before moving on.

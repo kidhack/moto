@@ -16,6 +16,8 @@ interface TransactionDetailsProps {
   walletAddress: string;
   onClose: () => void;
   onSelectTransaction: (tx: Transaction) => void;
+  /** Render inline instead of portaling to <body> (desktop shows it inside a panel). Default true. */
+  portal?: boolean;
 }
 
 type CurrencyMode = 'BTC' | 'SATS' | string;
@@ -219,6 +221,7 @@ function TransactionDetailsContent({
   walletAddress,
   onClose,
   onSelectTransaction,
+  portal = true,
 }: TransactionDetailsProps) {
   const transaction = transactions[selectedIndex];
 
@@ -417,5 +420,5 @@ function TransactionDetailsContent({
     </div>
   );
 
-  return createPortal(content, document.body);
+  return portal ? createPortal(content, document.body) : content;
 }

@@ -17,6 +17,8 @@ const en: Record<string, string> = {
   'dashboard.openMenu': 'Open menu',
   'dashboard.addFunds': 'Add funds',
   'dashboard.refreshing': 'Refreshing…',
+  'dashboard.refresh': "Refresh",
+  'dashboard.yourAddress': "Your Bitcoin address",
   'dashboard.releaseToRefresh': 'Release to refresh',
   'dashboard.pullToRefresh': 'Pull to refresh',
   'dashboard.testnet': '⚠️ TESTNET',

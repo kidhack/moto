@@ -15,6 +15,8 @@ const hi: Record<string, string> = {
   'dashboard.openMenu': 'मेनू खोलें',
   'dashboard.addFunds': 'धन जोड़ें',
   'dashboard.refreshing': 'रिफ्रेश हो रहा है…',
+  'dashboard.refresh': "रीफ़्रेश करें",
+  'dashboard.yourAddress': "आपका बिटकॉइन पता",
   'dashboard.releaseToRefresh': 'रिफ्रेश के लिए छोड़ें',
   'dashboard.pullToRefresh': 'रिफ्रेश के लिए खींचें',
   'dashboard.testnet': '⚠️ टेस्टनेट',

@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { useIsDesktop } from '../hooks/useIsDesktop';
+import { useKeypadKeys } from '../hooks/useKeypadKeys';
 import { trimTrailingZeros } from '../lib/utils';
 import { Principal } from '@dfinity/principal';
 import { useScreenTransitionGuard } from '../hooks/useScreenTransitionGuard';
@@ -155,6 +157,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   const qrScanner = useQRScanner({
     facingMode: 'environment',
   });
+  const isDesktop = useIsDesktop();
 
   // Handle QR code scan result
   useEffect(() => {
@@ -206,6 +209,9 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
       return;
     }
 
+    // On desktop, don't prompt for webcam access on open; "Start Camera" is still available.
+    if (isDesktop) return;
+
     // If camera is not active and we can start, do it
     if (!qrScanner.isActive && !qrScanner.isLoading) {
       const startCamera = async () => {
@@ -240,6 +246,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     }
   }, [
     step,
+    isDesktop,
     qrScanner.isActive,
     qrScanner.isScanning,
     qrScanner.isSupported,
@@ -439,6 +446,8 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     }
     setStep('confirm');
   };
+
+  useKeypadKeys(step === 'amount', { onDigit: handleNumberPress, onBackspace: handleBackspace, onEnter: handleNext });
 
   // Remaining balance after this send: we debit quote.totalDebit (amount + app fee + ledger fees).
   const getRemainingBalanceSatoshis = (): bigint => {

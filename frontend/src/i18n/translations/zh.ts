@@ -15,6 +15,8 @@ const zh: Record<string, string> = {
   'dashboard.openMenu': '打开菜单',
   'dashboard.addFunds': '充值',
   'dashboard.refreshing': '刷新中…',
+  'dashboard.refresh': "刷新",
+  'dashboard.yourAddress': "您的比特币地址",
   'dashboard.releaseToRefresh': '松开刷新',
   'dashboard.pullToRefresh': '下拉刷新',
   'dashboard.testnet': '⚠️ 测试网',
