@@ -17,7 +17,7 @@ interface SetAmountProps {
 // Currency display mode: 'BTC' | 'SATS' | preferred currency code
 type CurrencyMode = 'BTC' | 'SATS' | string;
 
-export default function SetAmount({ address: _address, onConfirm, onClose, initialCurrency, initialAmount }: SetAmountProps) {
+export default function SetAmount({ onConfirm, onClose, initialCurrency, initialAmount }: SetAmountProps) {
   const { preferredCurrency } = usePreferredCurrency();
   const { t } = useTranslation();
   const { data: btcPriceData } = useBTCPrice();

@@ -193,7 +193,7 @@ export default function WalletDashboard() {
       await clear();
       try {
         sessionStorage.setItem('moto_skip_splash', '1');
-      } catch {}
+      } catch { /* storage unavailable (private mode) */ }
       toast.success(t('menu.signedOut'));
       setTimeout(() => {
         window.location.href = window.location.origin + window.location.pathname;
@@ -217,7 +217,7 @@ export default function WalletDashboard() {
       await clear();
       try {
         sessionStorage.setItem('moto_skip_splash', '1');
-      } catch {}
+      } catch { /* storage unavailable (private mode) */ }
       toast.success(t('menu.canisterWiped'));
       setTimeout(() => {
         window.location.href = window.location.origin + window.location.pathname;
@@ -228,7 +228,7 @@ export default function WalletDashboard() {
         await clear();
         try {
           sessionStorage.setItem('moto_skip_splash', '1');
-        } catch {}
+        } catch { /* storage unavailable (private mode) */ }
         window.location.href = window.location.origin + window.location.pathname;
       } catch (clearError) {
         console.error('Failed to clear identity:', clearError);

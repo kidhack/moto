@@ -1,21 +1,19 @@
 # Dependencies
 node_modules/
-package-lock.json
 
-# Environment variables
+# Environment variables (mode files like .env.production / .env.testnet / .env.mainnet are committed)
 .env
 .env.local
 .env.*.local
 
 # dfx
 .dfx/
-canister_ids.json
 *.wasm
 *.wasm.gz
 
 # Build outputs
 dist/
-build/
+/build/
 *.log
 
 # IDE
@@ -34,8 +32,7 @@ Thumbs.db
 
 # Generated files (root declarations from dfx generate; frontend/src/declarations is committed)
 /declarations/
-src/
-*.d.ts
+/src/
 
 # Stray / accidental ref assets (e.g. space in filename)
 ref/img/ .svg
@@ -43,4 +40,3 @@ ref/img/ .svg
 # Temporary files
 *.tmp
 *.temp
-

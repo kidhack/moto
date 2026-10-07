@@ -131,7 +131,7 @@ export function useCkBTCLedger() {
         console.log('useCkBTCLedger: Querying balance for default subaccount (subaccount = undefined)...');
         
         // Use the library's balanceOf method
-        let balanceValue = await ledger.balance({
+        const balanceValue = await ledger.balance({
           owner: principal,
           // subaccount: undefined means default account
         });

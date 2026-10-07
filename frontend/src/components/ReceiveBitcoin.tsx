@@ -48,6 +48,12 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
       .catch((err) => console.warn('ReceiveBitcoin: setBitcoinAddress failed (wallet may not exist yet):', err));
   }, [actor, address]);
 
+  // Hooks must run before the early return below (same hook order on every render).
+  // Store both amount and currency to properly display and convert
+  const [amountCurrency, setAmountCurrency] = useState<string>('BTC');
+  const [addressCopied, setAddressCopied] = useState(false);
+  const isGuardDisabled = useScreenTransitionGuard(500);
+
   // Don't render if address is invalid
   if (!address || !isValidBitcoinAddress(address)) {
     return (
@@ -64,8 +70,6 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
     );
   }
 
-  // Store both amount and currency to properly display and convert
-  const [amountCurrency, setAmountCurrency] = useState<string>('BTC');
 
   const BTC_PRICE_FIAT = getBTCPriceInCurrency(btcPriceData, preferredCurrency);
   const priceIsStale = isPriceStale(btcPriceData);
@@ -113,8 +117,6 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
     return value.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   };
 
-  const [addressCopied, setAddressCopied] = useState(false);
-  const isGuardDisabled = useScreenTransitionGuard(500);
 
   const copyAddress = async () => {
     try {

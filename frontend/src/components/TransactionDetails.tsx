@@ -207,7 +207,13 @@ function TxCard({
   );
 }
 
-export default function TransactionDetails({
+export default function TransactionDetails(props: TransactionDetailsProps) {
+  // Guard outside the hook-using component so hooks always run in the same order.
+  if (!props.transactions[props.selectedIndex]) return null;
+  return <TransactionDetailsContent {...props} />;
+}
+
+function TransactionDetailsContent({
   transactions,
   selectedIndex,
   walletAddress,
@@ -215,7 +221,6 @@ export default function TransactionDetails({
   onSelectTransaction,
 }: TransactionDetailsProps) {
   const transaction = transactions[selectedIndex];
-  if (!transaction) return null;
 
   const { t } = useTranslation();
 
