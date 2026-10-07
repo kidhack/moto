@@ -5,12 +5,6 @@ import Debug "mo:base/Debug";
 import Time "mo:base/Time";
 import Text "mo:base/Text";
 import Char "mo:base/Char";
-import Migration "Migration";
-
-// One-time migration (drops the old fake balance/transactions, clears unverified addresses).
-// Remove the `with migration` clause in the release after this one has been deployed:
-// it only accepts the pre-migration state shape, so a later upgrade with it attached is rejected.
-(with migration = Migration.run)
 persistent actor BitcoinWallet {
   transient let principalMap = OrderedMap.Make<Principal>(Principal.compare);
   transient let textMap = OrderedMap.Make<Text>(Text.compare);

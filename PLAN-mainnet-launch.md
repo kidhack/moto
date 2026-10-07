@@ -92,7 +92,7 @@ New `Migration.mo` used via `(with migration = Migration.run) persistent actor`:
 - Build an empty `addressIndex`.
 - Test the upgrade locally against a snapshot of the current state (`dfx deploy` old version → create wallets → upgrade → verify names/prefs survive).
 
-### 2e½. Deploy note
+### 2e½. Deploy note (done: migration deployed to the live canister and removed afterwards)
 
 The migration runs once. In the **next** backend release after it's deployed, delete the `(with migration = Migration.run)` line and `Migration.mo` — the migration only accepts the old state shape, so an upgrade with it still attached is rejected (safe, but blocks the deploy).
 
