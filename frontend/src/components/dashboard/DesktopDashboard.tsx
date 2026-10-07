@@ -25,8 +25,8 @@ interface DesktopDashboardProps {
 }
 
 /**
- * Desktop (≥1024px) dashboard: a compact centered panel with the menu on the left, balance and
- * history in the middle, and Send/Receive on the right. All data and state come from WalletDashboard.
+ * Desktop (≥1024px) dashboard filling the window: menu on the left, balance and history in the
+ * (flexible) middle, and Send/Receive on the right. All data and state come from WalletDashboard.
  */
 const thinScrollbar = { scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.2) transparent' } as const;
 
@@ -71,10 +71,10 @@ export default function DesktopDashboard({
   }, [rightPanelOpen, modal, onCloseRightPanel]);
 
   return (
-    <div className="flex h-dvh min-h-dvh items-center justify-center bg-black text-white overflow-hidden p-6 xl:p-8">
-      <div className="flex w-full max-w-[1120px] h-[min(760px,calc(100dvh-48px))] xl:h-[min(760px,calc(100dvh-64px))]">
+    <div className="flex h-dvh min-h-dvh bg-black text-white overflow-hidden">
+      <div className="flex flex-1 min-w-0 h-full">
         {/* Left: menu */}
-        <aside className="w-[240px] xl:w-[290px] shrink-0 flex flex-col min-h-0 pt-4 px-5 pb-5">
+        <aside className="w-[240px] xl:w-[290px] 2xl:w-[320px] shrink-0 flex flex-col min-h-0 pt-4 px-5 pb-5">
           <img src="/assets/moto-logo.svg" alt="MOTO" className="h-8 w-[172px] object-contain object-left shrink-0" />
           <div className="h-px w-full bg-white/50 shrink-0 mt-4" />
           <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pt-6" style={thinScrollbar}>{menuPanel}</div>
@@ -116,7 +116,7 @@ export default function DesktopDashboard({
         <div className="w-px bg-white/50 shrink-0" />
 
         {/* Right: Send / Receive */}
-        <ContainedPanel className="w-[340px] xl:w-[400px] shrink-0">
+        <ContainedPanel className="w-[340px] xl:w-[400px] 2xl:w-[440px] shrink-0">
           {rightPanelOpen ? (
             rightPanel
           ) : (
