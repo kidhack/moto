@@ -5,7 +5,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useWalletInfo, useEnsureWallet, useResetOnboarding, useSignOutAndReset, useWalletAddress } from '../hooks/useQueries';
 import { useCkBTCMinter } from '../hooks/useCkBTCMinter';
 import { useCkBTCLedger } from '../hooks/useCkBTCLedger';
-import { isBech32AddressForStorage } from '../utils/addressValidation';
 import { useCkBTCTransactions } from '../hooks/useCkBTCTransactions';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import type { Transaction } from '../backend';
@@ -157,23 +156,6 @@ export default function WalletDashboard() {
       ensureWallet.mutate();
     }
   }, [actor, ensureWallet]);
-
-  // Explicitly sync this user's ckBTC address to the canister as soon as we have both wallet and address.
-  // This guarantees getPrincipalByBitcoinAddress can resolve our address for senders (MOTO-to-MOTO),
-  // independent of useWalletInfo query timing.
-  useEffect(() => {
-    if (!actor || !ensureWallet.isSuccess || !ckbtcAddress || !isBech32AddressForStorage(ckbtcAddress)) return;
-    let cancelled = false;
-    actor
-      .setBitcoinAddress(ckbtcAddress)
-      .then(() => {
-        if (!cancelled) console.log('WalletDashboard: setBitcoinAddress synced for MOTO-to-MOTO', ckbtcAddress.slice(0, 12) + '...');
-      })
-      .catch((err) => {
-        if (!cancelled) console.warn('WalletDashboard: setBitcoinAddress failed:', err);
-      });
-    return () => { cancelled = true; };
-  }, [actor, ensureWallet.isSuccess, ckbtcAddress]);
 
   const handleResetOnboarding = async () => {
     try {

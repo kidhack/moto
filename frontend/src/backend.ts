@@ -23,11 +23,11 @@ export interface Transaction {
   burnMemo?: number[];
 }
 
-export interface UserWallet {
+/** Wallet record stored in the MOTO canister (metadata only; funds live on the ckBTC ledger). */
+export interface CanisterWallet {
   principal: Principal;
+  /** ckBTC deposit address derived by the minter; "" until registerDepositAddress has run. */
   bitcoinAddress: BitcoinAddress;
-  transactions: Transaction[];
-  balance: bigint;
   onboardingComplete: boolean;
   walletName: string;
   preferredCurrency: string;
@@ -36,26 +36,35 @@ export interface UserWallet {
   lastUpdated: bigint;
 }
 
-// Actor interface matching the Motoko backend
+/** Wallet view model used by the UI: canister metadata + live ledger balance and history. */
+export interface UserWallet extends CanisterWallet {
+  transactions: Transaction[];
+  balance: bigint;
+}
+
+export interface MotoConfig {
+  minterId: string;
+  maxWallets: bigint;
+  walletCount: bigint;
+}
+
+// Actor interface matching the Motoko backend. Candid `opt T` decodes as [] | [T].
 export interface BitcoinWalletActor {
   ensureWalletExists: () => Promise<BitcoinAddress>;
-  getBalance: () => Promise<bigint>;
-  syncBalanceFromLedger: (newBalance: bigint) => Promise<void>;
-  getTransactionHistory: () => Promise<Transaction[]>;
-  sendTransaction: (toAddress: BitcoinAddress, amount: bigint) => Promise<TransactionId>;
-  getBitcoinAddress: () => Promise<BitcoinAddress>;
-  setBitcoinAddress: (address: BitcoinAddress) => Promise<void>;
+  registerDepositAddress: () => Promise<BitcoinAddress>;
+  getPrincipalByBitcoinAddress: (address: string) => Promise<[] | [Principal]>;
+  resolveRecipient: (address: string) => Promise<[] | [Principal]>;
   setWalletName: (name: string) => Promise<void>;
   setPreferences: (currency: string, language: string) => Promise<void>;
-  getWalletInfo: () => Promise<UserWallet | null>;
-  getPrincipalByBitcoinAddress: (address: string) => Promise<Principal | null>;
+  getWalletInfo: () => Promise<[] | [CanisterWallet]>;
   completeOnboarding: () => Promise<void>;
   isOnboardingComplete: () => Promise<boolean>;
   resetOnboarding: () => Promise<void>;
   signOutAndReset: () => Promise<void>;
-  getAllWallets: () => Promise<UserWallet[]>;
+  getAllWallets: () => Promise<CanisterWallet[]>;
+  getConfig: () => Promise<MotoConfig>;
+  setConfig: (minterId: [] | [string], maxWallets: [] | [bigint]) => Promise<void>;
 }
 
 // Type for ActorSubclass with our interface
 export type BitcoinWalletActorSubclass = ActorSubclass<BitcoinWalletActor>;
-

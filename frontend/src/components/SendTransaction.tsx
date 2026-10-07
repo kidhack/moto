@@ -448,6 +448,8 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
           toPrincipal: recipientPrincipal,
           amount: amountSatoshis,
           btcPriceUsd: btcPriceUsdForFee,
+          // Looked up from a Bitcoin address: re-verify with an update call before sending.
+          viaAddress: pastedPrincipal ? undefined : input,
         });
         toast.success(t('send.sentInstant'));
         if (onSuccess) {

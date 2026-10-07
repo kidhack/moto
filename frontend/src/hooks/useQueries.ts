@@ -8,9 +8,9 @@ import { useCkBTCMinter, createCkBTCMinterIDL, CKBTC_MINTER_CANISTER_ID, type Ck
 import { useCkBTCLedger, CKBTC_LEDGER_CANISTER_ID } from './useCkBTCLedger';
 import { useCkBTCTransactions } from './useCkBTCTransactions';
 import { useInternetIdentity } from './useInternetIdentity';
-import type { UserWallet, BitcoinAddress, TransactionId, Transaction } from '../backend';
+import type { UserWallet, CanisterWallet, BitcoinAddress, Transaction, BitcoinWalletActor } from '../backend';
 import { setSessionWithdrawal } from '../lib/sessionWithdrawalStore';
-import { isValidBitcoinAddress, isBech32AddressForStorage } from '../utils/addressValidation';
+import { isValidBitcoinAddress } from '../utils/addressValidation';
 import { checkPendingDeposits } from '../utils/bitcoinTestnetChecker';
 
 /** Which price sources contributed (for transparency / FAQ system status) */
@@ -182,46 +182,19 @@ export function useWalletInfo() {
       
       try {
         console.log('useWalletInfo: Fetching wallet info...');
-        let wallet: UserWallet | null = null;
+        let wallet: CanisterWallet | null = null;
         try {
           const raw = await actor.getWalletInfo();
           // Candid opt returns [value] for Some, [] for None in @dfinity/agent
-          wallet = Array.isArray(raw) ? (raw.length > 0 ? raw[0] as UserWallet : null) : (raw ?? null);
+          wallet = raw.length > 0 ? raw[0] ?? null : null;
         } catch (error) {
           // Wallet might not exist in custom canister yet - that's OK, we can still show balance from ledger
           console.log('useWalletInfo: Wallet not found in custom canister (this is OK if we have ledger balance)');
         }
         
-        // If we have a ckBTC balance from the ledger, use that instead of the canister balance
-        // The ledger has the real balance, the canister just stores metadata
-        // Use ledger balance even if it's 0 (it's the source of truth)
-        let finalBalance = BigInt(0);
-        if (ckbtcBalance !== null && ckbtcBalance !== undefined) {
-          finalBalance = ckbtcBalance;
-          // Sync canister balance with ledger so sendTransaction (which checks canister balance) succeeds
-          try {
-            await actor.syncBalanceFromLedger(ckbtcBalance);
-          } catch (syncErr) {
-            console.warn('useWalletInfo: syncBalanceFromLedger failed (non-fatal):', syncErr);
-          }
-        } else if (wallet?.balance) {
-          console.log('useWalletInfo: Using canister balance (ledger not available):', wallet.balance.toString());
-          finalBalance = wallet.balance;
-        } else {
-          console.log('useWalletInfo: No balance available from ledger or canister');
-        }
-        
-        // Sync canister's stored Bitcoin address whenever we have a wallet and a bech32 ckBTC address,
-        // so getPrincipalByBitcoinAddress works for other users (MOTO-to-MOTO). Use isBech32AddressForStorage
-        // so we store the address for both mainnet (bc1) and testnet (tb1) regardless of VITE_USE_TESTNET.
-        if (wallet && ckbtcAddress && isBech32AddressForStorage(ckbtcAddress)) {
-          try {
-            await actor.setBitcoinAddress(ckbtcAddress);
-          } catch (addrErr) {
-            console.warn('useWalletInfo: setBitcoinAddress failed (non-fatal):', addrErr);
-          }
-        }
-        
+        // The ckBTC ledger is the only balance source; the canister stores metadata only.
+        const finalBalance = ckbtcBalance ?? BigInt(0);
+
         // NEVER use fake address from custom canister - only use real ckBTC address
         const realBitcoinAddress = ckbtcAddress && isValidBitcoinAddress(ckbtcAddress) 
           ? ckbtcAddress 
@@ -269,10 +242,8 @@ export function useWalletInfo() {
           }
         }
         
-        // Merge transactions from custom canister and ckBTC ledger
-        // Deduplicate by transaction ID and sort by timestamp (newest first)
-        const canisterTransactions = wallet?.transactions || [];
-        const allTransactions: Transaction[] = [...canisterTransactions, ...ckbtcTransactions];
+        // Deduplicate ledger transactions by ID and sort by timestamp (newest first)
+        const allTransactions: Transaction[] = [...ckbtcTransactions];
         
         // Deduplicate transactions by ID
         const transactionMap = new Map<string, Transaction>();
@@ -287,18 +258,6 @@ export function useWalletInfo() {
         // Sort by timestamp (newest first)
         const mergedTransactions = Array.from(transactionMap.values())
           .sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
-        
-        console.log('useWalletInfo: ========================================');
-        console.log('useWalletInfo: Transaction merge summary:');
-        console.log('  - Canister transactions:', canisterTransactions.length);
-        console.log('  - ckBTC ledger transactions:', ckbtcTransactions.length);
-        console.log('  - Merged total:', mergedTransactions.length);
-        if (canisterTransactions.length > 0) {
-          console.log('useWalletInfo: Sample canister transaction:', canisterTransactions[0]);
-        }
-        if (ckbtcTransactions.length > 0) {
-          console.log('useWalletInfo: Sample ckBTC transaction:', ckbtcTransactions[0]);
-        }
         
         // If we have a balance from the ledger, create a wallet object even if custom canister doesn't have one
         // This ensures the balance is displayed even if the wallet hasn't been created in the custom canister yet
@@ -441,25 +400,31 @@ export function useEnsureWallet() {
           throw new Error('Actor not available. Cannot ensure wallet exists.');
         }
 
-        console.log('useEnsureWallet: Ensuring wallet exists in custom canister...');
-        const addressPromise = actor.ensureWalletExists();
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => {
-            reject(new Error('Wallet setup timed out after 30 seconds. Please check your connection and try again.'));
-          }, 30000);
-        });
+        const timeout = <T,>(promise: Promise<T>, label: string) =>
+          Promise.race([
+            promise,
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error(`${label} timed out after 30 seconds. Please check your connection and try again.`)), 30000)
+            ),
+          ]);
 
-        const address = await Promise.race([addressPromise, timeoutPromise]);
-        
-        if (!address || address.length === 0) {
-          throw new Error('Failed to create wallet: empty address returned');
+        await timeout(actor.ensureWalletExists(), 'Wallet setup');
+
+        // The canister asks the ckBTC minter for this principal's deposit address (never trusts the client),
+        // so other MOTO users sending to it get an instant ckBTC transfer. Non-fatal: without it, incoming
+        // sends from MOTO users fall back to a normal Bitcoin deposit.
+        let registered = '';
+        try {
+          registered = await timeout(actor.registerDepositAddress(), 'Address registration');
+        } catch (err) {
+          console.warn('useEnsureWallet: registerDepositAddress failed (non-fatal):', err);
         }
-        
-        const duration = Date.now() - startTime;
-        console.log(`useEnsureWallet: Wallet ensured in custom canister in ${duration}ms:`, address);
-        
-        // Return the canister address (ckBTC address is just for reference, wallet is in canister)
-        return address;
+        if (registered && ckbtcAddress && registered.toLowerCase() !== ckbtcAddress.toLowerCase()) {
+          // Backend minter config doesn't match this build's network (e.g. testnet vs mainnet).
+          console.error('useEnsureWallet: registered deposit address does not match minter address shown in app');
+        }
+        console.log(`useEnsureWallet: wallet ready in ${Date.now() - startTime}ms`);
+        return registered;
       } catch (error) {
         const duration = Date.now() - startTime;
         console.error(`useEnsureWallet: Error after ${duration}ms:`, error);
@@ -470,8 +435,7 @@ export function useEnsureWallet() {
         throw new Error(`Failed to ensure wallet exists: ${String(error)}`);
       }
     },
-    onSuccess: (address) => {
-      console.log('useEnsureWallet: onSuccess called with address:', address);
+    onSuccess: () => {
       // DO NOT cache the fake address from custom canister
       // Only the ckBTC minter provides real Bitcoin addresses
       // The custom canister address is only used internally for wallet setup
@@ -561,32 +525,26 @@ export function useSignOutAndReset() {
   });
 }
 
-export function useSendTransaction() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-
-  return useMutation<TransactionId, Error, { toAddress: BitcoinAddress; amount: bigint }>({
-    mutationFn: async ({ toAddress, amount }) => {
-      if (!actor) throw new Error('Actor not initialized');
-      try {
-        return await actor.sendTransaction(toAddress, amount);
-      } catch (error) {
-        console.error('Error sending transaction:', error);
-        throw error;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['walletInfo'] });
-    },
-    retry: 1,
-  });
-}
-
 /** Normalize Bitcoin address for lookup: bech32 (bc1/tb1) is case-insensitive, use lowercase to match canister. */
 function normalizeAddressForLookup(address: string): string {
   const t = address.trim();
   if (/^(bc1|tb1)/i.test(t)) return t.toLowerCase();
   return t;
+}
+
+function optPrincipalText(raw: [] | [Principal]): string | null {
+  return raw.length > 0 && raw[0] ? raw[0].toText() : null;
+}
+
+/**
+ * Re-check, with an update call (agreed on by the subnet rather than one replica), that a Bitcoin
+ * address still resolves to the principal the user confirmed. Throws if it doesn't.
+ */
+async function verifyRecipient(actor: BitcoinWalletActor, address: string, expectedPrincipal: string) {
+  const resolved = optPrincipalText(await actor.resolveRecipient(normalizeAddressForLookup(address)));
+  if (resolved !== expectedPrincipal) {
+    throw new Error('Recipient could not be verified. Please review the address and try again.');
+  }
 }
 
 /** Look up principal by Bitcoin address (for smart send: instant ckBTC vs withdraw to BTC). */
@@ -597,28 +555,9 @@ export function usePrincipalByBitcoinAddress(address: string | null) {
     queryKey: ['principalByBitcoinAddress', normalized || ''],
     queryFn: async () => {
       if (!actor || !normalized) return null;
-      console.log('getPrincipalByBitcoinAddress: looking up', normalized.slice(0, 14) + '...');
       try {
         const raw = await actor.getPrincipalByBitcoinAddress(normalized);
-        console.log('getPrincipalByBitcoinAddress: raw response', raw);
-        // Candid Opt returns [] for None, [value] for Some. Agent may also return null or Principal directly.
-        const principal = Array.isArray(raw) ? (raw.length > 0 ? raw[0] : null) : raw;
-        if (!principal) {
-          console.log('getPrincipalByBitcoinAddress: no MOTO user for this address');
-          return null;
-        }
-        const principalText =
-          typeof principal === 'string'
-            ? principal
-            : typeof principal?.toText === 'function'
-              ? principal.toText()
-              : String(principal);
-        if (principalText && principalText !== 'null' && principalText !== 'undefined') {
-          console.log('getPrincipalByBitcoinAddress: found MOTO user →', principalText.slice(0, 10) + '...');
-          return principalText;
-        }
-        console.log('getPrincipalByBitcoinAddress: could not extract principal text from', principal);
-        return null;
+        return optPrincipalText(raw);
       } catch (e) {
         console.warn('getPrincipalByBitcoinAddress: backend call failed', e);
         return null;
@@ -632,15 +571,21 @@ export function usePrincipalByBitcoinAddress(address: string | null) {
 /** Instant ckBTC transfer to another principal (ICRC-1; no minter approval). App fee (0.5%, max $100) is charged on top when configured. */
 export function useTransferCkBTC() {
   const { identity } = useInternetIdentity();
+  const { actor } = useActor();
   const queryClient = useQueryClient();
 
   return useMutation<
     { block_index: bigint },
     Error,
-    { toPrincipal: string; amount: bigint; btcPriceUsd: number }
+    /** viaAddress: the Bitcoin address the principal was looked up from (omit for a pasted principal). */
+    { toPrincipal: string; amount: bigint; btcPriceUsd: number; viaAddress?: string }
   >({
-    mutationFn: async ({ toPrincipal, amount, btcPriceUsd }) => {
+    mutationFn: async ({ toPrincipal, amount, btcPriceUsd, viaAddress }) => {
       if (!identity) throw new Error('Not authenticated');
+      if (viaAddress) {
+        if (!actor) throw new Error('Not connected');
+        await verifyRecipient(actor, viaAddress, toPrincipal);
+      }
       const host = 'https://ic0.app';
       const agent = new HttpAgent({ identity: identity as any, host });
       const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';

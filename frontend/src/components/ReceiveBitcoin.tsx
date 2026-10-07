@@ -9,8 +9,7 @@ import { useBTCPrice, isPriceStale, getBTCPriceInCurrency } from '../hooks/useQu
 import { formatFiatCompact } from '../data/currencies';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import StalePriceIndicator from './StalePriceIndicator';
-import { useActor } from '../hooks/useActor';
-import { isValidBitcoinAddress, isBech32AddressForStorage } from '../utils/addressValidation';
+import { isValidBitcoinAddress } from '../utils/addressValidation';
 import BackCloseButton from './BackCloseButton';
 import { useTranslation } from '../i18n';
 
@@ -25,7 +24,6 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
   const [showSetAmount, setShowSetAmount] = useState(false);
   const { data: btcPriceData } = useBTCPrice();
   const { preferredCurrency } = usePreferredCurrency();
-  const { actor } = useActor();
 
   // Validate address is real - NEVER display fake addresses
   useEffect(() => {
@@ -37,16 +35,6 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
       }
     }
   }, [address, onClose]);
-
-  // Sync this address to the MOTO canister when user opens Receive, so getPrincipalByBitcoinAddress
-  // can resolve it for senders (MOTO-to-MOTO). Uses bech32 check so testnet (tb1) is stored too.
-  useEffect(() => {
-    if (!actor || !address || !isBech32AddressForStorage(address)) return;
-    actor
-      .setBitcoinAddress(address)
-      .then(() => console.log('ReceiveBitcoin: setBitcoinAddress synced for MOTO-to-MOTO'))
-      .catch((err) => console.warn('ReceiveBitcoin: setBitcoinAddress failed (wallet may not exist yet):', err));
-  }, [actor, address]);
 
   // Hooks must run before the early return below (same hook order on every render).
   // Store both amount and currency to properly display and convert

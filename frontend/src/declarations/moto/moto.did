@@ -1,49 +1,45 @@
 type UserWallet = 
  record {
-   balance: int;
    bitcoinAddress: BitcoinAddress;
    createdAt: int;
    lastUpdated: int;
    onboardingComplete: bool;
-   "principal": principal;
-   transactions: vec Transaction;
-   walletName: text;
    preferredCurrency: text;
    preferredLanguage: text;
+   "principal": principal;
+   walletName: text;
  };
-type TransactionStatus = 
- variant {
-   confirmed;
-   failed;
-   pending;
- };
-type TransactionId = text;
-type Transaction = 
+type Config = 
  record {
-   amount: int;
-   fee: int;
-   fromAddress: BitcoinAddress;
-   id: TransactionId;
-   status: TransactionStatus;
-   timestamp: int;
-   toAddress: BitcoinAddress;
+   maxWallets: nat;
+   minterId: text;
+   walletCount: nat;
  };
 type BitcoinAddress = text;
 service : {
   completeOnboarding: () -> ();
+  /// Returns the registered deposit address ("" until registerDepositAddress has run).
   ensureWalletExists: () -> (BitcoinAddress);
   getAllWallets: () -> (vec UserWallet);
-  getBalance: () -> (int);
-  getBitcoinAddress: () -> (BitcoinAddress);
-  getTransactionHistory: () -> (vec Transaction);
-  getWalletInfo: () -> (opt UserWallet);
-  isOnboardingComplete: () -> (bool);
+  getConfig: () -> (Config);
+  /// Fast lookup for the send screen's "Instant / Bitcoin" hint while typing.
+  /// Don't route funds on this alone — a query is answered by a single replica.
+  getPrincipalByBitcoinAddress: (address: text) -> (opt principal) query;
+  getWalletInfo: () -> (opt UserWallet) query;
+  isOnboardingComplete: () -> (bool) query;
+  /// Asks the ckBTC minter for the caller's deposit address and indexes it, so other MOTO users
+  /// sending to that address get an instant ckBTC transfer. The address is never taken from the client.
+  registerDepositAddress: () -> (BitcoinAddress);
   resetOnboarding: () -> ();
-  sendTransaction: (toAddress: BitcoinAddress, amount: int) ->
-   (TransactionId);
-  setBitcoinAddress: (BitcoinAddress) -> ();
-  setWalletName: (text) -> ();
+  /// Same lookup as an update call (agreed on by the subnet). The send flow uses this
+  /// result on confirm to decide where funds go.
+  resolveRecipient: (address: text) -> (opt principal);
+  /// Controller-only. Changing the minter (e.g. testnet -> mainnet cutover) clears every stored
+  /// deposit address, since they belong to the old minter; users re-register on next login.
+  setConfig: (newMinterId: opt text, newMaxWallets: opt nat) -> ();
   setPreferences: (currency: text, language: text) -> ();
-  getPrincipalByBitcoinAddress: (text) -> (opt principal) query;
+  setWalletName: (name: text) -> ();
+  /// Deletes the caller's name/preferences and address registration. Funds are untouched:
+  /// ckBTC belongs to the principal on the ledger, not to this canister.
   signOutAndReset: () -> ();
 }

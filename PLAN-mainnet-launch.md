@@ -92,6 +92,10 @@ New `Migration.mo` used via `(with migration = Migration.run) persistent actor`:
 - Build an empty `addressIndex`.
 - Test the upgrade locally against a snapshot of the current state (`dfx deploy` old version → create wallets → upgrade → verify names/prefs survive).
 
+### 2e½. Deploy note
+
+The migration runs once. In the **next** backend release after it's deployed, delete the `(with migration = Migration.run)` line and `Migration.mo` — the migration only accepts the old state shape, so an upgrade with it still attached is rejected (safe, but blocks the deploy).
+
 ### 2f. Frontend wiring
 
 - Regenerate declarations (`dfx generate`).
@@ -203,7 +207,7 @@ Can run in parallel with Phase 4.
 - [ ] If D2 = yes: deploy the testnet build to its own canister/subdomain first.
 
 ### Cutover
-1. Backend: `setConfig(minter = "mqygn-kiaaa-aaaar-qaadq-cai")`, then call a controller-only `resetAddresses()` (clears testnet `tb1…` addresses + index; users re-register on next login).
+1. Backend: `dfx canister call moto setConfig '(opt "mqygn-kiaaa-aaaar-qaadq-cai", null)' --network ic`. Changing the minter automatically clears every stored testnet `tb1…` address and the index; users re-register on next login. Check with `getConfig`.
 2. Frontend: `.env.mainnet` → `VITE_USE_TESTNET=false`; `npm run build:mainnet`; check the bundle contains `mxzaz-…` (ledger), `mqygn-…` (minter), `n5wcd-…` (index) and **not** `mc6ru`/`ml52i`/`mm444`.
 3. `dfx deploy moto_frontend --network ic`.
 4. Remove the TESTNET label (should follow automatically from `VITE_USE_TESTNET`).
