@@ -17,8 +17,11 @@ interface TransactionDetailsProps {
   walletAddress: string;
   onClose: () => void;
   onSelectTransaction: (tx: Transaction) => void;
-  /** Render inline instead of portaling to <body> (desktop shows it inside a panel). Default true. */
-  portal?: boolean;
+  /**
+   * 'overlay' (mobile, default): swipeable cards over the dashboard, portaled to <body>.
+   * 'panel' (desktop): the selected transaction alone, filling its container, no card styling.
+   */
+  variant?: 'overlay' | 'panel';
 }
 
 type CurrencyMode = 'BTC' | 'SATS' | string;
@@ -44,6 +47,8 @@ interface TxCardProps {
   preferredCurrency: string;
   marketPriceStale: boolean;
   t: (key: string, vars?: Record<string, string | number>) => string;
+  /** No card background/corners (desktop panel). */
+  flat?: boolean;
 }
 
 function TxCard({
@@ -67,6 +72,7 @@ function TxCard({
   preferredCurrency,
   marketPriceStale,
   t,
+  flat = false,
 }: TxCardProps) {
   const isSent = transaction.fromAddress === walletAddress;
   const txType = isSent ? 'sent' : (transaction.toAddress === walletAddress ? 'received' : 'added');
@@ -80,7 +86,7 @@ function TxCard({
   return (
     <div
       className="flex-shrink-0 w-full flex flex-col overflow-hidden"
-      style={{ backgroundColor: '#111111', minHeight: '100%', borderRadius: 2 }}
+      style={flat ? { backgroundColor: '#000', minHeight: '100%' } : { backgroundColor: '#111111', minHeight: '100%', borderRadius: 2 }}
     >
       {/* Header - 20px inner padding */}
       <header className="flex items-center justify-between h-8 shrink-0 px-5 mb-5" style={{ marginTop: 16 }}>
@@ -216,7 +222,7 @@ function TransactionDetailsContent({
   walletAddress,
   onClose,
   onSelectTransaction,
-  portal = true,
+  variant = 'overlay',
 }: TransactionDetailsProps) {
   const transaction = transactions[selectedIndex];
 
@@ -415,5 +421,35 @@ function TransactionDetailsContent({
     </div>
   );
 
-  return portal ? createPortal(content, document.body) : content;
+  if (variant === 'panel') {
+    return (
+      <div className="absolute inset-0 flex flex-col bg-black overflow-y-auto">
+        <TxCard
+          transaction={transaction}
+          walletAddress={walletAddress}
+          currencyMode={currencyMode}
+          onCycleCurrency={cycleCurrency}
+          onClose={onClose}
+          formatBTC={formatBTC}
+          formatSats={formatSats}
+          formatAmount={formatAmount}
+          formatDate={formatDate}
+          formatAddress={formatAddress}
+          getBlockExplorerUrl={getBlockExplorerUrl}
+          getStatusDisplay={getStatusDisplay}
+          getFiatValue={getFiatValue}
+          copiedField={copiedField}
+          copyToClipboard={copyToClipboard}
+          priceAtTimeLoading={priceAtTimeLoading}
+          BTC_PRICE_FIAT={BTC_PRICE_FIAT}
+          preferredCurrency={preferredCurrency}
+          marketPriceStale={marketPriceStale}
+          t={t}
+          flat
+        />
+      </div>
+    );
+  }
+
+  return createPortal(content, document.body);
 }

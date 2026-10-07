@@ -413,7 +413,7 @@ export default function WalletDashboard() {
         walletAddress={walletAddress ?? walletAddressForTx}
         onClose={() => setSelectedTransaction(null)}
         onSelectTransaction={(tx) => setSelectedTransaction(tx)}
-        portal={!isDesktop}
+        variant={isDesktop ? 'panel' : 'overlay'}
       />
     );
   })();
