@@ -1,4 +1,5 @@
-import type { Transaction } from '../../backend';
+import { useEffect, useRef } from 'react';
+import type { Transaction, TransactionStatus } from '../../backend';
 import { useTranslation } from '../../i18n';
 
 interface TransactionListProps {
@@ -10,11 +11,30 @@ interface TransactionListProps {
   formatDate: (timestamp: bigint) => string;
   /** Highlights the row whose details are open (desktop shows them alongside the list). */
   selectedId?: string | null;
+  /** Desktop: status column, and every row padded so highlighting doesn't shift its contents. */
+  desktop?: boolean;
+}
+
+/** Dot color: sent red / received green; dim until a withdrawal completes; gray if it failed. */
+function dotClass(isSent: boolean, status: TransactionStatus): string {
+  if (status === 'failed') return 'bg-white/40 opacity-60';
+  const color = isSent ? 'bg-red-500' : 'bg-green-500';
+  if (status === 'pending') return `${color} opacity-25`;
+  return `${color} opacity-60 group-hover:opacity-100 group-active:opacity-100`;
 }
 
 /** Newest-first transaction rows (with loading shimmer and empty state). Shared by mobile and desktop. */
-export default function TransactionList({ isLoading, transactions, walletAddress, onSelect, formatBTC, formatDate, selectedId }: TransactionListProps) {
+export default function TransactionList({ isLoading, transactions, walletAddress, onSelect, formatBTC, formatDate, selectedId, desktop = false }: TransactionListProps) {
   const { t } = useTranslation();
+  const selectedRef = useRef<HTMLButtonElement>(null);
+
+  // Keep the selected row visible when it changes (keyboard navigation on desktop).
+  useEffect(() => {
+    selectedRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [selectedId]);
+
+  const statusLabel = (status: TransactionStatus) =>
+    status === 'pending' ? t('txDetails.pending') : status === 'failed' ? t('txDetails.failed') : t('txDetails.complete');
 
   return (
     <div className="flex flex-col" style={{ gap: 19 }}>
@@ -41,21 +61,22 @@ export default function TransactionList({ isLoading, transactions, walletAddress
             .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
             .map((tx) => {
               const isSent = tx.fromAddress === walletAddress;
+              const isSelected = tx.id === selectedId;
               return (
                 <button
                   key={tx.id}
+                  ref={isSelected ? selectedRef : undefined}
                   onClick={() => onSelect(tx)}
-                  className={`group flex w-full items-center justify-between h-8 hover:opacity-100 transition-opacity ${
-                    tx.id === selectedId ? 'opacity-100 bg-white/10 -mx-2 px-2 w-[calc(100%+1rem)]' : 'opacity-80'
-                  }`}
+                  className={
+                    desktop
+                      ? `group flex items-center justify-between h-8 -mx-2 px-2 hover:opacity-100 transition-opacity ${isSelected ? 'opacity-100 bg-white/10' : 'opacity-80'}`
+                      : 'group flex w-full items-center justify-between h-8 opacity-80 hover:opacity-100 transition-opacity'
+                  }
+                  style={desktop ? { width: 'calc(100% + 1rem)' } : undefined}
                 >
-                  <div className="flex items-center gap-[8px]">
+                  <div className={`flex items-center gap-[8px] ${desktop ? 'w-48 shrink-0' : ''}`}>
                     <div className="h-4 w-4 flex items-center justify-center shrink-0">
-                      {isSent ? (
-                        <div className="h-2 w-2 rounded-full bg-red-500 opacity-60 group-hover:opacity-100 group-active:opacity-100 transition-opacity" />
-                      ) : (
-                        <div className="h-2 w-2 rounded-full bg-green-500 opacity-60 group-hover:opacity-100 group-active:opacity-100 transition-opacity" />
-                      )}
+                      <div className={`h-2 w-2 rounded-full transition-opacity ${dotClass(isSent, tx.status)}`} />
                     </div>
                     <div className="flex items-center gap-1">
                       <span className="font-mono text-[18px] font-medium text-white/80" style={{ letterSpacing: '0.8px' }}>₿</span>
@@ -64,6 +85,11 @@ export default function TransactionList({ isLoading, transactions, walletAddress
                       </p>
                     </div>
                   </div>
+                  {desktop && (
+                    <p className={`flex-1 min-w-0 truncate text-left text-sm ${tx.status === 'confirmed' ? 'text-white/40' : 'text-white/70'}`}>
+                      {statusLabel(tx.status)}
+                    </p>
+                  )}
                   <p className="font-mono text-[18px] font-normal text-white/50 whitespace-nowrap" style={{ letterSpacing: '-0.04em' }}>
                     {formatDate(tx.timestamp)}
                   </p>

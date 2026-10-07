@@ -7,6 +7,7 @@ import { useBTCPrice, isPriceStale, getBTCPriceInCurrency } from '../hooks/useQu
 import { formatFiatCompact, getCurrencyMeta } from '../data/currencies';
 import StalePriceIndicator from './StalePriceIndicator';
 import { useTranslation } from '../i18n';
+import BackCloseButton from './BackCloseButton';
 
 interface SetAmountProps {
   address: string;
@@ -154,17 +155,7 @@ export default function SetAmount({ onConfirm, onClose, initialCurrency, initial
       {/* Main container - pt-4 matches dashboard/menu header */}
       <div className="flex flex-col pt-4 flex-1 min-h-0">
         <header className="flex items-center justify-between h-8 shrink-0 px-5">
-          <button
-            onClick={onClose}
-            className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
-            aria-label={t('common.close')}
-          >
-            <img 
-              src="/assets/close.png" 
-              alt="" 
-              className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
-            />
-          </button>
+          <BackCloseButton onClose={onClose} />
           <p className="font-medium text-xl text-white tracking-[-0.22px]">
             {t('setAmount.header')}
           </p>

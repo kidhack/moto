@@ -2,9 +2,11 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Principal } from '@dfinity/principal';
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { useInternetIdentity } from './useInternetIdentity';
-import { createCkBTCMinterIDL, CKBTC_MINTER_CANISTER_ID } from './useCkBTCMinter';
+import { useQuery } from '@tanstack/react-query';
+import { createCkBTCMinterIDL, CKBTC_MINTER_CANISTER_ID, type CkBTCMinter } from './useCkBTCMinter';
 import { getSessionWithdrawal } from '../lib/sessionWithdrawalStore';
-import type { Transaction } from '../backend';
+import { withdrawalStatus } from '../lib/withdrawalStatus';
+import type { Transaction, TransactionStatus } from '../backend';
 import { IC_HOST } from '../lib/ic';
 
 const FEE_PARENT_TIME_WINDOW_SEC = 120;
@@ -591,6 +593,29 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
     return () => { cancelled = true; };
   }, [identity, transactions, destinationAddressByTxId]);
 
+  // Withdrawals stay pending until their Bitcoin transaction confirms. One minter call returns the
+  // status of every withdrawal for this principal (keyed by the ledger burn block index).
+  const burnCount = transactions.filter((tx) => tx.id.startsWith('icrc1-burn-')).length;
+  const principalText = identity ? identity.getPrincipal().toText() : null;
+  const { data: withdrawalStatusByBlock } = useQuery<Record<string, TransactionStatus>>({
+    queryKey: ['withdrawalStatuses', principalText, burnCount],
+    enabled: !!identity && burnCount > 0,
+    queryFn: async () => {
+      const agent = await HttpAgent.create({ host: HOST });
+      const minter = Actor.createActor(createCkBTCMinterIDL(), {
+        agent,
+        canisterId: CKBTC_MINTER_CANISTER_ID,
+      }) as unknown as CkBTCMinter;
+      const rows = await minter.retrieve_btc_status_v2_by_account([{ owner: identity!.getPrincipal(), subaccount: [] }]);
+      return Object.fromEntries(
+        rows.map((row) => [row.block_index.toString(), withdrawalStatus((row.status_v2[0] ?? null) as Record<string, unknown> | null)])
+      );
+    },
+    staleTime: 30_000,
+    // Keep polling while anything is still on its way to the Bitcoin network.
+    refetchInterval: (query) => (Object.values(query.state.data ?? {}).includes('pending') ? 60_000 : false),
+  });
+
   const transactionsWithSource = useMemo(
     () => transactions.map(tx => {
       const isBurn = tx.id.startsWith('icrc1-burn-');
@@ -599,13 +624,15 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
       const toAddress = isBurn
         ? (sessionAddress ?? destinationAddressByTxId[tx.id] ?? tx.toAddress)
         : (destinationAddressByTxId[tx.id] ?? tx.toAddress);
+      const status = (blockIndex && withdrawalStatusByBlock?.[blockIndex]) || tx.status;
       return {
         ...tx,
+        status,
         sourceBitcoinAddress: sourceAddressByTxId[tx.id] ?? tx.sourceBitcoinAddress,
         toAddress,
       };
     }),
-    [transactions, sourceAddressByTxId, destinationAddressByTxId]
+    [transactions, sourceAddressByTxId, destinationAddressByTxId, withdrawalStatusByBlock]
   );
 
   useEffect(() => {

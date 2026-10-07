@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { vibrateLight } from '../utils/haptics';
 import { useTranslation } from '../i18n';
+import BackCloseButton from './BackCloseButton';
 
 interface TransactionDetailsProps {
   transactions: Transaction[];
@@ -83,13 +84,7 @@ function TxCard({
     >
       {/* Header - 20px inner padding */}
       <header className="flex items-center justify-between h-8 shrink-0 px-5 mb-5" style={{ marginTop: 16 }}>
-        <button
-          onClick={onClose}
-          className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
-          aria-label={t('common.close')}
-        >
-          <img src="/assets/close.png" alt="" className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" />
-        </button>
+        <BackCloseButton onClose={onClose} />
         <p className="font-medium text-lg text-white tracking-[-0.22px] truncate">
           {txType === 'received' ? t('txDetails.received') : t('txDetails.sent')}
         </p>

@@ -11,7 +11,8 @@ interface DesktopDashboardProps {
   balance: ReactNode;
   showAddFunds: boolean;
   onAddFunds: () => void;
-  onRefresh: () => void;
+  /** Returns a promise so the icon can spin until the refresh finishes. */
+  onRefresh: () => Promise<unknown> | void;
   recoveryBanner: ReactNode;
   testnetBadge: ReactNode;
   transactionList: ReactNode;
@@ -48,6 +49,14 @@ export default function DesktopDashboard({
 }: DesktopDashboardProps) {
   const { t } = useTranslation();
   const rightPanelOpen = rightPanel !== null;
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    // Spin at least one full turn so a fast refresh still reads as "done something".
+    await Promise.all([Promise.resolve(onRefresh()).catch(() => {}), new Promise((r) => setTimeout(r, 700))]);
+    setRefreshing(false);
+  };
   const [addressCopied, setAddressCopied] = useState(false);
   const copyAddress = async () => {
     if (!address) return;
@@ -74,7 +83,7 @@ export default function DesktopDashboard({
     <div className="flex h-dvh min-h-dvh bg-black text-white overflow-hidden">
       <div className="flex flex-1 min-w-0 h-full">
         {/* Left: menu */}
-        <aside className="w-[240px] xl:w-[290px] 2xl:w-[320px] shrink-0 flex flex-col min-h-0 pt-4 px-5 pb-5">
+        <aside className="w-[240px] xl:w-[290px] 2xl:w-[320px] shrink-0 flex flex-col min-h-0 pt-6 px-5 pb-5">
           <img src="/assets/moto-logo.svg" alt="MOTO" className="h-8 w-[172px] object-contain object-left shrink-0" />
           <div className="h-px w-full bg-white/50 shrink-0 mt-4" />
           <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pt-6" style={thinScrollbar}>{menuPanel}</div>
@@ -84,7 +93,7 @@ export default function DesktopDashboard({
 
         {/* Center: balance + history */}
         <main className="flex-1 min-w-0 flex flex-col min-h-0">
-          <div className="flex flex-col shrink-0 pt-4 px-5">
+          <div className="flex flex-col shrink-0 pt-6 px-5">
             <header className="flex items-center justify-between h-8">
               {balance}
               <div className="flex items-center gap-2">
@@ -94,8 +103,8 @@ export default function DesktopDashboard({
                   </button>
                 )}
                 {/* No pull-to-refresh on desktop */}
-                <button onClick={onRefresh} className="h-8 w-8 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors" aria-label={t('dashboard.refresh')} title={t('dashboard.refresh')}>
-                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <button onClick={handleRefresh} disabled={refreshing} className="h-8 w-8 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors" aria-label={t('dashboard.refresh')} title={t('dashboard.refresh')}>
+                  <svg className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M23 4v6h-6M1 20v-6h6" />
                     <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
                   </svg>
@@ -118,9 +127,12 @@ export default function DesktopDashboard({
         {/* Right: Send / Receive */}
         <ContainedPanel className="w-[340px] xl:w-[400px] 2xl:w-[440px] shrink-0">
           {rightPanelOpen ? (
-            rightPanel
+            // Mobile screens use pt-4; nudge them down 8px so their headers line up with the pt-6 columns.
+            <div className="absolute inset-x-0 bottom-0 top-2 overflow-hidden" style={{ transform: 'translateZ(0)' }}>
+              {rightPanel}
+            </div>
           ) : (
-            <div className="flex h-full flex-col pt-4 px-5 pb-5">
+            <div className="flex h-full flex-col pt-6 px-5 pb-5">
               <header className="flex items-center h-8 shrink-0">
                 <p className="font-medium text-base text-white/80 tracking-[0.8px]">{t('dashboard.yourAddress')}</p>
               </header>

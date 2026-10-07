@@ -78,6 +78,14 @@ export default function FAQPage({ onClose }: FAQPageProps) {
 
             <div className="h-px w-full bg-white/30 shrink-0" />
 
+            {/* Instant MOTO-to-MOTO sends */}
+            <section>
+              <h2 className="font-medium text-base text-white tracking-[0.8px] mb-2">{t('faq.instantTitle')}</h2>
+              <p className="text-sm text-white/70 leading-relaxed whitespace-pre-line">{t('faq.instantBody')}</p>
+            </section>
+
+            <div className="h-px w-full bg-white/30 shrink-0" />
+
             <section>
               <h2 className="font-medium text-base text-white tracking-[0.8px] mb-2">{t('faq.txFeesTitle')}</h2>
               <p className="text-sm text-white/70 leading-relaxed whitespace-pre-line">{t('faq.txFeesBody')}</p>
@@ -105,6 +113,14 @@ export default function FAQPage({ onClose }: FAQPageProps) {
             <section>
               <h2 className="font-medium text-base text-white tracking-[0.8px] mb-2">{t('faq.nonCustodialTitle')}</h2>
               <p className="text-sm text-white/70 leading-relaxed whitespace-pre-line">{t('faq.nonCustodialBody')}</p>
+            </section>
+
+            <div className="h-px w-full bg-white/30 shrink-0" />
+
+            {/* Login backup / recovery */}
+            <section>
+              <h2 className="font-medium text-base text-white tracking-[0.8px] mb-2">{t('faq.backupTitle')}</h2>
+              <p className="text-sm text-white/70 leading-relaxed whitespace-pre-line">{t('faq.backupBody')}</p>
             </section>
 
             <div className="h-px w-full bg-white/30 shrink-0" />

@@ -16,11 +16,11 @@ const legalTermsAndPrivacyEn: Record<string, string> = {
 
   'terms.s03Title': '3. No Recovery of Lost Funds',
   'terms.s03Body':
-    'MOTO cannot recover lost, stolen, or misdirected Bitcoin or ckBTC. This includes but is not limited to:\n\n• Sending BTC or ckBTC to an incorrect address\n• Loss of access to your Internet Identity\n• Accidental or unauthorized transactions\n• Errors resulting from user input\n\nAll transactions on Bitcoin and ICP are irreversible. Double-check all recipient addresses before sending.',
+    'MOTO cannot recover lost, stolen, or misdirected Bitcoin or ckBTC. This includes but is not limited to:\n\n• Sending BTC or ckBTC to an incorrect address\n• Sending ckBTC to an Internet Computer principal or account you or the recipient do not control (for example, an exchange that requires a specific deposit account)\n• Bitcoin deposits below the ckBTC minimum, or deposits rejected by the ckBTC Bitcoin check, which are not converted to ckBTC\n• Loss of access to your Internet Identity (for example, a lost passkey with no recovery method set up)\n• Accidental or unauthorized transactions\n• Errors resulting from user input\n\nAll transactions on Bitcoin and ICP are irreversible. Double-check all recipient addresses before sending.',
 
   'terms.s04Title': '4. Fees',
   'terms.s04Body':
-    'MOTO charges an app fee on outgoing sends. By default the fee is 0.5% of the amount you send, capped at the Bitcoin equivalent of USD $100 at send time (a deployment may configure different values via environment variables).\n\nInstant transfers to another MOTO user move ckBTC on ICP: you pay the app fee plus ckBTC ledger costs (a small fixed fee per transfer), all shown on the confirm screen.\n\nWithdrawals to a native Bitcoin address include the same app fee plus ckBTC ledger costs. In addition, the ckBTC minter deducts its own fee and the Bitcoin miner fee from the amount withdrawn, so the recipient receives less than the amount sent; the confirm screen shows an estimate of what the recipient receives. Miner fees are set by the Bitcoin network and may differ from the estimate.\n\nThe app fee is collected as a separate transfer after your send succeeds. If your send fails, no app fee is charged.',
+    'MOTO charges an app fee on outgoing sends. By default the fee is 0.5% of the amount you send, capped at the Bitcoin equivalent of USD $100 at send time.\n\nInstant transfers to another MOTO user move ckBTC on ICP: you pay the app fee plus ckBTC ledger costs (a small fixed fee per transfer), all shown on the confirm screen.\n\nWithdrawals to a native Bitcoin address include the same app fee plus ckBTC ledger costs. In addition, the ckBTC minter deducts its own fee and the Bitcoin miner fee from the amount withdrawn, so the recipient receives less than the amount sent; the confirm screen shows an estimate of what the recipient receives. Miner fees are set by the Bitcoin network and may differ from the estimate.\n\nThe app fee is collected as a separate transfer after your send succeeds. If your send fails, no app fee is charged.',
 
   'terms.s05Title': '5. On-Chain Hosting and Availability',
   'terms.s05Body':
@@ -75,7 +75,7 @@ const legalTermsAndPrivacyEn: Record<string, string> = {
 
   'privacy.s05Title': '5. Internet Identity',
   'privacy.s05Body':
-    'MOTO uses ICP\'s Internet Identity for authentication. Internet Identity is designed so you do not create a classic username/password for MOTO and you are not required to provide personal information to MOTO through II. See https://identity.ic0.app for official documentation.',
+    'MOTO uses ICP\'s Internet Identity for authentication. Internet Identity is designed so you do not create a classic username/password for MOTO and you are not required to provide personal information to MOTO through II. See https://id.ai for official documentation and to manage your recovery methods.',
 
   'privacy.s06Title': '6. Third-Party APIs',
   'privacy.s06Body':
@@ -87,7 +87,7 @@ const legalTermsAndPrivacyEn: Record<string, string> = {
 
   'privacy.s08Title': '8. On-Chain Hosting and Privacy Benefits',
   'privacy.s08Body':
-    'Because MOTO\'s frontend and backend logic are deployed as ICP canisters:\n\n• There is no traditional MOTO-operated centralized database for wallet settings of the kind common in classic SaaS\n• App distribution and execution occur in the ICP protocol model rather than on a single rented server under MOTO\'s desk\n\nThis architecture provides structural privacy protections that differ from typical centralized wallet backends.',
+    'Because MOTO\'s frontend and backend logic are deployed as ICP canisters:\n\n• There is no traditional MOTO-operated centralized database for wallet settings of the kind common in classic SaaS\n• App distribution and execution occur in the ICP protocol model rather than on a single rented server\n\nThis architecture provides structural privacy protections that differ from typical centralized wallet backends.',
 
   'privacy.s09Title': '9. Canister Upgrade Authority',
   'privacy.s09Body':
@@ -95,7 +95,7 @@ const legalTermsAndPrivacyEn: Record<string, string> = {
 
   'privacy.s10Title': '10. Local Device Cache',
   'privacy.s10Body':
-    'The app may cache recent BTC fiat prices in your browser\'s local storage to improve resilience when price APIs are slow or unavailable. This cache does not contain your name or email; clear site data in your browser if you want to remove it.',
+    'The app stores a few things in your browser\'s local storage, on your device only:\n\n• Your Internet Identity session, so you stay signed in (managed by the Internet Identity client library)\n• Recent BTC fiat prices, so the app works when price APIs are slow\n• Display preferences and small UI state (for example, whether you dismissed the login backup reminder, and which deposit notices you have already seen)\n\nNone of this contains your name or email. Signing out ends the session; clearing site data in your browser removes the rest.',
 
   'privacy.s11Title': '11. Changes and Contact',
   'privacy.s11Body':

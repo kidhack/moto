@@ -354,8 +354,27 @@ export default function WalletDashboard() {
       formatBTC={formatBTC}
       formatDate={formatDate}
       selectedId={isDesktop ? selectedTransaction?.id ?? null : null}
+      desktop={isDesktop}
     />
   );
+
+  // Desktop: ↑/↓ move through the history (details follow in the right panel).
+  const sortedTransactions = [...displayTransactions].sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
+  const anyOverlayOpen = showFAQ || showTerms || showPrivacy || showCurrencySelector || showLanguageSelector || showSendModal || showReceiveModal || showAddFundsModal;
+  useEffect(() => {
+    if (!isDesktop || anyOverlayOpen || sortedTransactions.length === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      e.preventDefault();
+      const idx = selectedTransaction ? sortedTransactions.findIndex((tx) => tx.id === selectedTransaction.id) : -1;
+      const next = e.key === 'ArrowDown' ? Math.min(idx + 1, sortedTransactions.length - 1) : Math.max(idx - 1, 0);
+      setSelectedTransaction(sortedTransactions[next]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   const recoveryBanner = !recoveryAcked && ledgerBalance !== null && ledgerBalance > BigInt(0) && (
     <div className="flex items-start gap-3 py-3 border-b border-white/30">
@@ -435,7 +454,7 @@ export default function WalletDashboard() {
         balance={<BalanceDisplay balance={ledgerBalance} formatBTC={formatBTC} />}
         showAddFunds={ledgerBalance === null || ledgerBalance <= BigInt(0)}
         onAddFunds={() => setShowAddFundsModal(true)}
-        onRefresh={() => { refetchWalletInfo(); }}
+        onRefresh={() => refetchWalletInfo()}
         recoveryBanner={recoveryBanner}
         testnetBadge={testnetBadge}
         transactionList={transactionList}

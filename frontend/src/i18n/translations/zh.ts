@@ -16,7 +16,7 @@ const zh: Record<string, string> = {
   'dashboard.addFunds': '充值',
   'dashboard.refreshing': '刷新中…',
   'dashboard.refresh': "刷新",
-  'dashboard.yourAddress': "您的比特币地址",
+  'dashboard.yourAddress': "钱包地址",
   'dashboard.releaseToRefresh': '松开刷新',
   'dashboard.pullToRefresh': '下拉刷新',
   'dashboard.testnet': '⚠️ 测试网',
@@ -30,7 +30,6 @@ const zh: Record<string, string> = {
   'menu.language': '语言',
   'menu.signOut': '退出登录',
   'menu.yourPrincipalId': '您的 Principal ID',
-  'menu.motoDescription': 'MOTO 完全在链上运行，由 Internet Computer 驱动。\n设置保存在 MOTO 容器中，并按您的 Principal 隔离。\n资金活动记录在公开账本上。',
   'menu.wiping': '删除中…',
   'menu.wipeCanister': '删除数据并退出',
   'menu.signedOut': '已退出登录',
@@ -65,7 +64,7 @@ const zh: Record<string, string> = {
   'faq.howItWorksTitle': 'MOTO 如何运作',
   'faq.howItWorksBody': 'MOTO 在 Internet Computer（IC）上运行。应用与前端由链上容器提供服务。\n\n您的设置（钱包名称、货币、语言）保存在 MOTO 后端容器中，以 Internet Identity 的 Principal 为键隔离——同一容器代码、多租户分区，并非每位用户单独一个容器。\n\n身份由 Internet Identity（去中心化）处理。\n\n余额与转账在比特币与 ckBTC 账本上。',
   'faq.servicesTitle': '我们使用的服务',
-  'faq.servicesBody': '• 法币价格：CoinGecko 和 Mempool.space（两个独立来源）\n• 比特币交易数据：Blockstream 和 Mempool.space（两个独立索引器）\n• Internet Identity 用于登录\n• ckBTC 铸币和账本容器在 Internet Computer 上',
+  'faq.servicesBody': "法币价格来自 CoinGecko、Mempool.space、CoinDesk 和 Binance。比特币交易详情来自 Mempool.space 和 Blockstream。登录由 Internet Identity 处理。转账使用 ICP 上的 ckBTC canister。",
   'faq.notOnChainTitle': '未上链 / 第三方依赖',
   'faq.notOnChainBody': '• 法币价格来自公共 API（CoinGecko、Mempool.space）\n• 界面中显示的比特币交易详情可能使用公共索引器（Blockstream、Mempool.space）\n• 应用更新：MOTO 容器由项目方升级。目前升级权限由项目控制。您的数据按 Principal 隔离。我们计划将升级权限向社区治理（如 SNS、多重签名）推进。',
   'faq.disclaimersTitle': '免责声明',
@@ -77,11 +76,13 @@ const zh: Record<string, string> = {
   'faq.hostingBody':
     'MOTO 完全运行在 Internet Computer（ICP）上。前端与后端逻辑以容器（链上智能合约）部署，而非传统意义上租用的应用服务器（如 AWS、Cloudflare）。执行与存储按协议分布在 ICP 节点网络中。',
   'faq.canisterTitle': '什么是容器？我的数据如何存储？',
-  'faq.canisterBody':
-    '在 ICP 上，容器保存代码与状态。MOTO 将您的显示名称、首选货币与语言、是否完成引导，以及应用内使用的比特币地址，保存在后端容器中，以 Internet Identity Principal 为键映射。其他用户无法通过应用的公开接口读取您的条目。资金与 ckBTC 余额在 ckBTC 账本与比特币网络上。',
+  'faq.canisterBody': "ICP 的智能合约——存储代码和状态。MOTO 的 canister 保存您的钱包名称、偏好设置和 ckBTC 充值地址。只有您通过 Internet Identity 登录后才能修改它们。",
   'faq.txFeesTitle': '发送费用包含什么？',
-  'faq.txFeesBody':
-    '对外发送可能包括：\n\n• 应用费——默认为金额的 0.5%，上限为发送时点约等值 100 美元的比特币数量（部署可通过环境变量覆盖）。在确认界面显示。\n• 账本/网络费用——MOTO 用户间 ckBTC 转账在 IC 上结算，费用见应用所示。提现到原生比特币地址时另有估算的链上成本（应用使用保守的聪估算；实际比特币矿工费由比特币网络决定）。',
+  'faq.txFeesBody': "MOTO 收取转账金额 0.5% 的应用费，上限相当于 100 美元，用于支付 ICP 托管和持续开发。每笔 ckBTC 转账还有少量账本费（10 聪）。提现到比特币地址时，还需支付 ckBTC 铸币器费用和比特币矿工费，这些费用从转出金额中扣除。确认页面会在发送前显示所有费用。",
+  'faq.backupBody': "您的钱包与您的 Internet Identity 绑定。如果您丢失通行密钥且没有恢复方式，任何人（包括 MOTO）都无法恢复对您资金的访问。请使用菜单中的“备份登录”，在 Internet Identity 中添加恢复短语或第二台设备。",
+  'faq.backupTitle': "如何保护我的登录？",
+  'faq.instantBody': "当您向属于另一位 MOTO 用户的比特币地址转账时，MOTO 会直接在 ICP 上向对方发送 ckBTC，而不是提现到比特币网络。几秒钟即可到账，且无需支付比特币矿工费。确认页面会显示将使用的网络。为实现这一点，任何人都可以向 MOTO 的 canister 查询某个地址是否属于 MOTO 用户。",
+  'faq.instantTitle': "为什么有些转账是即时到账的？",
 
   ...legalTermsAndPrivacyEn,
 

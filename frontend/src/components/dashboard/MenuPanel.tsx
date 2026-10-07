@@ -151,19 +151,9 @@ export default function MenuPanel({
 
       <div className="w-full border-t border-white/30 shrink-0" />
 
-      {/* Sign Out */}
-      <button
-        onClick={onSignOut}
-        className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
-      >
-        <img src="/assets/logout.svg" alt="" className="size-5 shrink-0 opacity-80" />
-        <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.signOut')}</span>
-      </button>
-
-      <div className="w-full border-t border-white/30 shrink-0" />
-
-      {/* Principal ID + blurb */}
+      {/* Principal ID */}
       {currentPrincipal && (
+        <>
         <div className="flex flex-col gap-3">
           <p className="text-white/60 text-xs font-medium">{t('menu.yourPrincipalId')}</p>
           <div
@@ -187,11 +177,21 @@ export default function MenuPanel({
               </p>
             )}
           </div>
-          <p className="text-white/50 text-xs leading-relaxed whitespace-pre-line">
-            {t('menu.motoDescription')}
-          </p>
         </div>
+        <div className="w-full border-t border-white/30 shrink-0" />
+        </>
       )}
+
+      {/* Sign Out */}
+      <button
+        onClick={onSignOut}
+        className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
+      >
+        <img src="/assets/logout.svg" alt="" className="size-5 shrink-0 opacity-80" />
+        <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.signOut')}</span>
+      </button>
+
+      <div className="w-full border-t border-white/30 shrink-0" />
 
       {/* Wipe Canister & Sign Out */}
       <button
