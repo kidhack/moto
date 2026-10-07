@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { HttpAgent, Actor } from '@dfinity/agent';
 import { Principal } from '@dfinity/principal';
 import { useInternetIdentity } from './useInternetIdentity';
+import { IC_HOST } from '../lib/ic';
 
 // Check if we should use testnet
 const USE_TESTNET = import.meta.env.VITE_USE_TESTNET === 'true';
@@ -43,8 +44,7 @@ const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
 const isLocal = envNetwork ? envNetwork === 'local' : isLocalhost;
 
 // Always use production host for ckBTC minter (it only exists on mainnet)
-// Localhost can call production canisters by using https://ic0.app
-const HOST = 'https://ic0.app';
+const HOST = IC_HOST;
 
 // ckBTC Minter interface
 // For optional values in Candid IDL.Opt(), the agent requires the field to be present
@@ -228,7 +228,7 @@ export function useCkBTCMinter() {
       return;
     }
 
-    // Note: We can call production ckBTC minter from localhost by using https://ic0.app as the host
+    // Note: We can call production ckBTC minter from localhost by using IC_HOST
     // The ckBTC minter only exists on mainnet, but we can access it from anywhere
     // On localhost, we'll still try to use ckBTC minter (it works from localhost)
 

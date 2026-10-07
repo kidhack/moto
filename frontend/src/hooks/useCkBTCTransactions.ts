@@ -5,6 +5,7 @@ import { useInternetIdentity } from './useInternetIdentity';
 import { createCkBTCMinterIDL, CKBTC_MINTER_CANISTER_ID } from './useCkBTCMinter';
 import { getSessionWithdrawal } from '../lib/sessionWithdrawalStore';
 import type { Transaction } from '../backend';
+import { IC_HOST } from '../lib/ic';
 
 const FEE_PARENT_TIME_WINDOW_SEC = 120;
 const FEE_TREASURY_PRINCIPAL = (import.meta.env.VITE_FEE_TREASURY_PRINCIPAL as string)?.trim() || 'c65im-m2qxx-7nvqc-fl62p-4xqmt-emdce-tmtqf-fggqq-3zh4d-yhdre-2qe';
@@ -28,7 +29,7 @@ const CKBTC_INDEX_CANISTER_ID = USE_TESTNET
   ? (import.meta.env.VITE_CKBTC_INDEX_CANISTER_ID || CKBTC_INDEX_CANISTER_ID_TESTNET)
   : (import.meta.env.VITE_CKBTC_INDEX_CANISTER_ID || CKBTC_INDEX_CANISTER_ID_MAINNET);
 
-const HOST = 'https://ic0.app';
+const HOST = IC_HOST;
 
 // ICRC-1 Transaction types
 interface ICRC1Account {

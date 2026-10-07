@@ -178,7 +178,7 @@ function TxCard({
           <div className="flex gap-2 items-center text-base">
             <span className="text-white/80 shrink-0">{t('txDetails.price')}</span>
             <span className="font-mono text-white flex-1 text-right flex items-center justify-end gap-1">
-              {priceAtTimeLoading ? '…' : formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency)}
+              {priceAtTimeLoading ? '…' : BTC_PRICE_FIAT > 0 ? formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) : '—'}
               <StalePriceIndicator isStale={marketPriceStale} />
             </span>
           </div>
@@ -267,9 +267,10 @@ function TransactionDetailsContent({
   const BTC_PRICE_FIAT = priceAtTxTime != null ? priceAtTxTime : getBTCPriceInCurrency(currentPrice, preferredCurrency);
   const marketPriceStale = priceAtTxTime == null && isPriceStale(currentPrice);
 
+  const hasFiatPrice = BTC_PRICE_FIAT > 0;
   const cycleCurrency = () => {
     if (currencyMode === 'BTC') setCurrencyMode('SATS');
-    else if (currencyMode === 'SATS') setCurrencyMode(preferredCurrency);
+    else if (currencyMode === 'SATS') setCurrencyMode(hasFiatPrice ? preferredCurrency : 'BTC');
     else setCurrencyMode('BTC');
   };
 
@@ -281,6 +282,7 @@ function TransactionDetailsContent({
   const formatSats = (satoshis: bigint) => satoshis.toString();
 
   const getFiatValue = (satoshis: bigint) => {
+    if (!hasFiatPrice) return '—';
     const btc = Number(satoshis) / 100000000;
     return formatFiat(btc * BTC_PRICE_FIAT, preferredCurrency);
   };
@@ -288,6 +290,7 @@ function TransactionDetailsContent({
   const formatAmount = (satoshis: bigint) => {
     if (currencyMode === 'BTC') return `${formatBTC(satoshis)} BTC`;
     if (currencyMode === 'SATS') return `${formatSats(satoshis)} sats`;
+    if (!hasFiatPrice) return '—';
     return formatFiat(Number(satoshis) / 100000000 * BTC_PRICE_FIAT, preferredCurrency);
   };
 

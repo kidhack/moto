@@ -122,6 +122,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     if (amountCurrency === 'SATS') {
       return BigInt(parseInt(cleanAmount, 10) || 0);
     }
+    if (!(BTC_PRICE_FIAT > 0)) return 0n; // no price: fiat entry unavailable
     const btc = parseFloat(cleanAmount) / BTC_PRICE_FIAT;
     return BigInt(Math.floor(btc * 100000000));
   };
@@ -319,6 +320,11 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     if (isNaN(numValue)) return '0';
 
     let btcValue: number;
+    const isFiat = (c: CurrencyMode) => c !== 'BTC' && c !== 'SATS';
+    if ((isFiat(fromCurrency) && !(getBTCPriceInCurrency(btcPriceData, fromCurrency) > 0)) ||
+        (isFiat(toCurrency) && !(getBTCPriceInCurrency(btcPriceData, toCurrency) > 0))) {
+      return '0'; // no price for this currency
+    }
 
     if (fromCurrency === 'BTC') {
       btcValue = numValue;
@@ -350,7 +356,8 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     if (amountCurrency === 'BTC') {
       nextCurrency = 'SATS';
     } else if (amountCurrency === 'SATS') {
-      nextCurrency = preferredCurrency;
+      // Skip fiat when there's no live price for it.
+      nextCurrency = BTC_PRICE_FIAT > 0 ? preferredCurrency : 'BTC';
     } else {
       nextCurrency = 'BTC';
     }
@@ -766,10 +773,12 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                 {isInsufficient ? t('send.remainingBalanceNeg', { amount: formatDisplayAmount(remainingFormatted), currency: getCurrencyLabel() }) : t('send.remainingBalance', { amount: formatDisplayAmount(remainingFormatted), currency: getCurrencyLabel() })}
               </p>
               {/* Current market rate when converting currency */}
-              <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1" style={{ letterSpacing: '0.15px' }}>
-                {t('price.btcApprox', { price: formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) })}
-                <StalePriceIndicator isStale={priceIsStale} />
-              </p>
+              {BTC_PRICE_FIAT > 0 && (
+                <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1" style={{ letterSpacing: '0.15px' }}>
+                  {t('price.btcApprox', { price: formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) })}
+                  <StalePriceIndicator isStale={priceIsStale} />
+                </p>
+              )}
             </div>
 
             {/* Bottom section: Max + Keyboard, then Next button */}

@@ -5,6 +5,7 @@ import { HttpAgent, Actor } from '@dfinity/agent';
 import { IcrcLedgerCanister, IcrcTransferError } from '@dfinity/ledger-icrc';
 import { computeAppFee, type WithdrawalFees } from '../lib/sendFees';
 import { useActor } from './useActor';
+import { IC_HOST } from '../lib/ic';
 import { useCkBTCMinter, createCkBTCMinterIDL, CKBTC_MINTER_CANISTER_ID, type CkBTCMinter } from './useCkBTCMinter';
 import { useCkBTCLedger, CKBTC_LEDGER_CANISTER_ID } from './useCkBTCLedger';
 import { useCkBTCTransactions } from './useCkBTCTransactions';
@@ -48,7 +49,7 @@ function getStoredBtcPrice(): BTCPriceData | null {
         : undefined;
       return {
         prices: parsed.prices,
-        usd: parsed.prices.usd ?? FALLBACK_BTC_USD,
+        usd: parsed.prices.usd ?? 0,
         lastUpdated: parsed.lastUpdated,
         priceSourceStatus,
       };
@@ -568,7 +569,6 @@ export function usePrincipalByBitcoinAddress(address: string | null) {
   });
 }
 
-const IC_HOST = 'https://ic0.app';
 /** How long the minter's ICRC-2 allowance stays valid for a withdrawal. */
 const WITHDRAW_APPROVAL_TTL_NS = 10n * 60n * 1_000_000_000n;
 
@@ -834,7 +834,6 @@ export function useWithdrawalFeeEstimate(amount: bigint, enabled: boolean) {
   });
 }
 
-const FALLBACK_BTC_USD = 101799;
 
 import { LIVE_CURRENCY_CG_KEYS } from '../data/currencies';
 
@@ -855,9 +854,9 @@ const MEMPOOL_CURRENCY_KEYS = ['usd', 'eur', 'gbp', 'cad', 'chf', 'aud', 'jpy'] 
 const PRICE_AGREEMENT_THRESHOLD = 0.02;   // 2% max divergence
 const PRICE_SANITY_JUMP_THRESHOLD = 0.20; // 20% max jump from last good
 
+/** No price known: every fiat lookup returns 0 ("unavailable"). Never a made-up number. */
 function makeFallbackPriceData(): BTCPriceData {
-  // Mark synthetic fallback as stale so UI can show "price may be outdated".
-  return { prices: { usd: FALLBACK_BTC_USD }, usd: FALLBACK_BTC_USD, lastUpdated: 0 };
+  return { prices: {}, usd: 0, lastUpdated: 0 };
 }
 
 function isPriceValid(price: number): boolean {
@@ -883,7 +882,8 @@ async function fetchBtcPriceFromCoinGecko(url: string): Promise<BTCPriceData> {
       prices[key.toLowerCase()] = val as number;
     }
   }
-  const usd = prices.usd ?? FALLBACK_BTC_USD;
+  const usd = prices.usd;
+  if (usd === undefined) throw new Error('CoinGecko response has no USD price');
   const lastUpdated = data.bitcoin.last_updated_at ?? Date.now() / 1000;
   return { prices, usd, lastUpdated };
 }
@@ -901,7 +901,8 @@ async function fetchBtcPriceFromMempool(): Promise<{ usd: number; prices: Record
       prices[k] = val;
     }
   }
-  const usd = prices.usd ?? (typeof data.USD === 'number' && isPriceValid(data.USD) ? data.USD : FALLBACK_BTC_USD);
+  const usd = prices.usd;
+  if (usd === undefined) throw new Error('Mempool response has no USD price');
   return { usd, prices, lastUpdated };
 }
 
@@ -920,7 +921,8 @@ async function fetchBtcPriceFromCoinDesk(): Promise<{ usd: number; prices: Recor
       prices[code.toLowerCase()] = value;
     }
   }
-  const usd = prices.usd ?? FALLBACK_BTC_USD;
+  const usd = prices.usd;
+  if (usd === undefined) throw new Error('CoinDesk response has no USD price');
   const updatedIso = data?.time?.updatedISO;
   const parsedTs = typeof updatedIso === 'string' ? Date.parse(updatedIso) : NaN;
   const lastUpdated = Number.isFinite(parsedTs) ? parsedTs / 1000 : Date.now() / 1000;
@@ -1043,11 +1045,13 @@ export function useBTCPrice() {
 }
 
 /** Get BTC price in a specific fiat currency from the price data. Falls back to USD conversion. */
+/**
+ * BTC price in a fiat currency, or 0 when unknown. Callers must treat 0 as "unavailable".
+ * Never substitutes another currency's price (a USD number shown as ¥ would be wildly wrong).
+ */
 export function getBTCPriceInCurrency(priceData: BTCPriceData | undefined, currencyCode: string): number {
-  if (!priceData) return FALLBACK_BTC_USD;
-  const key = currencyCode.toLowerCase();
-  if (priceData.prices[key] != null) return priceData.prices[key];
-  return priceData.usd;
+  const price = priceData?.prices[currencyCode.toLowerCase()];
+  return price != null && isPriceValid(price) ? price : 0;
 }
 
 /** BTC price at the time of a transaction. Uses CoinGecko market_chart/range and picks the closest point to the tx timestamp. */
@@ -1059,7 +1063,7 @@ export function useBTCPriceAtTime(timestampSeconds: number | bigint, currencyCod
   const vsCurrency = currencyCode.toLowerCase();
   const historicalUrl = `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range?vs_currency=${vsCurrency}&from=${from}&to=${to}`;
 
-  return useQuery<number>({
+  return useQuery<number | null>({
     queryKey: ['btcPriceAtTime', ts, vsCurrency],
     queryFn: async () => {
       const tryFetch = async (url: string): Promise<number> => {
@@ -1091,7 +1095,7 @@ export function useBTCPriceAtTime(timestampSeconds: number | bigint, currencyCod
             // fall through
           }
         }
-        return FALLBACK_BTC_USD;
+        return null; // caller falls back to the current price
       }
     },
     enabled: ts > 0,

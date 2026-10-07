@@ -36,6 +36,11 @@ export default function SetAmount({ onConfirm, onClose, initialCurrency, initial
     if (isNaN(numValue)) return '0';
 
     let btcValue: number;
+    const isFiat = (c: CurrencyMode) => c !== 'BTC' && c !== 'SATS';
+    if ((isFiat(fromCurrency) && !(getBTCPriceInCurrency(btcPriceData, fromCurrency) > 0)) ||
+        (isFiat(toCurrency) && !(getBTCPriceInCurrency(btcPriceData, toCurrency) > 0))) {
+      return '0'; // no price for this currency
+    }
 
     // Convert from source currency to BTC
     if (fromCurrency === 'BTC') {
@@ -73,7 +78,8 @@ export default function SetAmount({ onConfirm, onClose, initialCurrency, initial
     if (currencyMode === 'BTC') {
       nextCurrency = 'SATS';
     } else if (currencyMode === 'SATS') {
-      nextCurrency = preferredCurrency;
+      // Skip fiat when there's no live price for it.
+      nextCurrency = BTC_PRICE_FIAT > 0 ? preferredCurrency : 'BTC';
     } else {
       nextCurrency = 'BTC';
     }
@@ -183,10 +189,12 @@ export default function SetAmount({ onConfirm, onClose, initialCurrency, initial
                 {getCurrencyLabel()}
               </p>
             </div>
-            <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1" style={{ letterSpacing: '0.15px' }}>
-              {t('price.btcApprox', { price: formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) })}
-              <StalePriceIndicator isStale={priceIsStale} />
-            </p>
+            {BTC_PRICE_FIAT > 0 && (
+              <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1" style={{ letterSpacing: '0.15px' }}>
+                {t('price.btcApprox', { price: formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) })}
+                <StalePriceIndicator isStale={priceIsStale} />
+              </p>
+            )}
           </div>
 
           {/* Numeric Keypad */}

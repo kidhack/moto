@@ -74,8 +74,9 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
     } else {
       // For fiat currencies, convert to BTC using live price
       const fiatAmount = parseFloat(amountValue.replace(/,/g, ''));
-      const btc = fiatAmount / getBTCPriceInCurrency(btcPriceData, currency);
-      return btc.toString();
+      const price = getBTCPriceInCurrency(btcPriceData, currency);
+      if (!(price > 0) || !Number.isFinite(fiatAmount)) return ''; // no price: QR without amount
+      return (fiatAmount / price).toFixed(8).replace(/\.?0+$/, '');
     }
   };
 
@@ -208,10 +209,12 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <div className="flex flex-col pt-4 pb-4 gap-2">
-          <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1 pb-1" style={{ letterSpacing: '0.15px' }}>
-            {t('price.btcApprox', { price: formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) })}
-            <StalePriceIndicator isStale={priceIsStale} />
-          </p>
+          {BTC_PRICE_FIAT > 0 && (
+            <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1 pb-1" style={{ letterSpacing: '0.15px' }}>
+              {t('price.btcApprox', { price: formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) })}
+              <StalePriceIndicator isStale={priceIsStale} />
+            </p>
+          )}
           {amount ? (
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-2 h-[22px]">
