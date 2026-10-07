@@ -20,7 +20,7 @@ const legalTermsAndPrivacyEn: Record<string, string> = {
 
   'terms.s04Title': '4. Fees',
   'terms.s04Body':
-    'MOTO charges an app fee on outgoing sends. By default the fee is 0.5% of the amount you send, capped at the Bitcoin equivalent of USD $100 at send time (a deployment may configure different values via environment variables).\n\nInstant transfers to another MOTO user move ckBTC on ICP: you pay the app fee plus any ledger costs shown on the confirm screen.\n\nWithdrawals to a native Bitcoin address include the same app fee plus an estimated network cost shown in the app (including a conservative satoshi estimate); Bitcoin miner fees are ultimately set by the Bitcoin network.',
+    'MOTO charges an app fee on outgoing sends. By default the fee is 0.5% of the amount you send, capped at the Bitcoin equivalent of USD $100 at send time (a deployment may configure different values via environment variables).\n\nInstant transfers to another MOTO user move ckBTC on ICP: you pay the app fee plus ckBTC ledger costs (a small fixed fee per transfer), all shown on the confirm screen.\n\nWithdrawals to a native Bitcoin address include the same app fee plus ckBTC ledger costs. In addition, the ckBTC minter deducts its own fee and the Bitcoin miner fee from the amount withdrawn, so the recipient receives less than the amount sent; the confirm screen shows an estimate of what the recipient receives. Miner fees are set by the Bitcoin network and may differ from the estimate.\n\nThe app fee is collected as a separate transfer after your send succeeds. If your send fails, no app fee is charged.',
 
   'terms.s05Title': '5. On-Chain Hosting and Availability',
   'terms.s05Body':

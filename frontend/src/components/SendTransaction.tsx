@@ -1,8 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
+import { trimTrailingZeros } from '../lib/utils';
 import { Principal } from '@dfinity/principal';
 import { useScreenTransitionGuard } from '../hooks/useScreenTransitionGuard';
 import { vibrateLight } from '../utils/haptics';
-import { useRetrieveBtc, useTransferCkBTC, usePrincipalByBitcoinAddress, computeFeeSats, useCkBTCWithdrawalFee } from '../hooks/useQueries';
+import {
+  useRetrieveBtc,
+  useTransferCkBTC,
+  usePrincipalByBitcoinAddress,
+  computeFeeSats,
+  useLedgerFee,
+  useWithdrawalInfo,
+  useWithdrawalFeeEstimate,
+  newSendTimestamp,
+} from '../hooks/useQueries';
+import { DEFAULT_LEDGER_FEE, maxSendable, parseBtcToSats, quoteSend } from '../lib/sendFees';
 import { useQRScanner } from '../qr-code/useQRScanner';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import { useBTCPrice, isPriceStale, getBTCPriceInCurrency } from '../hooks/useQueries';
@@ -72,7 +83,15 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
 
   const retrieveBtc = useRetrieveBtc();
   const transferCkBTC = useTransferCkBTC();
-  const { data: withdrawalInfo } = useCkBTCWithdrawalFee();
+  const { data: withdrawalInfo } = useWithdrawalInfo();
+  const { data: ledgerFeeData } = useLedgerFee();
+  const ledgerFee = ledgerFeeData ?? DEFAULT_LEDGER_FEE;
+  // created_at_time for the send on the confirm screen; reused if Confirm is tapped again (ledger dedup).
+  const sendTimestampRef = useRef<bigint | null>(null);
+  useEffect(() => {
+    // A different send gets a fresh timestamp; only an identical retry should be deduplicated.
+    sendTimestampRef.current = null;
+  }, [toAddress, amount, amountCurrency]);
   const { identity } = useInternetIdentity();
   const input = toAddress.trim();
   const pastedPrincipal = parsePrincipalInput(input);
@@ -98,7 +117,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     const cleanAmount = (amount || '0').replace(/,/g, '');
     if (!cleanAmount || cleanAmount === '0') return BigInt(0);
     if (amountCurrency === 'BTC') {
-      return BigInt(Math.floor(parseFloat(cleanAmount) * 100000000));
+      return parseBtcToSats(cleanAmount);
     }
     if (amountCurrency === 'SATS') {
       return BigInt(parseInt(cleanAmount, 10) || 0);
@@ -107,13 +126,26 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     return BigInt(Math.floor(btc * 100000000));
   };
   const currentAmountSatoshis = getCurrentAmountSatoshis();
-  const btcPriceUsdForFee = btcPriceData?.usd ?? 101799;
-  const appFeeSats = computeFeeSats(currentAmountSatoshis, btcPriceUsdForFee);
-  // Use live minter fee (kyt_fee) instead of hardcoded estimate; fallback keeps behavior resilient.
-  const withdrawalNetworkFeeSats = withdrawalInfo?.kytFee ?? 1000n;
+  // Price is only used for the $ cap on the app fee; without one the uncapped percentage applies.
+  const btcPriceUsdForFee = btcPriceData?.usd;
+  const appFeeFor = (sats: bigint) => computeFeeSats(sats, btcPriceUsdForFee);
+  const appFeeSats = appFeeFor(currentAmountSatoshis);
+  const { data: withdrawalFees } = useWithdrawalFeeEstimate(currentAmountSatoshis, sendMode === 'btc' && step === 'confirm');
+  const quote = quoteSend({
+    mode: sendMode ?? 'ckbtc',
+    amount: currentAmountSatoshis,
+    appFee: appFeeSats,
+    ledgerFee,
+    withdrawalFees,
+  });
   const dynamicWithdrawMinutes = Math.max(10, (withdrawalInfo?.minConfirmations ?? 3) * 10);
   const estimatedWithdrawText = `~${dynamicWithdrawMinutes} min`;
-  const effectiveFee = sendMode === 'ckbtc' ? appFeeSats : withdrawalNetworkFeeSats + appFeeSats;
+  /** Everything the sender pays on top of the amount (app fee + ledger fees). */
+  const effectiveFee = quote.senderFee;
+  const withdrawMin = withdrawalInfo?.minAmount ?? null;
+  const isBelowWithdrawMin = sendMode === 'btc' && withdrawMin !== null && currentAmountSatoshis < withdrawMin;
+  const isWithdrawFeeMissing = sendMode === 'btc' && !withdrawalFees;
+  const maxSendableSatoshis = maxSendable({ balance: wallet.balance, mode: sendMode ?? 'ckbtc', ledgerFee, appFeeFor });
   const isWithdrawPending = retrieveBtc.isPending;
   const isTransferPending = transferCkBTC.isPending;
   const isConfirmPending = isWithdrawPending || isTransferPending;
@@ -306,7 +338,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     } else {
       result = btcValue * getBTCPriceInCurrency(btcPriceData, toCurrency);
       const decimals = getCurrencyMeta(toCurrency).decimals;
-      return result.toFixed(decimals).replace(/\.?0+$/, '');
+      return trimTrailingZeros(result.toFixed(decimals));
     }
   };
 
@@ -381,13 +413,13 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
 
   // Handle max button. In all modes, sender pays amount + fee.
   const handleMaxAmount = () => {
-    const maxSendableSatoshis = wallet.balance - effectiveFee;
     if (maxSendableSatoshis <= 0n) {
       setAmount('0');
       setStep('confirm');
       return;
     }
-    const maxInCurrency = formatAmountInCurrency(maxSendableSatoshis, amountCurrency);
+    // Round fiat down so converting back never exceeds the balance.
+    const maxInCurrency = formatAmountInCurrency(maxSendableSatoshis, amountCurrency, 'floor');
     setAmount(maxInCurrency.replace(/,/g, ''));
     setStep('confirm');
   };
@@ -401,7 +433,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     setStep('confirm');
   };
 
-  // Remaining balance after this send. In all modes, we debit amountSatoshis + effectiveFee.
+  // Remaining balance after this send: we debit quote.totalDebit (amount + app fee + ledger fees).
   const getRemainingBalanceSatoshis = (): bigint => {
     const amountSatoshis = getCurrentAmountSatoshis();
     return wallet.balance - amountSatoshis - effectiveFee;
@@ -410,16 +442,14 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   // Calculate transaction details (includes app fee 0.5%, max $100)
   const getTransactionDetails = () => {
     const amountSatoshis = getCurrentAmountSatoshis();
-    const totalAmount = amountSatoshis + effectiveFee;
-    // Recipient always receives the exact amount entered by sender.
-    const recipientAmount = amountSatoshis;
-
     return {
       amountSatoshis,
       estimatedFee: effectiveFee,
-      appFeeSats: appFeeSats,
-      totalAmount,
-      recipientAmount,
+      appFeeSats,
+      totalAmount: quote.totalDebit,
+      // Instant: exact amount. Withdrawal: minus minter + Bitcoin network fees (estimate).
+      recipientAmount: quote.recipientReceives,
+      networkFee: quote.networkFee,
     };
   };
 
@@ -432,6 +462,8 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
       toast.error(t('send.insufficientBalance'));
       return;
     }
+    if (!sendTimestampRef.current) sendTimestampRef.current = newSendTimestamp();
+    const createdAt = sendTimestampRef.current;
 
     if (sendMode === 'ckbtc') {
       if (!recipientPrincipal) return;
@@ -447,10 +479,12 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
         await transferCkBTC.mutateAsync({
           toPrincipal: recipientPrincipal,
           amount: amountSatoshis,
-          btcPriceUsd: btcPriceUsdForFee,
+          appFee: appFeeSats,
+          createdAt,
           // Looked up from a Bitcoin address: re-verify with an update call before sending.
           viaAddress: pastedPrincipal ? undefined : input,
         });
+        sendTimestampRef.current = null;
         toast.success(t('send.sentInstant'));
         if (onSuccess) {
           setTimeout(() => onSuccess(), 1000);
@@ -463,7 +497,9 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             : typeof error === 'object' && error !== null && 'message' in error
               ? String((error as { message: unknown }).message)
               : t('send.transferFailed');
-        toast.error(message.length > 80 ? message.slice(0, 80) + '…' : message);
+        const short = message.length > 80 ? message.slice(0, 80) + '…' : message;
+        // Same createdAt on the next tap, so the ledger can't execute it twice.
+        toast.error(`${short} ${t('send.safeToRetry')}`);
       }
       return;
     }
@@ -476,8 +512,10 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
       await retrieveBtc.mutateAsync({
         toAddress,
         amount: amountSatoshis,
-        btcPriceUsd: btcPriceUsdForFee,
+        appFee: appFeeSats,
+        createdAt,
       });
+      sendTimestampRef.current = null;
       toast.success(t('send.withdrawalSubmitted'));
       if (onSuccess) {
         setTimeout(() => onSuccess(), 1000);
@@ -506,7 +544,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   };
 
   // Format amount in current currency for confirmation screen
-  const formatAmountInCurrency = (satoshis: bigint, currency: CurrencyMode): string => {
+  const formatAmountInCurrency = (satoshis: bigint, currency: CurrencyMode, rounding: 'nearest' | 'floor' = 'nearest'): string => {
     const btc = Number(satoshis) / 100000000;
     
     if (currency === 'BTC') {
@@ -517,8 +555,10 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
       // Fiat currency
       const fiatPrice = getBTCPriceInCurrency(btcPriceData, amountCurrency);
       const decimals = getCurrencyMeta(amountCurrency).decimals;
-      const fiat = (btc * fiatPrice).toFixed(decimals);
-      return fiat.replace(/\.?0+$/, '');
+      const scale = 10 ** decimals;
+      const value = rounding === 'floor' ? Math.floor(btc * fiatPrice * scale) / scale : btc * fiatPrice;
+      const fiat = value.toFixed(decimals);
+      return trimTrailingZeros(fiat);
     }
   };
 
@@ -535,9 +575,8 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
   const remainingFormatted =
     formatAmountInCurrency(remainingSatoshis >= 0n ? remainingSatoshis : -remainingSatoshis, amountCurrency);
   const isInsufficient = remainingSatoshis < 0n;
-  const maxSendableSatoshis = wallet.balance - effectiveFee;
   const maxSendableFormatted =
-    maxSendableSatoshis > 0n ? formatAmountInCurrency(maxSendableSatoshis, amountCurrency) : '0';
+    maxSendableSatoshis > 0n ? formatAmountInCurrency(maxSendableSatoshis, amountCurrency, 'floor') : '0';
 
   // SCAN STEP
   if (step === 'scan') {
@@ -837,6 +876,9 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
     isConfirmPending ||
     isInsufficient ||
     isSelfSend ||
+    isBelowWithdrawMin ||
+    isWithdrawFeeMissing ||
+    (sendMode === 'btc' && quote.recipientReceives <= 0n) ||
     isPrimaryButtonDisabled ||
     (sendMode === 'ckbtc' && principalByAddress.isLoading) ||
     (toAddress.trim() && sendMode === null)
@@ -902,7 +944,7 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
             {/* Transaction details - horizontal layout */}
             {transactionDetails && (
               <div className="flex flex-col gap-4 px-0 py-4">
-                {/* Recipient */}
+                {/* Recipient: full address, never truncated, so a swapped or look-alike address is easier to spot */}
                 <div className="flex gap-2.5 items-center w-full">
                   <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
                     {t('send.recipient')}
@@ -911,8 +953,8 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                     {principalByAddress.isLoading ? (
                       <p className="font-mono text-base font-medium text-white/60 tracking-[0.32px]">{t('send.lookingUp')}</p>
                     ) : (
-                      <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px] break-all">
-                        {toAddress.length > 20 ? `${toAddress.slice(0, 7)}...${toAddress.slice(-7)}` : toAddress}
+                      <p className="font-mono text-sm font-medium text-white text-right tracking-[0.32px] break-all">
+                        {toAddress}
                       </p>
                     )}
                   </div>
@@ -981,6 +1023,28 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                     </p>
                   </div>
                 </div>
+
+                {/* Withdrawals: the minter takes its fee and the Bitcoin network fee out of the amount */}
+                {sendMode === 'btc' && (
+                  <div className="flex gap-2.5 items-center w-full">
+                    <p className="font-medium text-base text-white/80 tracking-[-0.176px] shrink-0">
+                      {t('send.recipientReceives')}
+                    </p>
+                    <div className="flex-1 flex justify-end">
+                      <p className="font-mono text-base font-medium text-white text-right tracking-[0.32px]">
+                        {isWithdrawFeeMissing
+                          ? t('send.checking')
+                          : `≈ ${formatDisplayAmount(formatAmountInCurrency(transactionDetails.recipientAmount, amountCurrency, 'floor'))} ${getConfirmationCurrencyLabel()}`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {isBelowWithdrawMin && withdrawMin !== null && (
+                  <p className="font-normal text-sm text-red-400 text-center">
+                    {t('send.minWithdrawal', { amount: withdrawMin.toString() })}
+                  </p>
+                )}
               </div>
             )}
 

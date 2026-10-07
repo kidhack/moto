@@ -122,6 +122,9 @@ const zh: Record<string, string> = {
   'send.transferFailed': '转账失败',
   'send.withdrawalSubmitted': '提款已提交。网络处理后比特币将发送到该地址。',
   'send.failedToSend': '发送交易失败',
+  'send.recipientReceives': '收款方实收',
+  'send.minWithdrawal': '比特币最低提现金额为 {{amount}} 聪',
+  'send.safeToRetry': '可以放心再次点击确认。',
 
   'receive.header': '接收比特币',
   'receive.invalidAddress': '比特币地址无效，请重试。',

@@ -123,6 +123,9 @@ const en: Record<string, string> = {
   'send.transferFailed': 'Transfer failed',
   'send.withdrawalSubmitted': 'Withdrawal submitted. Bitcoin will be sent to the address once the network processes it.',
   'send.failedToSend': 'Failed to send transaction',
+  'send.recipientReceives': 'Recipient receives',
+  'send.minWithdrawal': 'Minimum Bitcoin withdrawal is {{amount}} sats',
+  'send.safeToRetry': 'It is safe to tap Confirm again.',
 
   // Receive
   'receive.header': 'Receive Bitcoin',

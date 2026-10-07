@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { trimTrailingZeros } from '../lib/utils';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import { useScreenTransitionGuard } from '../hooks/useScreenTransitionGuard';
 import { useBTCPrice, isPriceStale, getBTCPriceInCurrency } from '../hooks/useQueries';
@@ -60,7 +61,7 @@ export default function SetAmount({ onConfirm, onClose, initialCurrency, initial
       // Fiat currency — convert from BTC using that currency's price
       result = btcValue * getBTCPriceInCurrency(btcPriceData, toCurrency);
       const decimals = getCurrencyMeta(toCurrency).decimals;
-      return result.toFixed(decimals).replace(/\.?0+$/, '');
+      return trimTrailingZeros(result.toFixed(decimals));
     }
   };
 

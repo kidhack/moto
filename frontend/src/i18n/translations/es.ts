@@ -122,6 +122,9 @@ const es: Record<string, string> = {
   'send.transferFailed': 'Transferencia fallida',
   'send.withdrawalSubmitted': 'Retiro enviado. El Bitcoin se enviará a la dirección una vez procesado por la red.',
   'send.failedToSend': 'Error al enviar la transacción',
+  'send.recipientReceives': 'El destinatario recibe',
+  'send.minWithdrawal': 'El retiro mínimo de Bitcoin es de {{amount}} sats',
+  'send.safeToRetry': 'Puedes volver a tocar Confirmar con seguridad.',
 
   'receive.header': 'Recibir Bitcoin',
   'receive.invalidAddress': 'Dirección Bitcoin inválida. Por favor intenta de nuevo.',

@@ -58,6 +58,10 @@ export interface CkBTCMinter {
     | { Ok: { block_index: bigint } }
     | { Err: RetrieveBtcWithApprovalError }
   >;
+  estimate_withdrawal_fee: (arg: { amount: [] | [bigint] }) => Promise<{ bitcoin_fee: bigint; minter_fee: bigint }>;
+  retrieve_btc_status_v2_by_account: (
+    account: [] | [{ owner: Principal; subaccount: [] | [Uint8Array] }]
+  ) => Promise<Array<{ block_index: bigint; status_v2: [] | [unknown] }>>;
 }
 
 export type RetrieveBtcWithApprovalError =
@@ -195,6 +199,16 @@ const createCkBTCMinterIDL = () => {
       ),
       decode_ledger_memo: IDL.Func([DecodeLedgerMemoArgs], [DecodeLedgerMemoResult], ['query']),
       retrieve_btc_status_v2: IDL.Func([IDL.Record({ block_index: IDL.Nat64 })], [RetrieveBtcStatusV2], ['query']),
+      estimate_withdrawal_fee: IDL.Func(
+        [IDL.Record({ amount: IDL.Opt(IDL.Nat64) })],
+        [IDL.Record({ bitcoin_fee: IDL.Nat64, minter_fee: IDL.Nat64 })],
+        ['query']
+      ),
+      retrieve_btc_status_v2_by_account: IDL.Func(
+        [IDL.Opt(IDL.Record({ owner: IDL.Principal, subaccount: IDL.Opt(IDL.Vec(IDL.Nat8)) }))],
+        [IDL.Vec(IDL.Record({ block_index: IDL.Nat64, status_v2: IDL.Opt(RetrieveBtcStatusV2) }))],
+        ['query']
+      ),
     });
   };
 };

@@ -122,6 +122,9 @@ const hi: Record<string, string> = {
   'send.transferFailed': 'ट्रांसफर विफल',
   'send.withdrawalSubmitted': 'निकासी सबमिट हो गई। नेटवर्क प्रोसेस होने पर बिटकॉइन पते पर भेजा जाएगा।',
   'send.failedToSend': 'लेनदेन भेजने में विफल',
+  'send.recipientReceives': 'प्राप्तकर्ता को मिलेगा',
+  'send.minWithdrawal': 'न्यूनतम बिटकॉइन निकासी {{amount}} सैट्स है',
+  'send.safeToRetry': 'फिर से पुष्टि करें दबाना सुरक्षित है।',
 
   'receive.header': 'बिटकॉइन प्राप्त करें',
   'receive.invalidAddress': 'अमान्य बिटकॉइन पता। कृपया पुनः प्रयास करें।',
