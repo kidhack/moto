@@ -8,6 +8,7 @@ import { getSessionWithdrawal } from '../lib/sessionWithdrawalStore';
 import { withdrawalStatus } from '../lib/withdrawalStatus';
 import type { Transaction, TransactionStatus } from '../backend';
 import { IC_HOST } from '../lib/ic';
+import { BLOCKSTREAM_API, MEMPOOL_API } from '../lib/bitcoinNetwork';
 
 const FEE_PARENT_TIME_WINDOW_SEC = 120;
 const FEE_TREASURY_PRINCIPAL = (import.meta.env.VITE_FEE_TREASURY_PRINCIPAL as string)?.trim() || 'c65im-m2qxx-7nvqc-fl62p-4xqmt-emdce-tmtqf-fggqq-3zh4d-yhdre-2qe';
@@ -253,8 +254,6 @@ function convertICRC1TransactionToAppTransaction(
   return null;
 }
 
-const BLOCKSTREAM_API = USE_TESTNET ? 'https://blockstream.info/testnet/api' : 'https://blockstream.info/api';
-const MEMPOOL_API = USE_TESTNET ? 'https://mempool.space/testnet/api' : 'https://mempool.space/api';
 
 const TX_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const TX_CACHE_KEY_PREFIX = 'moto_btc_tx_';
@@ -278,6 +277,7 @@ function getFirstOutputAddress(tx: BitcoinTxData): string | undefined {
 }
 
 function getPrimaryIndexer(): 'blockstream' | 'mempool' {
+  if (!BLOCKSTREAM_API) return 'mempool';
   try {
     const key = 'moto_primary_indexer';
     let primary = sessionStorage.getItem(key) as 'blockstream' | 'mempool' | null;
@@ -385,13 +385,13 @@ async function fetchBitcoinTx(txidHex: string): Promise<BitcoinTxData | null> {
   const first = primary === 'blockstream' ? BLOCKSTREAM_API : MEMPOOL_API;
   const second = primary === 'blockstream' ? MEMPOOL_API : BLOCKSTREAM_API;
 
-  let data = await fetchFromIndexer(txidHex, first);
+  let data = first ? await fetchFromIndexer(txidHex, first) : null;
   if (data) {
     setCachedTx(txidHex, data);
     setIndexerUsed(primary);
     return data;
   }
-  data = await fetchFromIndexer(txidHex, second);
+  data = second ? await fetchFromIndexer(txidHex, second) : null;
   if (data) {
     setCachedTx(txidHex, data);
     setIndexerUsed(primary === 'blockstream' ? 'mempool' : 'blockstream');

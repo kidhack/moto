@@ -1,3 +1,5 @@
+import { MEMPOOL_API } from '../lib/bitcoinNetwork';
+
 /**
  * Utility to check Bitcoin testnet transaction status
  * Uses mempool.space testnet API to verify if transactions were sent to an address
@@ -50,7 +52,7 @@ export async function checkBitcoinTestnetTransactions(address: string): Promise<
 }> {
   try {
     // Use mempool.space testnet API
-    const apiUrl = `https://mempool.space/testnet/api/address/${address}/txs`;
+    const apiUrl = `${MEMPOOL_API}/address/${address}/txs`;
     
     console.log('bitcoinTestnetChecker: Checking transactions for address:', address);
     console.log('bitcoinTestnetChecker: API URL:', apiUrl);
@@ -139,7 +141,7 @@ export async function getBitcoinTestnetBalance(address: string): Promise<{
   error?: string;
 }> {
   try {
-    const apiUrl = `https://mempool.space/testnet/api/address/${address}`;
+    const apiUrl = `${MEMPOOL_API}/address/${address}`;
     
     const response = await fetch(apiUrl);
     
@@ -191,10 +193,7 @@ export async function checkPendingDeposits(
   error?: string;
 }> {
   try {
-    const USE_TESTNET = import.meta.env.VITE_USE_TESTNET === 'true';
-    const apiBase = USE_TESTNET 
-      ? 'https://mempool.space/testnet/api'
-      : 'https://mempool.space/api';
+    const apiBase = MEMPOOL_API;
     
     // Get address info
     const addressUrl = `${apiBase}/address/${address}`;

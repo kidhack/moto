@@ -837,14 +837,12 @@ export function useWithdrawalFeeEstimate(amount: bigint, enabled: boolean) {
 
 import { LIVE_CURRENCY_CG_KEYS } from '../data/currencies';
 
-const USE_TESTNET = import.meta.env.VITE_USE_TESTNET === 'true';
 const ENABLE_PROXY_FALLBACK = import.meta.env.VITE_ENABLE_PROXY_FALLBACK === 'true';
 
 const COINGECKO_PRICE_URL =
   `https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=${LIVE_CURRENCY_CG_KEYS.join(',')}&include_last_updated_at=true`;
-const MEMPOOL_PRICE_URL = USE_TESTNET
-  ? 'https://mempool.space/testnet/api/v1/prices'
-  : 'https://mempool.space/api/v1/prices';
+// Test coins have no price of their own; testnet builds show the mainnet BTC price.
+const MEMPOOL_PRICE_URL = 'https://mempool.space/api/v1/prices';
 const COINDESK_PRICE_URL = 'https://api.coindesk.com/v1/bpi/currentprice.json';
 const BINANCE_PRICE_URL = 'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT';
 

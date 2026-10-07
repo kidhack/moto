@@ -99,7 +99,7 @@ const legalTermsAndPrivacyEn: Record<string, string> = {
 
   'privacy.s11Title': '11. Changes and Contact',
   'privacy.s11Body':
-    'MOTO may update this Privacy Policy; the "Last updated" line will change when it does. Continued use of the App constitutes acceptance of the updated policy.\n\nFor questions about privacy: hello@motowallet.com',
+    'MOTO may update this Privacy Policy; the "Last updated" line will change when it does. Continued use of the App constitutes acceptance of the updated policy.\n\nFor questions about privacy: hello@motowallet.app',
 };
 
 export default legalTermsAndPrivacyEn;
