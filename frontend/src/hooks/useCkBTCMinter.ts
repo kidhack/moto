@@ -1,8 +1,28 @@
 import { useState, useEffect, useCallback } from 'react';
 import { HttpAgent, Actor } from '@dfinity/agent';
 import { Principal } from '@dfinity/principal';
+import { toast } from 'sonner';
 import { useInternetIdentity } from './useInternetIdentity';
 import { IC_HOST } from '../lib/ic';
+import { depositNotices, type DepositNotice, type UpdateBalanceResult } from '../lib/depositNotices';
+import { useTranslation } from '../i18n';
+
+const SEEN_DEPOSIT_NOTICES_KEY = 'moto_seen_deposit_notices';
+
+/** Keys of deposit notices already shown this session (so balance refreshes don't repeat them). */
+function takeUnseenNotices(notices: DepositNotice[]): DepositNotice[] {
+  let seen: string[] = [];
+  try {
+    seen = JSON.parse(sessionStorage.getItem(SEEN_DEPOSIT_NOTICES_KEY) ?? '[]');
+  } catch { /* storage unavailable */ }
+  const fresh = notices.filter((n) => !seen.includes(n.key));
+  if (fresh.length > 0) {
+    try {
+      sessionStorage.setItem(SEEN_DEPOSIT_NOTICES_KEY, JSON.stringify([...seen, ...fresh.map((n) => n.key)]));
+    } catch { /* storage unavailable */ }
+  }
+  return fresh;
+}
 
 // Check if we should use testnet
 const USE_TESTNET = import.meta.env.VITE_USE_TESTNET === 'true';
@@ -52,7 +72,7 @@ const HOST = IC_HOST;
 // - For Some(value): pass [value] (wrapped in array)
 export interface CkBTCMinter {
   get_btc_address: (arg: { owner: [] | [Principal]; subaccount: [] | [Uint8Array] }) => Promise<string>;
-  update_balance: (arg: { owner: [] | [Principal]; subaccount: [] | [Uint8Array] }) => Promise<{ Ok?: unknown[]; Err?: unknown }>;
+  update_balance: (arg: { owner: [] | [Principal]; subaccount: [] | [Uint8Array] }) => Promise<UpdateBalanceResult>;
   get_minter_info: () => Promise<{ retrieve_btc_min_amount: bigint; min_confirmations: number; kyt_fee: bigint; deposit_btc_min_amount?: [] | [bigint] }>;
   retrieve_btc_with_approval: (arg: { address: string; amount: bigint; from_subaccount: [] | [Uint8Array] }) => Promise<
     | { Ok: { block_index: bigint } }
@@ -215,6 +235,7 @@ const createCkBTCMinterIDL = () => {
 
 export function useCkBTCMinter() {
   const { identity } = useInternetIdentity();
+  const { t } = useTranslation();
   const [address, setAddress] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -374,23 +395,25 @@ export function useCkBTCMinter() {
         owner: [],
         subaccount: [],
       });
-      if (result?.Ok && Array.isArray(result.Ok) && result.Ok.length > 0) {
-        console.log('useCkBTCMinter: update_balance minted', result.Ok.length, 'UTXO(s) to ckBTC');
+      for (const notice of takeUnseenNotices(depositNotices(result))) {
+        const sats = notice.sats.toString();
+        if (notice.kind === 'pending') {
+          toast(t('deposit.pending', { sats, confirmations: String(notice.confirmations ?? 0), required: String(notice.required ?? 0) }));
+        } else if (notice.kind === 'minted') {
+          toast.success(t('deposit.minted', { sats }));
+        } else if (notice.kind === 'tooSmall') {
+          toast.error(t('deposit.tooSmall', { sats }), { duration: 15000 });
+        } else {
+          toast.error(t('deposit.flagged', { sats }), { duration: 15000 });
+        }
       }
-      if (result?.Err) {
-        const err = result.Err as { NoNewUtxos?: unknown; AlreadyProcessing?: null; [k: string]: unknown };
-        if (err.NoNewUtxos !== undefined) {
-          return; // No new UTXOs to process
-        }
-        if (err.AlreadyProcessing !== undefined) {
-          return; // Another update is in progress, skip logging
-        }
+      if ('Err' in result && !('NoNewUtxos' in result.Err) && !('AlreadyProcessing' in result.Err)) {
         console.warn('useCkBTCMinter: update_balance error', result.Err);
       }
     } catch (err) {
       console.warn('useCkBTCMinter: update_balance failed (non-fatal):', err);
     }
-  }, [identity, isLocal]);
+  }, [identity, isLocal, t]);
 
   return {
     address,

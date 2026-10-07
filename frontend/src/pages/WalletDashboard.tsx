@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { II_MANAGE_URL } from '../lib/ic';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { useActor } from '../hooks/useActor';
 import { useQueryClient } from '@tanstack/react-query';
@@ -54,6 +55,23 @@ export default function WalletDashboard() {
   
   // Get current principal for debugging
   const currentPrincipal = identity ? identity.getPrincipal().toText() : null;
+
+  // Losing an II passkey with no recovery method means losing the funds, so nudge once there's a balance.
+  const recoveryAckKey = currentPrincipal ? `moto_recovery_ack_${currentPrincipal}` : null;
+  const [recoveryAcked, setRecoveryAcked] = useState(true);
+  useEffect(() => {
+    try {
+      setRecoveryAcked(!recoveryAckKey || localStorage.getItem(recoveryAckKey) === '1');
+    } catch {
+      setRecoveryAcked(false);
+    }
+  }, [recoveryAckKey]);
+  const dismissRecoveryBanner = () => {
+    try {
+      if (recoveryAckKey) localStorage.setItem(recoveryAckKey, '1');
+    } catch { /* storage unavailable */ }
+    setRecoveryAcked(true);
+  };
 
   // Debug logging
   useEffect(() => {
@@ -187,6 +205,8 @@ export default function WalletDashboard() {
   };
 
   const handleWipeCanisterAndSignOut = async () => {
+    // Funds are untouched (they belong to the II principal), but make sure people know that first.
+    if (!window.confirm(t('menu.wipeConfirm'))) return;
     setMenuOpen(false);
     // Wallet name is stored in the canister and will be wiped with signOutAndReset
     try {
@@ -342,6 +362,25 @@ export default function WalletDashboard() {
         </header>
         {/* Top divider - fixed, does not scroll */}
         <div className="h-[1px] w-full bg-white/50 mt-4" />
+        {!recoveryAcked && ledgerBalance !== null && ledgerBalance > BigInt(0) && (
+          <div className="flex items-start gap-3 py-3 border-b border-white/30">
+            <p className="text-sm text-amber-300 leading-snug flex-1">{t('recovery.banner')}</p>
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <a
+                href={II_MANAGE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={dismissRecoveryBanner}
+                className="text-sm font-medium text-white underline underline-offset-2"
+              >
+                {t('recovery.setUp')}
+              </a>
+              <button onClick={dismissRecoveryBanner} className="text-sm text-white/50">
+                {t('recovery.dismiss')}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Scrollable area: only the transaction list - pb for fixed bottom bar */}
@@ -677,6 +716,19 @@ export default function WalletDashboard() {
                        <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.language')}</span>
                        <span className="ml-auto font-medium text-base text-white/50 tracking-[0.8px]">{languageName}</span>
                      </button>
+
+                     {/* Back up login (Internet Identity recovery) */}
+                     <a
+                       href={II_MANAGE_URL}
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
+                     >
+                       <svg className="size-5 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                       </svg>
+                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('recovery.menu')}</span>
+                     </a>
 
                      {/* FAQ */}
                      <button

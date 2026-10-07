@@ -5,7 +5,7 @@ import { useScreenTransitionGuard } from '../hooks/useScreenTransitionGuard';
 import { vibrateLight } from '../utils/haptics';
 import { SlideFromRight } from './SlideFromRight';
 import SetAmount from './SetAmount';
-import { useBTCPrice, isPriceStale, getBTCPriceInCurrency } from '../hooks/useQueries';
+import { useBTCPrice, isPriceStale, getBTCPriceInCurrency, useWithdrawalInfo } from '../hooks/useQueries';
 import { formatFiatCompact } from '../data/currencies';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import StalePriceIndicator from './StalePriceIndicator';
@@ -23,6 +23,7 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
   const { t } = useTranslation();
   const [showSetAmount, setShowSetAmount] = useState(false);
   const { data: btcPriceData } = useBTCPrice();
+  const { data: minterInfo } = useWithdrawalInfo();
   const { preferredCurrency } = usePreferredCurrency();
 
   // Validate address is real - NEVER display fake addresses
@@ -199,6 +200,12 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
                 </p>
               )}
             </button>
+            {minterInfo?.minDeposit != null && (
+              // Smaller deposits are ignored by the ckBTC minter and never show up in the balance.
+              <p className="text-white/50 text-xs text-center pt-2" style={{ letterSpacing: '0.15px' }}>
+                {t('receive.minDeposit', { sats: minterInfo.minDeposit.toString() })}
+              </p>
+            )}
           </div>
         </div>
       </div>

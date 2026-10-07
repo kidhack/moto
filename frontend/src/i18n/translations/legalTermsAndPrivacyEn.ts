@@ -4,7 +4,7 @@
  */
 const legalTermsAndPrivacyEn: Record<string, string> = {
   'terms.header': 'Terms of Service',
-  'terms.lastUpdated': 'Last updated: April 8, 2026',
+  'terms.lastUpdated': 'Last updated: October 7, 2026',
 
   'terms.s01Title': '1. Acceptance',
   'terms.s01Body':
@@ -32,7 +32,7 @@ const legalTermsAndPrivacyEn: Record<string, string> = {
 
   'terms.s07Title': '7. Third-Party Services',
   'terms.s07Body':
-    'MOTO uses third-party APIs for fiat price data (CoinGecko, Mempool.space) and Bitcoin transaction lookups (Blockstream, Mempool.space). MOTO is not responsible for the accuracy or availability of these services.',
+    'MOTO uses third-party APIs for fiat price data (CoinGecko, Mempool.space, CoinDesk, Binance) and Bitcoin transaction lookups (Blockstream, Mempool.space). MOTO is not responsible for the accuracy or availability of these services.',
 
   'terms.s08Title': '8. Canister Upgrades',
   'terms.s08Body':
@@ -55,7 +55,7 @@ const legalTermsAndPrivacyEn: Record<string, string> = {
     'MOTO may update these Terms at any time. Continued use of the App following any update constitutes acceptance of the revised Terms.',
 
   'privacy.header': 'Privacy Policy',
-  'privacy.lastUpdated': 'Last updated: April 8, 2026',
+  'privacy.lastUpdated': 'Last updated: October 7, 2026',
 
   'privacy.s01Title': '1. Overview',
   'privacy.s01Body':
@@ -67,7 +67,7 @@ const legalTermsAndPrivacyEn: Record<string, string> = {
 
   'privacy.s03Title': '3. Data Stored On-Chain (App Canister)',
   'privacy.s03Body':
-    'When you use MOTO, your wallet display name and preferred currency and language are stored in the MOTO application canister on ICP. Your record is keyed to your Internet Identity principal and is updated only when you authenticate as that principal. Other users have separate records in the same canister (multi-tenant storage)—not a separate private canister per person. Canister controllers can upgrade application logic; see the FAQ for upgrade authority.',
+    'When you use MOTO, your wallet display name and preferred currency and language are stored in the MOTO application canister on ICP. Your record is keyed to your Internet Identity principal and is updated only when you authenticate as that principal. Other users have separate records in the same canister (multi-tenant storage)—not a separate private canister per person. Canister controllers can upgrade application logic; see the FAQ for upgrade authority.\n\nThe canister also stores your ckBTC deposit address (obtained from the ckBTC minter, not entered by you). So that other MOTO users can send to you instantly, anyone can ask the MOTO canister whether a Bitcoin address belongs to a MOTO user and, if it does, which Internet Identity principal it belongs to. This means your deposit address can be linked to your principal. Erasing your data from the menu removes this link.',
 
   'privacy.s04Title': '4. Financial Data',
   'privacy.s04Body':
@@ -79,7 +79,7 @@ const legalTermsAndPrivacyEn: Record<string, string> = {
 
   'privacy.s06Title': '6. Third-Party APIs',
   'privacy.s06Body':
-    'MOTO fetches read-only data from:\n\n• CoinGecko — BTC fiat prices (public API)\n• Mempool.space — BTC fiat prices and transaction data (public API)\n• Blockstream — Bitcoin transaction lookup (public blockchain queries)\n\nThese requests do not attach your name, email, or phone. They use public endpoints and may reference public blockchain data (for example transaction IDs or addresses that already appear on-chain).',
+    'MOTO fetches read-only data from:\n\n• CoinGecko — BTC fiat prices and historical prices (public API)\n• Mempool.space — BTC fiat prices and Bitcoin transaction data (public API)\n• CoinDesk and Binance — backup BTC price sources (public APIs)\n• Blockstream — Bitcoin transaction lookup (public blockchain queries)\n\nThese requests come directly from your device. They do not attach your name, email, or phone, but like any web request they reveal your IP address to that service. Transaction and deposit lookups include your own Bitcoin address or transaction IDs, so those services could associate them with your IP address. Fonts and all app code are served by MOTO itself, not third-party CDNs.',
 
   'privacy.s07Title': '7. No Advertising or Tracking',
   'privacy.s07Body':

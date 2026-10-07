@@ -126,6 +126,17 @@ const en: Record<string, string> = {
   'send.recipientReceives': 'Recipient receives',
   'send.minWithdrawal': 'Minimum Bitcoin withdrawal is {{amount}} sats',
   'send.safeToRetry': 'It is safe to tap Confirm again.',
+  'send.principalWarning': "You are sending ckBTC to an Internet Computer principal. Exchanges usually need a specific deposit account; ckBTC sent to the wrong account cannot be recovered.",
+  'receive.minDeposit': "Minimum deposit: {{sats}} sats. Smaller deposits are not added to your balance.",
+  'deposit.pending': "Bitcoin deposit of {{sats}} sats detected ({{confirmations}}/{{required}} confirmations). It will appear in your balance once confirmed.",
+  'deposit.minted': "Deposit received: {{sats}} sats",
+  'deposit.tooSmall': "A deposit of {{sats}} sats is below the minimum and was not added to your balance.",
+  'deposit.flagged': "A deposit of {{sats}} sats was flagged by the ckBTC Bitcoin check and was not added to your balance.",
+  'recovery.banner': "Back up your login. If you lose your passkey without a recovery method, you lose access to your bitcoin.",
+  'recovery.setUp': "Set up",
+  'recovery.dismiss': "Dismiss",
+  'recovery.menu': "Back Up Login",
+  'menu.wipeConfirm': "Erase your wallet name and settings from MOTO and sign out?\n\nYour bitcoin is not affected. It stays with your Internet Identity and will be here when you sign in again.",
 
   // Receive
   'receive.header': 'Receive Bitcoin',

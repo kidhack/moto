@@ -1049,6 +1049,14 @@ export default function SendTransaction({ wallet, onSuccess, onClose }: SendTran
                   </div>
                 )}
 
+                {pastedPrincipal && !isSelfSend && (
+                  // Exchanges and other wallets usually need a deposit account (principal + subaccount);
+                  // ckBTC sent to a bare principal they don't control can't be recovered.
+                  <p className="font-normal text-sm text-amber-300 text-center">
+                    {t('send.principalWarning')}
+                  </p>
+                )}
+
                 {isBelowWithdrawMin && withdrawMin !== null && (
                   <p className="font-normal text-sm text-red-400 text-center">
                     {t('send.minWithdrawal', { amount: withdrawMin.toString() })}
