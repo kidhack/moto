@@ -70,9 +70,9 @@ const en: Record<string, string> = {
   'faq.servicesTitle': 'Services We Use',
   'faq.servicesBody': "Fiat prices come from CoinGecko, Mempool.space, CoinDesk, and Binance. Bitcoin transaction details come from Mempool.space and Blockstream. Login is handled by Internet Identity. Transfers use the ckBTC canisters on ICP.",
   'faq.notOnChainTitle': 'Is MOTO decentralized?',
-  'faq.notOnChainBody': 'The app runs on ICP with no centralized infrastructure. Fiat prices and transaction data come from third-party APIs. Canister upgrades are currently project-controlled, with plans to move toward community governance over time.',
+  'faq.notOnChainBody': "MOTO runs on the Internet Computer rather than rented servers, and your funds live on public ledgers. Fiat prices and Bitcoin transaction data come from third-party services. MOTO’s canisters are currently upgraded by the MOTO team.",
   'faq.nonCustodialTitle': 'Is MOTO non-custodial?',
-  'faq.nonCustodialBody': 'Yes. MOTO never holds your funds. Assets live on public ledgers; you control access via Internet Identity.',
+  'faq.nonCustodialBody': "Yes. MOTO never holds your keys or your funds. Your assets live on public ledgers and you control access with your Internet Identity. You do rely on the MOTO app at motowallet.app to view and move them.",
   'faq.disclaimersTitle': 'Disclaimer',
   'faq.disclaimersBody': 'Not financial advice. Prices are volatile. Do your own research.',
   'faq.networksTitle': 'Networks',
@@ -182,6 +182,10 @@ const en: Record<string, string> = {
   'login.connecting': 'Connecting...',
   'login.signIn': 'Sign In',
   'login.failedToSignIn': 'Failed to sign in. Please try again.',
+  'legal.dismiss': "OK",
+  'legal.review': "Review",
+  'legal.updated': "We've updated our Terms of Service and Privacy Policy.",
+  'login.agree': "By signing in, you agree to the {{terms}} and {{privacy}}.",
 
   // Onboarding
   'onboarding.depositBitcoin': 'Deposit Bitcoin to fund your wallet.',

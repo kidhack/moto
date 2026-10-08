@@ -1,14 +1,23 @@
+import { useState } from 'react';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { toast } from 'sonner';
 import { useTranslation } from '../i18n';
+import { SlideFromRight } from '../components/SlideFromRight';
+import TermsPage from '../components/TermsPage';
+import PrivacyPage from '../components/PrivacyPage';
+import { markLegalSeen } from '../lib/legalNotice';
 
 const CONTENT_MAX_WIDTH = 320;
 
 export default function LoginPage() {
   const { login, isLoggingIn } = useInternetIdentity();
   const { t } = useTranslation();
+  const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
 
   const handleLogin = async () => {
+    // Signing in is agreeing to the current Terms and Privacy Policy (shown under the button).
+    markLegalSeen();
     try {
       await login();
     } catch (error) {
@@ -54,7 +63,7 @@ export default function LoginPage() {
       </div>
 
       {/* Sign In button at bottom */}
-      <div className="flex shrink-0 justify-center w-full px-5 pt-4" style={{ paddingBottom: '1.25rem' }}>
+      <div className="flex shrink-0 justify-center w-full px-5 pt-4" style={{ paddingBottom: '0.75rem' }}>
           <button
             onClick={handleLogin}
             disabled={isLoggingIn}
@@ -73,6 +82,39 @@ export default function LoginPage() {
             </span>
           </button>
         </div>
+
+      {/* Agreement: shown before sign-in so the Terms are actually presented to the user */}
+      <p
+        className="shrink-0 text-xs leading-relaxed text-white/50 text-left px-5"
+        style={{ width: CONTENT_MAX_WIDTH, maxWidth: '100%', paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))', boxSizing: 'content-box' }}
+      >
+        {t('login.agree')
+          .split(/(\{\{terms\}\}|\{\{privacy\}\})/)
+          .map((part, i) =>
+            part === '{{terms}}' ? (
+              <button key={i} type="button" onClick={() => setShowTerms(true)} className="underline underline-offset-2 text-white/70 hover:text-white">
+                {t('menu.terms')}
+              </button>
+            ) : part === '{{privacy}}' ? (
+              <button key={i} type="button" onClick={() => setShowPrivacy(true)} className="underline underline-offset-2 text-white/70 hover:text-white">
+                {t('menu.privacy')}
+              </button>
+            ) : (
+              <span key={i}>{part}</span>
+            )
+          )}
+      </p>
+
+      {showTerms && (
+        <SlideFromRight open={showTerms} onClose={() => setShowTerms(false)}>
+          <TermsPage onClose={() => setShowTerms(false)} />
+        </SlideFromRight>
+      )}
+      {showPrivacy && (
+        <SlideFromRight open={showPrivacy} onClose={() => setShowPrivacy(false)}>
+          <PrivacyPage onClose={() => setShowPrivacy(false)} />
+        </SlideFromRight>
+      )}
     </div>
   );
 }

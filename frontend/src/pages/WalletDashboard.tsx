@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { hasUnseenLegalUpdate, markLegalSeen } from '../lib/legalNotice';
 import { II_MANAGE_URL } from '../lib/ic';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { useActor } from '../hooks/useActor';
@@ -71,6 +72,12 @@ export default function WalletDashboard() {
       setRecoveryAcked(false);
     }
   }, [recoveryAckKey]);
+  const [legalUpdateUnseen, setLegalUpdateUnseen] = useState(hasUnseenLegalUpdate);
+  const dismissLegalUpdate = () => {
+    markLegalSeen();
+    setLegalUpdateUnseen(false);
+  };
+
   const dismissRecoveryBanner = () => {
     try {
       if (recoveryAckKey) localStorage.setItem(recoveryAckKey, '1');
@@ -376,6 +383,24 @@ export default function WalletDashboard() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  // Material Terms/Privacy changes are announced once per version (Terms §17).
+  const legalBanner = legalUpdateUnseen && (
+    <div className="flex items-start gap-3 py-3 border-b border-white/30">
+      <p className="text-sm text-white/80 leading-snug flex-1">{t('legal.updated')}</p>
+      <div className="flex flex-col items-end gap-1 shrink-0">
+        <button
+          onClick={() => { dismissLegalUpdate(); setShowTerms(true); }}
+          className="text-sm font-medium text-white underline underline-offset-2"
+        >
+          {t('legal.review')}
+        </button>
+        <button onClick={dismissLegalUpdate} className="text-sm text-white/50">
+          {t('legal.dismiss')}
+        </button>
+      </div>
+    </div>
+  );
+
   const recoveryBanner = !recoveryAcked && ledgerBalance !== null && ledgerBalance > BigInt(0) && (
     <div className="flex items-start gap-3 py-3 border-b border-white/30">
       <p className="text-sm text-amber-300 leading-snug flex-1">{t('recovery.banner')}</p>
@@ -455,7 +480,7 @@ export default function WalletDashboard() {
         showAddFunds={ledgerBalance === null || ledgerBalance <= BigInt(0)}
         onAddFunds={() => setShowAddFundsModal(true)}
         onRefresh={() => refetchWalletInfo()}
-        recoveryBanner={recoveryBanner}
+        recoveryBanner={<>{legalBanner}{recoveryBanner}</>}
         testnetBadge={testnetBadge}
         transactionList={transactionList}
         rightPanel={
@@ -510,6 +535,7 @@ export default function WalletDashboard() {
         </header>
         {/* Top divider - fixed, does not scroll */}
         <div className="h-[1px] w-full bg-white/50 mt-4" />
+        {legalBanner}
         {recoveryBanner}
       </div>
 
