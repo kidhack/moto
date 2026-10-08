@@ -85,3 +85,7 @@ moto/
 - [ckBTC overview](https://internetcomputer.org/docs/defi/chain-key-tokens/ckbtc/overview)
 - [ckBTC reference](https://internetcomputer.org/docs/references/ckbtc-reference)
 - [ICP Bitcoin integration](https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/overview)
+
+## License
+
+MOTO is open source under the [MIT License](LICENSE).
