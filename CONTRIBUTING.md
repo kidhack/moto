@@ -54,7 +54,21 @@ cd frontend
 npm run dev
 ```
 
-Open **http://localhost:5173**. For more detail, see [README.md](README.md) and [QUICK_START.md](QUICK_START.md).
+Open **http://localhost:5173**. For more detail, see [QUICK_START.md](QUICK_START.md) and [SETUP.md](SETUP.md).
+
+### 5. Build, test, deploy
+
+From `frontend/`:
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Local dev server on port 5173 |
+| `npm test` | Unit tests (Vitest) |
+| `npm run lint` | ESLint |
+| `npm run build:testnet` | Production build against ckTESTBTC |
+| `npm run build:mainnet` | Production build against ckBTC |
+
+The network is chosen by the build command (`.env.testnet` / `.env.mainnet`), never by a local `.env`. Deploying to the live canisters is covered in [DEPLOY.md](DEPLOY.md); the mainnet cutover checklist is in [PLAN-mainnet-launch.md](PLAN-mainnet-launch.md).
 
 ---
 
@@ -94,7 +108,7 @@ requiring userBitcoinAddress, so the list populates immediately.
 
 ## Code and quality
 
-- **Lint:** From `frontend/`, run `npm run lint` before committing.
+- **Lint and tests:** From `frontend/`, run `npm run lint` and `npm test` before committing.
 - **TypeScript:** Keep types accurate; the project uses strict-ish TypeScript.
 - **Style:** Follow existing patterns in the repo (React hooks, file layout, naming). Use the project’s formatting (e.g. existing quote/indent style).
 
@@ -102,16 +116,42 @@ requiring userBitcoinAddress, so the list populates immediately.
 
 ## Project layout
 
-- **`backend/`** – Motoko canister (`moto`).
-- **`frontend/`** – React + TypeScript + Vite app; deploys as `moto_frontend`.
-- **`frontend/src/`** – Components, hooks, pages, declarations.
-- **Docs** – [README.md](README.md), [ARCHITECTURE.md](ARCHITECTURE.md), [DEPLOY.md](DEPLOY.md), [SETUP.md](SETUP.md), [QUICK_START.md](QUICK_START.md).
+```
+moto/
+├── backend/
+│   └── main.mo              # Motoko canister (moto)
+├── frontend/
+│   ├── src/
+│   │   ├── components/      # UI (Send, Receive, TransactionDetails, dashboard/ for shared + desktop pieces)
+│   │   ├── hooks/           # useActor, useInternetIdentity, ckBTC hooks, etc.
+│   │   ├── lib/             # Pure logic with tests: fees, deposit notices, geo-blocking, ...
+│   │   ├── pages/           # SplashScreen, LoginPage, WalletDashboard
+│   │   ├── i18n/            # Translations (en, zh, hi, es, fr) and the Terms/Privacy text
+│   │   └── declarations/    # Candid bindings for the moto canister
+│   ├── public/              # Static assets, icons, .ic-assets.json5 (security headers)
+│   └── package.json
+└── dfx.json                 # Canisters: moto, moto_frontend
+```
+
+## Docs
+
+| Doc | Purpose |
+| --- | --- |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Canisters, data flow, backend API |
+| [DEPLOY.md](DEPLOY.md) | Deploying to the live canisters |
+| [PLAN-mainnet-launch.md](PLAN-mainnet-launch.md) | Mainnet launch plan and decisions |
+| [QUICK_START.md](QUICK_START.md) | Short local run guide |
+| [SETUP.md](SETUP.md) | Detailed local setup |
+| [TESTNET_TESTING.md](TESTNET_TESTING.md) | ckTESTBTC / testnet |
+| [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) | Colors, type, spacing |
+
+Background on ckBTC: [overview](https://internetcomputer.org/docs/defi/chain-key-tokens/ckbtc/overview), [reference](https://internetcomputer.org/docs/references/ckbtc-reference).
 
 ---
 
 ## Questions and issues
 
 - **Bugs or feature ideas:** Open an [issue](https://github.com/kidhack/moto/issues) on GitHub.
-- **Security:** Do not open public issues for security-sensitive topics; contact the maintainers privately.
+- **Security:** Do not open public issues for security-sensitive topics; email hello@motowallet.app.
 
 Thanks for contributing.
