@@ -1,91 +1,58 @@
-# MOTO
+<p align="center">
+  <img src="frontend/public/icon-192.png" alt="MOTO" width="96" height="96">
+</p>
 
-A self-custodial Bitcoin wallet (ckBTC) on the Internet Computer. Send and receive ckBTC, view balance and transaction history, and manage your wallet with Internet Identity.
+<h1 align="center">MOTO</h1>
 
-**Repository:** [github.com/kidhack/moto](https://github.com/kidhack/moto)
+<p align="center">
+  A minimal Bitcoin wallet for everyday transactions.<br>
+  <a href="https://motowallet.app"><strong>motowallet.app</strong></a>
+</p>
 
-## What it does
+> **Status:** MOTO is in public testing with test bitcoin (ckTESTBTC, backed by Bitcoin testnet4). Test coins have no value. Mainnet is coming soon.
 
-- **Sign in** with [Internet Identity](https://identity.ic0.app/) (or local II for development)
-- **View balance** and **transaction history** from the ckBTC ledger and index
-- **Receive** – get a ckBTC deposit address and show QR
-- **Send** – send ckBTC to another address (with optional app fee)
-- **Local and production** – deploy to mainnet or run against a local replica
+## Why MOTO
 
-Canisters: **moto** (Motoko backend) and **moto_frontend** (React + TypeScript + Vite). The app uses existing canisters; see [DEPLOY.md](DEPLOY.md) for production deployment.
+- **Non-custodial.** MOTO never holds your keys. Your bitcoin is recorded on public ledgers under your own identity.
+- **No account or email.** Sign in with a passkey through [Internet Identity](https://id.ai). There's no password to leak and no personal data to hand over.
+- **Instant MOTO to MOTO.** Sending to another MOTO wallet arrives in seconds, powered by ckBTC, with no Bitcoin miner fees.
 
-## Getting started
+## What you can do
 
-### Prerequisites
+- **Receive** bitcoin with your own deposit address and QR code, and request a specific amount.
+- **Send** to any Bitcoin address, or to another MOTO user. MOTO picks the route for you: an instant ckBTC transfer when the address belongs to a MOTO wallet, a regular Bitcoin withdrawal otherwise.
+- **See every fee before you confirm,** including what the recipient actually receives on a Bitcoin withdrawal.
+- **Track your history,** with withdrawals marked as pending until they confirm on the Bitcoin network.
+- **Use it your way:** 20 display currencies, 5 languages (English, 中文, हिन्दी, Español, Français), on phone or desktop.
 
-- [dfx](https://internetcomputer.org/docs/current/developer-docs/setup/install/) (ICP SDK)
-- Node.js 18+ and npm
+## How it works
 
-### Quick setup
+MOTO runs as smart contracts (canisters) on the [Internet Computer](https://internetcomputer.org). The app itself is served from a canister, with no traditional servers.
 
-From the project root (directory containing `dfx.json`):
+Your balance is held as **ckBTC**, a token on the Internet Computer backed one-to-one by real bitcoin held by the protocol. Depositing bitcoin to your MOTO address converts it to ckBTC. Withdrawing converts it back and sends real bitcoin to the address you choose. Transfers between MOTO wallets stay on the Internet Computer, which is why they're instant.
 
-```bash
-# 1. Install frontend dependencies
-cd frontend && npm install && cd ..
+You sign in with Internet Identity, so your wallet is tied to your passkey rather than to an email address or password.
 
-# 2. Start local replica (Terminal 1)
-dfx start
+## Fees
 
-# 3. Deploy canisters and generate bindings (Terminal 2)
-dfx deploy
-dfx generate
+| | You pay | Recipient gets |
+| --- | --- | --- |
+| **To another MOTO wallet** | Amount + 0.5% app fee (capped at US$100) + a 10-sat network fee per transfer | The full amount |
+| **To a Bitcoin address** | Amount + 0.5% app fee (capped at US$100) + small network fees | The amount minus the ckBTC minter fee and the Bitcoin miner fee |
 
-# 4. Frontend env: set backend canister ID
-cd frontend
-echo "VITE_CANISTER_ID_MOTO=$(cd .. && dfx canister id moto)" > .env
-echo "VITE_DFX_NETWORK=local" >> .env
+Every fee is shown on the confirm screen before you send. The app fee is only charged after your send succeeds.
 
-# 5. Run the app (stays on port 5173 for consistent II session)
-npm run dev
-```
+## Good to know
 
-Open **http://localhost:5173**. For step-by-step and troubleshooting, see [CONTRIBUTING.md](CONTRIBUTING.md) and [QUICK_START.md](QUICK_START.md).
+- **Back up your login.** Your wallet is tied to your Internet Identity. Add a recovery phrase or a second device at [id.ai](https://id.ai) (the app has a "Back Up Login" link). If you lose your passkey without one, nobody, including MOTO, can restore access to your funds.
+- **Transactions are final.** Bitcoin and ckBTC transfers can't be reversed, so check the address before you send.
+- **Use it for everyday amounts,** not your life savings.
+- **Not available everywhere.** MOTO can't be used from regions under comprehensive sanctions.
 
-## Project structure
+The full [Terms of Service and Privacy Policy](https://motowallet.app) are in the app's menu.
 
-```
-moto/
-├── backend/
-│   └── main.mo              # Motoko canister (moto)
-├── frontend/
-│   ├── src/
-│   │   ├── components/      # UI (Send, Receive, TransactionHistory, etc.)
-│   │   ├── hooks/            # useActor, useInternetIdentity, ckBTC hooks, etc.
-│   │   ├── pages/            # SplashScreen, LoginPage, WalletDashboard
-│   │   └── declarations/     # Generated Motoko bindings (moto)
-│   ├── public/assets/       # Logos and icons
-│   └── package.json
-├── dfx.json                 # Canisters: moto, moto_frontend
-├── DEPLOY.md                # Deploy to mainnet (existing canisters)
-├── ARCHITECTURE.md          # Data flow and backend API
-├── CONTRIBUTING.md          # Dev setup and Git workflow
-└── spec.md                  # Product specification
-```
+## Open source
 
-## Docs
+MOTO is open source under the [MIT License](LICENSE). The MOTO name and logo are not covered by the license.
 
-| Doc | Purpose |
-|-----|--------|
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, port 5173, branch/PR workflow |
-| [DEPLOY.md](DEPLOY.md) | Deploy to mainnet (use existing canisters only) |
-| [QUICK_START.md](QUICK_START.md) | Short local run guide |
-| [SETUP.md](SETUP.md) | Detailed local setup |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Canisters, data flow, backend API |
-| [TESTNET_TESTING.md](TESTNET_TESTING.md) | ckTESTBTC / testnet |
-
-## Resources
-
-- [Repository](https://github.com/kidhack/moto)
-- [ckBTC overview](https://internetcomputer.org/docs/defi/chain-key-tokens/ckbtc/overview)
-- [ckBTC reference](https://internetcomputer.org/docs/references/ckbtc-reference)
-- [ICP Bitcoin integration](https://internetcomputer.org/docs/current/developer-docs/integrations/bitcoin/overview)
-
-## License
-
-MOTO is open source under the [MIT License](LICENSE).
+Want to run it locally or contribute? Start with [CONTRIBUTING.md](CONTRIBUTING.md). Found a security issue? Please email hello@motowallet.app rather than opening a public issue.
