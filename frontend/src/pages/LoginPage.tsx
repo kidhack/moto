@@ -8,7 +8,6 @@ import PrivacyPage from '../components/PrivacyPage';
 import { markLegalSeen } from '../lib/legalNotice';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 
-const CONTENT_MAX_WIDTH = 320;
 
 const VALUE_PROPS = [
   ['login.propCustodyTitle', 'login.propCustodyBody'],
@@ -125,7 +124,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="fixed inset-0 flex min-h-dvh h-dvh w-full flex-col items-center overflow-hidden bg-black text-white pt-4 sm:pt-8 pb-0">
+    <div className="fixed inset-0 flex min-h-dvh h-dvh w-full flex-col overflow-hidden bg-black text-white">
       {/* Logo: same position as splash terminus */}
       <div
         className="absolute left-1/2 z-20 flex flex-col items-center"
@@ -138,40 +137,34 @@ export default function LoginPage() {
         />
       </div>
 
-      {/* Text block: bottom-aligned, same width as button */}
-      <div className="flex-1 flex items-end justify-center w-full px-5 min-h-0">
-        <div
-          className="w-full max-w-full text-left py-8"
-          style={{ letterSpacing: '-0.22px', width: CONTENT_MAX_WIDTH, maxWidth: '100%', fontSize: '1.1rem' }}
-        >
-          <p className="font-medium text-white leading-normal">
-            {t('login.welcomeLine1')}
-            <br aria-hidden="true" />
-            {t('login.welcomeLine2')}
-          </p>
-          <div className="my-5 sm:my-6 h-px w-full bg-white/30" aria-hidden />
-          <p className="leading-relaxed text-white/80">
-            {t('login.description1')}
-          </p>
-          <div className="my-5 sm:my-6 h-px w-full bg-white/30" aria-hidden />
-          <p className="leading-relaxed text-white/80">
-            {t('login.description2')}
-          </p>
-        </div>
-      </div>
-
-      {/* Sign In button at bottom */}
-      <div className="flex shrink-0 justify-center w-full px-5 pt-4" style={{ paddingBottom: '0.75rem' }}>
-        {signInButton({ width: CONTENT_MAX_WIDTH, maxWidth: '100%' })}
-      </div>
-
-      {/* Agreement: shown before sign-in so the Terms are actually presented to the user */}
-      <p
-        className="shrink-0 text-xs leading-relaxed text-white/50 text-left px-5"
-        style={{ width: CONTENT_MAX_WIDTH, maxWidth: '100%', paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))', boxSizing: 'content-box' }}
+      {/* Bottom-anchored block (Sign In stays in thumb reach); the logo above keeps the splash position. */}
+      <div className="flex-1" />
+      <div
+        className="mx-auto flex w-full max-w-[420px] flex-col px-5"
+        style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))' }}
       >
-        {agreementParts('underline underline-offset-2 text-white/70 hover:text-white')}
-      </p>
+        <h1 className="text-balance text-2xl font-medium leading-[1.25] tracking-[-0.4px] text-white">
+          {t('login.welcomeLine1')} {t('login.welcomeLine2')}
+        </h1>
+
+        <ul className="mt-5 flex flex-col gap-3">
+          {VALUE_PROPS.map(([title, body]) => (
+            <li key={title} className="flex flex-col gap-px">
+              <span className="text-[15px] font-medium leading-[1.4] text-white">{t(title)}</span>
+              <span className="text-sm leading-[1.45] text-white/60">{t(body)}</span>
+            </li>
+          ))}
+        </ul>
+
+        <p className="mt-5 text-[13px] leading-[1.45] text-white/50">{t('login.risk')}</p>
+
+        <div className="mt-7">{signInButton({ width: '100%' })}</div>
+
+        {/* Agreement: shown before sign-in so the Terms are actually presented to the user */}
+        <p className="mt-3 text-balance text-xs leading-[1.55] text-white/35">
+          {agreementParts('text-white/50 hover:text-white/80 hover:underline focus-visible:underline underline-offset-2')}
+        </p>
+      </div>
 
       {legalOverlays}
     </div>

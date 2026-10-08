@@ -170,8 +170,6 @@ const es: Record<string, string> = {
 
   'login.welcomeLine1': 'Bienvenido a MOTO,',
   'login.welcomeLine2': 'tu billetera Bitcoin minimalista.',
-  'login.description1': 'Usa para transacciones diarias, no para tus ahorros de toda la vida.',
-  'login.description2': 'Las transferencias MOTO a MOTO son instantáneas y funcionan con ckBTC.',
   'login.connecting': 'Conectando…',
   'login.signIn': 'Iniciar sesión',
   'login.failedToSignIn': 'Error al iniciar sesión. Por favor intenta de nuevo.',

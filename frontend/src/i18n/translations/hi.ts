@@ -170,8 +170,6 @@ const hi: Record<string, string> = {
 
   'login.welcomeLine1': 'MOTO में आपका स्वागत है,',
   'login.welcomeLine2': 'आपका न्यूनतम बिटकॉइन वॉलेट।',
-  'login.description1': 'दैनिक लेनदेन के लिए उपयोग करें, अपनी जीवन भर की बचत के लिए नहीं।',
-  'login.description2': 'MOTO से MOTO ट्रांसफर तुरंत होते हैं और ckBTC द्वारा संचालित हैं।',
   'login.connecting': 'कनेक्ट हो रहा है…',
   'login.signIn': 'साइन इन',
   'login.failedToSignIn': 'साइन इन विफल। कृपया पुनः प्रयास करें।',

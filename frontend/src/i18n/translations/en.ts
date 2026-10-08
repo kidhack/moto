@@ -177,8 +177,6 @@ const en: Record<string, string> = {
   // Login
   'login.welcomeLine1': 'Welcome to MOTO,',
   'login.welcomeLine2': 'your minimal Bitcoin wallet.',
-  'login.description1': 'Use for everyday transactions, not your life savings.',
-  'login.description2': 'MOTO to MOTO transfers are instant and powered by ckBTC.',
   'login.connecting': 'Connecting...',
   'login.signIn': 'Sign In',
   'login.failedToSignIn': 'Failed to sign in. Please try again.',
