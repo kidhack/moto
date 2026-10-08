@@ -170,8 +170,6 @@ const zh: Record<string, string> = {
 
   'login.welcomeLine1': '欢迎使用 MOTO，',
   'login.welcomeLine2': '您的极简比特币钱包。',
-  'login.description1': '用于日常交易，而非存放毕生积蓄。',
-  'login.description2': 'MOTO 之间的转账即时完成，由 ckBTC 驱动。',
   'login.connecting': '连接中…',
   'login.signIn': '登录',
   'login.failedToSignIn': '登录失败，请重试。',

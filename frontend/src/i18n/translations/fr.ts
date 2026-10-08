@@ -170,8 +170,6 @@ const fr: Record<string, string> = {
 
   'login.welcomeLine1': 'Bienvenue sur MOTO,',
   'login.welcomeLine2': 'votre portefeuille Bitcoin minimaliste.',
-  'login.description1': 'À utiliser pour les transactions quotidiennes, pas pour vos économies.',
-  'login.description2': 'Les transferts MOTO à MOTO sont instantanés et propulsés par ckBTC.',
   'login.connecting': 'Connexion…',
   'login.signIn': 'Se connecter',
   'login.failedToSignIn': 'Échec de la connexion. Veuillez réessayer.',
