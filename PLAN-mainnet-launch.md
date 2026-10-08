@@ -19,6 +19,15 @@ Source: audit of `59cdff6` (2026-10-07).
 | D5 | MOTO-to-MOTO lookup reveals "this address belongs to principal X". Accept + disclose, or add an opt-out? | **Disclose in Privacy Policy for v1**; opt-out toggle post-launch. |
 | D6 | Desktop layout: keep the 3-column 860×600 design from `PLAN-desktop-layout.md`? | Keep, with the changes in Phase 5. |
 
+### Decision outcomes (2026-10-08)
+
+- **D1:** Reuse the existing canisters (done: upgraded in place).
+- **D2:** No public testnet at launch. Maybe later at `test.motowallet.app`, on its own canisters.
+- **D3:** Treasury `c65im-…` is the owner's primary Internet Identity. Know which app it belongs to (needed to spend fees), make sure it has a recovery phrase, and sweep fees to cold storage periodically.
+- **D4:** 0.5% fee capped at $100 for launch; revisit later.
+- **D5:** Disclose the address lookup (done: in the Privacy Policy and FAQ); opt-out post-launch.
+- **D6:** Done (full-window desktop layout).
+
 ---
 
 ## Phase 1 — Repo Hygiene (≈1 hr, do first)
