@@ -182,6 +182,8 @@ const en: Record<string, string> = {
   'login.connecting': 'Connecting...',
   'login.signIn': 'Sign In',
   'login.failedToSignIn': 'Failed to sign in. Please try again.',
+  'region.unavailableTitle': "MOTO isn't available in your region",
+  'region.unavailableBody': "To comply with sanctions laws, MOTO can't be used from your current location.",
   'legal.dismiss': "OK",
   'legal.review': "Review",
   'legal.updated': "We've updated our Terms of Service and Privacy Policy.",

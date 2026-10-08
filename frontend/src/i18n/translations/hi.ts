@@ -175,6 +175,8 @@ const hi: Record<string, string> = {
   'login.connecting': 'कनेक्ट हो रहा है…',
   'login.signIn': 'साइन इन',
   'login.failedToSignIn': 'साइन इन विफल। कृपया पुनः प्रयास करें।',
+  'region.unavailableTitle': "MOTO आपके क्षेत्र में उपलब्ध नहीं है",
+  'region.unavailableBody': "प्रतिबंध कानूनों का पालन करने के लिए, MOTO का उपयोग आपके वर्तमान स्थान से नहीं किया जा सकता।",
   'faq.nonCustodialBody': "हाँ। MOTO कभी आपकी कुंजियाँ या फ़ंड नहीं रखता। आपकी संपत्ति सार्वजनिक लेजर पर रहती है और आप अपनी Internet Identity से उन तक पहुँच नियंत्रित करते हैं। उन्हें देखने और भेजने के लिए आप motowallet.app पर MOTO ऐप पर निर्भर करते हैं।",
   'legal.dismiss': "ठीक है",
   'legal.review': "देखें",

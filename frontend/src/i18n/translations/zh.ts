@@ -175,6 +175,8 @@ const zh: Record<string, string> = {
   'login.connecting': '连接中…',
   'login.signIn': '登录',
   'login.failedToSignIn': '登录失败，请重试。',
+  'region.unavailableTitle': "MOTO 在您所在的地区不可用",
+  'region.unavailableBody': "为遵守制裁法律，MOTO 无法在您当前所在的位置使用。",
   'faq.nonCustodialBody': "是的。MOTO 从不持有您的密钥或资金。您的资产存在于公共账本上，由您通过 Internet Identity 控制访问。查看和转移资产需要使用 motowallet.app 上的 MOTO 应用。",
   'legal.dismiss': "知道了",
   'legal.review': "查看",

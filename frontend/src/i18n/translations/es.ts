@@ -175,6 +175,8 @@ const es: Record<string, string> = {
   'login.connecting': 'Conectando…',
   'login.signIn': 'Iniciar sesión',
   'login.failedToSignIn': 'Error al iniciar sesión. Por favor intenta de nuevo.',
+  'region.unavailableTitle': "MOTO no está disponible en tu región",
+  'region.unavailableBody': "Para cumplir con las leyes de sanciones, MOTO no se puede usar desde tu ubicación actual.",
   'faq.nonCustodialBody': "Sí. MOTO nunca guarda tus claves ni tus fondos. Tus activos están en registros públicos y tú controlas el acceso con tu Internet Identity. Para verlos y moverlos dependes de la app MOTO en motowallet.app.",
   'legal.dismiss': "Entendido",
   'legal.review': "Revisar",

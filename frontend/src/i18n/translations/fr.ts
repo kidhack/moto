@@ -175,6 +175,8 @@ const fr: Record<string, string> = {
   'login.connecting': 'Connexion…',
   'login.signIn': 'Se connecter',
   'login.failedToSignIn': 'Échec de la connexion. Veuillez réessayer.',
+  'region.unavailableTitle': "MOTO n'est pas disponible dans votre région",
+  'region.unavailableBody': "Pour respecter les lois sur les sanctions, MOTO ne peut pas être utilisé depuis votre position actuelle.",
   'faq.nonCustodialBody': "Oui. MOTO ne détient jamais vos clés ni vos fonds. Vos actifs sont inscrits sur des registres publics et vous en contrôlez l'accès avec votre Internet Identity. Pour les consulter et les déplacer, vous dépendez de l'application MOTO sur motowallet.app.",
   'legal.dismiss': "OK",
   'legal.review': "Consulter",

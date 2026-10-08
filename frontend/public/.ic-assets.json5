@@ -1,13 +1,14 @@
 // Asset canister config. Lives in public/ so Vite copies it into dist/ (dfx reads it from the
 // asset source dir; at frontend/ it was never deployed). Every origin the app talks to must be in
-// connect-src: IC API, price sources, and Bitcoin explorers. The allorigins.win price proxy is
+// connect-src: IC API, price sources, Bitcoin explorers, and the country lookups used for
+// sanctions geo-blocking (ipwho.is, get.geojs.io). The allorigins.win price proxy is
 // deliberately absent; add it only if VITE_ENABLE_PROXY_FALLBACK is turned on.
 [
   {
     "match": "**/*",
     "security_policy": "hardened",
     "headers": {
-      "Content-Security-Policy": "default-src 'none'; script-src 'self'; connect-src 'self' https://icp-api.io https://icp0.io https://*.icp0.io https://ic0.app https://*.ic0.app https://api.coingecko.com https://mempool.space https://blockstream.info https://api.coindesk.com https://api.binance.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'; object-src 'none'; upgrade-insecure-requests",
+      "Content-Security-Policy": "default-src 'none'; script-src 'self'; connect-src 'self' https://icp-api.io https://icp0.io https://*.icp0.io https://ic0.app https://*.ic0.app https://api.coingecko.com https://mempool.space https://blockstream.info https://api.coindesk.com https://api.binance.com https://ipwho.is https://get.geojs.io; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'; object-src 'none'; upgrade-insecure-requests",
       "Permissions-Policy": "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), clipboard-read=(self), clipboard-write=(self)",
       "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
       "X-Frame-Options": "DENY",
