@@ -37,7 +37,7 @@ interface TxCardProps {
   formatAmount: (s: bigint) => string;
   formatDate: (t: bigint) => string;
   formatAddress: (a: string) => string;
-  getBlockExplorerUrl: (id: string) => string;
+  getBlockExplorerUrl: (id: string) => string | null;
   getStatusDisplay: (s: string) => string;
   getFiatValue: (s: bigint) => string;
   copiedField: 'to' | null;
@@ -187,14 +187,18 @@ function TxCard({
           </div>
           <div className="flex gap-2 items-center text-base">
             <span className="text-white/80 shrink-0">{t('txDetails.tx')}</span>
-            <a
-              href={getBlockExplorerUrl(transaction.id)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-white flex-1 text-right truncate hover:underline"
-            >
-              {formatAddress(transaction.id)}
-            </a>
+            {getBlockExplorerUrl(transaction.id) ? (
+              <a
+                href={getBlockExplorerUrl(transaction.id) ?? undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-white flex-1 text-right truncate hover:underline"
+              >
+                {formatAddress(transaction.id)}
+              </a>
+            ) : (
+              <span className="font-mono text-white flex-1 text-right truncate">{formatAddress(transaction.id)}</span>
+            )}
           </div>
           <div className="flex gap-2 items-center text-base">
             <span className="text-white/80 shrink-0">{t('txDetails.network')}</span>
@@ -305,7 +309,10 @@ function TransactionDetailsContent({
 
   const formatAddress = (address: string) => `${address.slice(0, 7)}...${address.slice(-6)}`;
 
-  const getBlockExplorerUrl = (transactionId: string) => {
+  const getBlockExplorerUrl = (transactionId: string): string | null => {
+    // The IC dashboard only covers mainnet ckBTC; a testnet block index would open an unrelated
+    // mainnet transaction with the same number, so testnet builds show no link.
+    if (import.meta.env.VITE_USE_TESTNET === 'true') return null;
     const numericIndex = transactionId.replace(/^icrc1-(mint-|burn-)?/, '');
     const index = /^\d+$/.test(numericIndex) ? numericIndex : transactionId;
     return `https://dashboard.internetcomputer.org/bitcoin/transaction/${encodeURIComponent(index)}`;
