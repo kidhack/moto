@@ -1,12 +1,12 @@
 import { Fragment } from 'react';
 import LegalInfoPageShell from './LegalInfoPageShell';
 import { useTranslation } from '../i18n';
+import { PRIVACY_SECTION_COUNT } from '../i18n/translations/legalTermsAndPrivacyEn';
 
 interface PrivacyPageProps {
   onClose?: () => void;
 }
 
-const PRIVACY_SECTION_COUNT = 11;
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0');

@@ -7,6 +7,8 @@ import WalletDashboard from './pages/WalletDashboard';
 import LoginPage from './pages/LoginPage';
 import SplashScreen from './pages/SplashScreen';
 import { useOnboardingStatus } from './hooks/useQueries';
+import { useGeoRestriction } from './hooks/useGeoRestriction';
+import RegionUnavailable from './components/RegionUnavailable';
 
 const SKIP_SPLASH_KEY = 'moto_skip_splash';
 
@@ -21,6 +23,7 @@ export default function App() {
     return false;
   });
   const { identity, isInitializing } = useInternetIdentity();
+  const geoRestricted = useGeoRestriction();
   const { actor } = useActor();
   const { data: isOnboardingComplete, isLoading: isCheckingOnboarding, refetch: refetchOnboarding } = useOnboardingStatus();
 
@@ -48,6 +51,11 @@ export default function App() {
   }, [identity, actor, isOnboardingComplete, isCheckingOnboarding, refetchOnboarding]);
 
 
+
+  // Sanctioned regions get no app at all, signed in or not (Terms §12).
+  if (geoRestricted) {
+    return <RegionUnavailable />;
+  }
 
   // Not signed in: show splash then sign-in as separate screens
   if (!identity) {
