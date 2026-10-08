@@ -11,10 +11,19 @@ export function markLegalSeen(): void {
   }
 }
 
-/** True when the Terms or Privacy Policy changed since this device last showed them. */
+/**
+ * True when the Terms or Privacy Policy changed after this device last recorded a version.
+ * A device with no recorded version (first visit, or signed in before versions were tracked)
+ * just records the current one: there is nothing it agreed to that has since changed.
+ */
 export function hasUnseenLegalUpdate(): boolean {
   try {
-    return localStorage.getItem(KEY) !== LEGAL_VERSION;
+    const seen = localStorage.getItem(KEY);
+    if (seen === null) {
+      localStorage.setItem(KEY, LEGAL_VERSION);
+      return false;
+    }
+    return seen !== LEGAL_VERSION;
   } catch {
     return false;
   }
