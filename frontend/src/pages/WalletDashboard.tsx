@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
+import { II_MANAGE_URL } from '../lib/ic';
 import { useInternetIdentity } from '../hooks/useInternetIdentity';
 import { useActor } from '../hooks/useActor';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWalletInfo, useEnsureWallet, useResetOnboarding, useSignOutAndReset, useWalletAddress } from '../hooks/useQueries';
 import { useCkBTCMinter } from '../hooks/useCkBTCMinter';
 import { useCkBTCLedger } from '../hooks/useCkBTCLedger';
-import { isBech32AddressForStorage } from '../utils/addressValidation';
 import { useCkBTCTransactions } from '../hooks/useCkBTCTransactions';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import type { Transaction } from '../backend';
@@ -34,6 +34,11 @@ import { useTranslation } from '../i18n';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import { usePreferredLanguage } from '../hooks/usePreferredLanguage';
 import { LANGUAGES } from '../data/languages';
+import { useIsDesktop } from '../hooks/useIsDesktop';
+import MenuPanel, { type MenuPanelProps } from '../components/dashboard/MenuPanel';
+import BalanceDisplay from '../components/dashboard/BalanceDisplay';
+import TransactionList from '../components/dashboard/TransactionList';
+import DesktopDashboard from '../components/dashboard/DesktopDashboard';
 
 export default function WalletDashboard() {
   const { clear, identity } = useInternetIdentity();
@@ -55,6 +60,23 @@ export default function WalletDashboard() {
   
   // Get current principal for debugging
   const currentPrincipal = identity ? identity.getPrincipal().toText() : null;
+
+  // Losing an II passkey with no recovery method means losing the funds, so nudge once there's a balance.
+  const recoveryAckKey = currentPrincipal ? `moto_recovery_ack_${currentPrincipal}` : null;
+  const [recoveryAcked, setRecoveryAcked] = useState(true);
+  useEffect(() => {
+    try {
+      setRecoveryAcked(!recoveryAckKey || localStorage.getItem(recoveryAckKey) === '1');
+    } catch {
+      setRecoveryAcked(false);
+    }
+  }, [recoveryAckKey]);
+  const dismissRecoveryBanner = () => {
+    try {
+      if (recoveryAckKey) localStorage.setItem(recoveryAckKey, '1');
+    } catch { /* storage unavailable */ }
+    setRecoveryAcked(true);
+  };
 
   // Debug logging
   useEffect(() => {
@@ -91,7 +113,6 @@ export default function WalletDashboard() {
   const [showTerms, setShowTerms] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [settingsExiting, setSettingsExiting] = useState(false);
-  const [principalCopied, setPrincipalCopied] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [menuClosing, setMenuClosing] = useState(false);
   const [menuEntering, setMenuEntering] = useState(true);
@@ -158,23 +179,6 @@ export default function WalletDashboard() {
     }
   }, [actor, ensureWallet]);
 
-  // Explicitly sync this user's ckBTC address to the canister as soon as we have both wallet and address.
-  // This guarantees getPrincipalByBitcoinAddress can resolve our address for senders (MOTO-to-MOTO),
-  // independent of useWalletInfo query timing.
-  useEffect(() => {
-    if (!actor || !ensureWallet.isSuccess || !ckbtcAddress || !isBech32AddressForStorage(ckbtcAddress)) return;
-    let cancelled = false;
-    actor
-      .setBitcoinAddress(ckbtcAddress)
-      .then(() => {
-        if (!cancelled) console.log('WalletDashboard: setBitcoinAddress synced for MOTO-to-MOTO', ckbtcAddress.slice(0, 12) + '...');
-      })
-      .catch((err) => {
-        if (!cancelled) console.warn('WalletDashboard: setBitcoinAddress failed:', err);
-      });
-    return () => { cancelled = true; };
-  }, [actor, ensureWallet.isSuccess, ckbtcAddress]);
-
   const handleResetOnboarding = async () => {
     try {
       await resetOnboarding.mutateAsync();
@@ -193,7 +197,7 @@ export default function WalletDashboard() {
       await clear();
       try {
         sessionStorage.setItem('moto_skip_splash', '1');
-      } catch {}
+      } catch { /* storage unavailable (private mode) */ }
       toast.success(t('menu.signedOut'));
       setTimeout(() => {
         window.location.href = window.location.origin + window.location.pathname;
@@ -205,6 +209,8 @@ export default function WalletDashboard() {
   };
 
   const handleWipeCanisterAndSignOut = async () => {
+    // Funds are untouched (they belong to the II principal), but make sure people know that first.
+    if (!window.confirm(t('menu.wipeConfirm'))) return;
     setMenuOpen(false);
     // Wallet name is stored in the canister and will be wiped with signOutAndReset
     try {
@@ -217,7 +223,7 @@ export default function WalletDashboard() {
       await clear();
       try {
         sessionStorage.setItem('moto_skip_splash', '1');
-      } catch {}
+      } catch { /* storage unavailable (private mode) */ }
       toast.success(t('menu.canisterWiped'));
       setTimeout(() => {
         window.location.href = window.location.origin + window.location.pathname;
@@ -228,7 +234,7 @@ export default function WalletDashboard() {
         await clear();
         try {
           sessionStorage.setItem('moto_skip_splash', '1');
-        } catch {}
+        } catch { /* storage unavailable (private mode) */ }
         window.location.href = window.location.origin + window.location.pathname;
       } catch (clearError) {
         console.error('Failed to clear identity:', clearError);
@@ -270,20 +276,6 @@ export default function WalletDashboard() {
     return `${year}-${month}-${day}·${hours}:${minutes}`;
   };
 
-  // Get transaction icon based on type
-  const getTransactionIcon = (tx: Transaction, walletAddress: string) => {
-    const isSent = tx.fromAddress === walletAddress;
-    const isReceived = tx.toAddress === walletAddress && !isSent;
-    // For now, we'll use simple icons - you can replace with actual SVG icons from Figma
-    if (isSent) {
-      return 'sent'; // Will use SVG icon
-    } else if (isReceived) {
-      return 'received'; // Will use SVG icon
-    } else {
-      return 'added'; // Added funds icon
-    }
-  };
-
   // Always show the dashboard - use loading skeletons for balance while data loads
   // Only use actual walletInfo - don't show fallback data
   const displayWalletInfo = walletInfo;
@@ -323,6 +315,175 @@ export default function WalletDashboard() {
     await refetchWalletInfo();
   });
 
+  const isDesktop = useIsDesktop();
+
+  // Menu contents are shared; on mobile, opening a page also closes the full-screen menu.
+  const closeMobileMenu = () => { if (!isDesktop) setMenuClosing(true); };
+  const menuPanelProps: MenuPanelProps = {
+    currentPrincipal,
+    walletName,
+    walletNameLoaded,
+    editingWalletName,
+    walletNameInput,
+    setWalletNameInput,
+    defaultWalletName: DEFAULT_WALLET_NAME,
+    onEditWalletName: () => { setWalletNameInput(walletName); setEditingWalletName(true); },
+    onSaveWalletName: handleSaveWalletName,
+    preferredCurrency,
+    languageName,
+    onOpenCurrency: () => { setShowLanguageSelector(false); setShowCurrencySelector(true); },
+    onOpenLanguage: () => { setShowCurrencySelector(false); setShowLanguageSelector(true); },
+    onOpenFAQ: () => { closeMobileMenu(); setShowFAQ(true); },
+    onOpenTerms: () => { closeMobileMenu(); setShowTerms(true); },
+    onOpenPrivacy: () => { closeMobileMenu(); setShowPrivacy(true); },
+    onSignOut: handleLogOut,
+    onWipe: handleWipeCanisterAndSignOut,
+    isWiping: signOutAndReset.isPending,
+  };
+
+  const transactionList = (
+    <TransactionList
+      isLoading={isLoadingBalance}
+      transactions={displayTransactions}
+      walletAddress={walletAddressForTx}
+      onSelect={(tx) => {
+        // Desktop shows details in the right panel, replacing any open Send/Receive.
+        if (isDesktop) { setShowSendModal(false); setShowReceiveModal(false); setShowAddFundsModal(false); }
+        setSelectedTransaction(tx);
+      }}
+      formatBTC={formatBTC}
+      formatDate={formatDate}
+      selectedId={isDesktop ? selectedTransaction?.id ?? null : null}
+      desktop={isDesktop}
+    />
+  );
+
+  // Desktop: ↑/↓ move through the history (details follow in the right panel).
+  const sortedTransactions = [...displayTransactions].sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
+  const anyOverlayOpen = showFAQ || showTerms || showPrivacy || showCurrencySelector || showLanguageSelector || showSendModal || showReceiveModal || showAddFundsModal;
+  useEffect(() => {
+    if (!isDesktop || anyOverlayOpen || sortedTransactions.length === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      e.preventDefault();
+      const idx = selectedTransaction ? sortedTransactions.findIndex((tx) => tx.id === selectedTransaction.id) : -1;
+      const next = e.key === 'ArrowDown' ? Math.min(idx + 1, sortedTransactions.length - 1) : Math.max(idx - 1, 0);
+      setSelectedTransaction(sortedTransactions[next]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  const recoveryBanner = !recoveryAcked && ledgerBalance !== null && ledgerBalance > BigInt(0) && (
+    <div className="flex items-start gap-3 py-3 border-b border-white/30">
+      <p className="text-sm text-amber-300 leading-snug flex-1">{t('recovery.banner')}</p>
+      <div className="flex flex-col items-end gap-1 shrink-0">
+        <a
+          href={II_MANAGE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={dismissRecoveryBanner}
+          className="text-sm font-medium text-white underline underline-offset-2"
+        >
+          {t('recovery.setUp')}
+        </a>
+        <button onClick={dismissRecoveryBanner} className="text-sm text-white/50">
+          {t('recovery.dismiss')}
+        </button>
+      </div>
+    </div>
+  );
+
+  const testnetBadge = import.meta.env.VITE_USE_TESTNET === 'true' && (
+    <div className="bg-yellow-500/20 border border-yellow-500/50 rounded px-4 py-2 text-center">
+      <p className="text-yellow-500 text-sm font-medium">{t('dashboard.testnet')}</p>
+    </div>
+  );
+
+  const selectedTransactionDetails = selectedTransaction && (walletAddress || walletAddressForTx) && (() => {
+    const sorted = [...displayTransactions].sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
+    const idx = sorted.findIndex((t) => t.id === selectedTransaction.id);
+    if (idx < 0) return null;
+    return (
+      <TransactionDetails
+        transactions={sorted}
+        selectedIndex={idx}
+        walletAddress={walletAddress ?? walletAddressForTx}
+        onClose={() => setSelectedTransaction(null)}
+        onSelectTransaction={(tx) => setSelectedTransaction(tx)}
+        variant={isDesktop ? 'panel' : 'overlay'}
+      />
+    );
+  })();
+
+  const addressUnavailable = (onClose: () => void) => (
+    <div className="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center px-5">
+      {isLoadingAddress ? (
+        <>
+          <p className="text-white text-center text-lg mb-4">{t('dashboard.loadingAddress')}</p>
+          <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseWait')}</p>
+        </>
+      ) : walletAddressError ? (
+        <>
+          <p className="text-white text-center text-lg mb-4">{t('dashboard.unableToLoadAddress')}</p>
+          <p className="text-white/60 text-center text-sm mb-4">{walletAddressError.message}</p>
+          <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseRetryLater')}</p>
+        </>
+      ) : (
+        <>
+          <p className="text-white text-center text-lg mb-4">{t('dashboard.unableToLoadAddress')}</p>
+          <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseRetryLater')}</p>
+        </>
+      )}
+      <button
+        onClick={onClose}
+        className="h-16 border-2 border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center px-8"
+      >
+        <span className="font-bold text-base text-white/80 tracking-[0.15px]">{t('common.close')}</span>
+      </button>
+    </div>
+  );
+
+  if (isDesktop) {
+    return (
+      <DesktopDashboard
+        address={walletAddress ?? null}
+        menuPanel={<MenuPanel {...menuPanelProps} />}
+        balance={<BalanceDisplay balance={ledgerBalance} formatBTC={formatBTC} />}
+        showAddFunds={ledgerBalance === null || ledgerBalance <= BigInt(0)}
+        onAddFunds={() => setShowAddFundsModal(true)}
+        onRefresh={() => refetchWalletInfo()}
+        recoveryBanner={recoveryBanner}
+        testnetBadge={testnetBadge}
+        transactionList={transactionList}
+        rightPanel={
+          showSendModal && sendWallet ? (
+            <SendTransaction wallet={sendWallet} onSuccess={() => setShowSendModal(false)} onClose={() => setShowSendModal(false)} />
+          ) : showReceiveModal || showAddFundsModal ? (
+            walletAddress ? (
+              <ReceiveBitcoin address={walletAddress} onClose={() => { setShowReceiveModal(false); setShowAddFundsModal(false); }} />
+            ) : (
+              addressUnavailable(() => { setShowReceiveModal(false); setShowAddFundsModal(false); })
+            )
+          ) : selectedTransactionDetails || null
+        }
+        onCloseRightPanel={() => { setShowSendModal(false); setShowReceiveModal(false); setShowAddFundsModal(false); setSelectedTransaction(null); }}
+        onSend={() => { setSelectedTransaction(null); setShowReceiveModal(false); setShowAddFundsModal(false); setShowSendModal(true); }}
+        onReceive={() => { setSelectedTransaction(null); setShowSendModal(false); setShowReceiveModal(true); }}
+        modal={
+          showFAQ ? { node: <FAQPage onClose={() => setShowFAQ(false)} />, close: () => setShowFAQ(false) }
+          : showTerms ? { node: <TermsPage onClose={() => setShowTerms(false)} />, close: () => setShowTerms(false) }
+          : showPrivacy ? { node: <PrivacyPage onClose={() => setShowPrivacy(false)} />, close: () => setShowPrivacy(false) }
+          : showCurrencySelector ? { node: <CurrencySelector onClose={() => setShowCurrencySelector(false)} embedded />, close: () => setShowCurrencySelector(false) }
+          : showLanguageSelector ? { node: <LanguageSelector onClose={() => setShowLanguageSelector(false)} embedded />, close: () => setShowLanguageSelector(false) }
+          : null
+        }
+      />
+    );
+  }
+
   return (
     <div className="flex h-dvh min-h-dvh flex-col bg-black text-white overflow-hidden">
       
@@ -339,18 +500,7 @@ export default function WalletDashboard() {
             <img src="/assets/moto-logo-mark.svg" alt="" className="h-8 w-8 object-left pointer-events-none select-none" />
           </button>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <span className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>₿</span>
-              {isLoadingBalance ? (
-                <div className="h-8 w-24 rounded animate-shimmer" aria-hidden />
-              ) : ledgerBalance !== null ? (
-                <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>{formatBTC(ledgerBalance)}</p>
-              ) : displayWalletInfo ? (
-                <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>{formatBTC(displayWalletInfo.balance)}</p>
-              ) : (
-                <p className="font-mono text-2xl font-bold text-white" style={{ letterSpacing: '0.96px' }}>0</p>
-              )}
-            </div>
+            <BalanceDisplay balance={ledgerBalance} formatBTC={formatBTC} />
             {(ledgerBalance === null || ledgerBalance <= BigInt(0)) && (
               <button onClick={() => setShowAddFundsModal(true)} className="h-8 w-8 flex items-center justify-center hover:bg-white/10 transition-colors" aria-label={t('dashboard.addFunds')}>
                 <img src="/assets/addfunds.svg" alt="" className="h-8 w-8" />
@@ -360,6 +510,7 @@ export default function WalletDashboard() {
         </header>
         {/* Top divider - fixed, does not scroll */}
         <div className="h-[1px] w-full bg-white/50 mt-4" />
+        {recoveryBanner}
       </div>
 
       {/* Scrollable area: only the transaction list - pb for fixed bottom bar */}
@@ -394,72 +545,9 @@ export default function WalletDashboard() {
           </div>
         </div>
         <div className="flex flex-col gap-6 pt-4 pb-5 transition-[transform] duration-75 ease-out" style={{ transform: `translateY(${pullDistance}px)` }}>
-        {import.meta.env.VITE_USE_TESTNET === 'true' && (
-          <div className="bg-yellow-500/20 border border-yellow-500/50 rounded px-4 py-2 text-center">
-            <p className="text-yellow-500 text-sm font-medium">{t('dashboard.testnet')}</p>
-          </div>
-        )}
+        {testnetBadge}
         {/* Transactions List */}
-        <div className="flex flex-col" style={{ gap: 19 }}>
-          {isLoadingBalance ? (
-            <div className="flex flex-col" style={{ gap: 19 }}>
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center justify-between h-8">
-                  <div className="flex items-center gap-[8px]">
-                    <div className="h-4 w-4 flex items-center justify-center shrink-0">
-                      <div className="h-2 w-2 rounded-full animate-shimmer" />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <div className="h-5 w-4 rounded animate-shimmer" />
-                      <div className="h-5 w-24 rounded animate-shimmer" />
-                    </div>
-                  </div>
-                  <div className="h-5 w-32 rounded animate-shimmer" />
-                </div>
-              ))}
-            </div>
-          ) : displayTransactions.length > 0 && walletAddressForTx ? (
-            <>
-              {[...displayTransactions]
-                .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
-                .map((tx) => {
-                  const txType = getTransactionIcon(tx, walletAddressForTx);
-                  return (
-                    <button
-                      key={tx.id}
-                      onClick={() => setSelectedTransaction(tx)}
-                      className="group flex w-full items-center justify-between h-8 opacity-80 hover:opacity-100 transition-opacity"
-                    >
-                      <div className="flex items-center gap-[8px]">
-                        <div className="h-4 w-4 flex items-center justify-center shrink-0">
-                          {txType === 'sent' ? (
-                            <div className="h-2 w-2 rounded-full bg-red-500 opacity-60 group-hover:opacity-100 group-active:opacity-100 transition-opacity" />
-                          ) : (
-                            <div className="h-2 w-2 rounded-full bg-green-500 opacity-60 group-hover:opacity-100 group-active:opacity-100 transition-opacity" />
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="font-mono text-[18px] font-medium text-white/80" style={{ letterSpacing: '0.8px' }}>₿</span>
-                          <p className="font-mono text-[18px] font-medium text-white/80" style={{ letterSpacing: '0.8px' }}>
-                            {formatBTC(tx.amount)}
-                          </p>
-                        </div>
-                      </div>
-                      <p className="font-mono text-[18px] font-normal text-white/50" style={{ letterSpacing: '-0.04em' }}>
-                        {formatDate(tx.timestamp)}
-                      </p>
-                    </button>
-                  );
-                })}
-            </>
-          ) : (
-            <>
-              <div className="flex flex-1 items-center justify-center">
-                <p className="text-center text-lg text-white/60">{t('dashboard.noTransactions')}</p>
-              </div>
-            </>
-          )}
-        </div>
+        {transactionList}
         </div>
       </div>
 
@@ -506,31 +594,7 @@ export default function WalletDashboard() {
             />
           </SlideFromRight>
         ) : (
-          <div className="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center px-5">
-            {isLoadingAddress ? (
-              <>
-                <p className="text-white text-center text-lg mb-4">{t('dashboard.loadingAddress')}</p>
-                <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseWait')}</p>
-              </>
-            ) : walletAddressError ? (
-              <>
-                <p className="text-white text-center text-lg mb-4">{t('dashboard.unableToLoadAddress')}</p>
-                <p className="text-white/60 text-center text-sm mb-4">{walletAddressError.message}</p>
-                <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseRetryLater')}</p>
-              </>
-            ) : (
-              <>
-                <p className="text-white text-center text-lg mb-4">{t('dashboard.unableToLoadAddress')}</p>
-                <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseRetryLater')}</p>
-              </>
-            )}
-            <button
-              onClick={() => setShowReceiveModal(false)}
-              className="h-16 border-2 border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center px-8"
-            >
-              <span className="font-bold text-base text-white/80 tracking-[0.15px]">{t('common.close')}</span>
-            </button>
-          </div>
+          addressUnavailable(() => setShowReceiveModal(false))
         )
       )}
 
@@ -563,31 +627,7 @@ export default function WalletDashboard() {
             />
           </SlideFromRight>
         ) : (
-          <div className="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center px-5">
-            {isLoadingAddress ? (
-              <>
-                <p className="text-white text-center text-lg mb-4">{t('dashboard.loadingAddress')}</p>
-                <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseWait')}</p>
-              </>
-            ) : walletAddressError ? (
-              <>
-                <p className="text-white text-center text-lg mb-4">{t('dashboard.unableToLoadAddress')}</p>
-                <p className="text-white/60 text-center text-sm mb-4">{walletAddressError.message}</p>
-                <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseRetryLater')}</p>
-              </>
-            ) : (
-              <>
-                <p className="text-white text-center text-lg mb-4">{t('dashboard.unableToLoadAddress')}</p>
-                <p className="text-white/60 text-center text-sm mb-8">{t('common.pleaseRetryLater')}</p>
-              </>
-            )}
-            <button
-              onClick={() => setShowAddFundsModal(false)}
-              className="h-16 border-2 border-white/80 bg-transparent hover:bg-white/10 transition-colors flex items-center justify-center px-8"
-            >
-              <span className="font-bold text-base text-white/80 tracking-[0.15px]">{t('common.close')}</span>
-            </button>
-          </div>
+          addressUnavailable(() => setShowAddFundsModal(false))
         )
       )}
 
@@ -643,153 +683,7 @@ export default function WalletDashboard() {
 
                    {/* Scrollable content: My Wallet, Currency, Language, Principal ID, Sign Out, Wipe */}
                    <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pt-6">
-                     {/* My Wallet - equal space above and below the name */}
-                     {currentPrincipal && (
-                       <div className="flex flex-col gap-4">
-                         <div className="flex items-center min-h-[2rem]">
-                          {!walletNameLoaded ? (
-                            <div className="h-5 w-40 rounded animate-shimmer" />
-                          ) : editingWalletName ? (
-                            <input
-                              type="text"
-                              value={walletNameInput}
-                              onChange={(e) => setWalletNameInput(e.target.value.slice(0, 32))}
-                              onBlur={handleSaveWalletName}
-                              onKeyDown={(e) => e.key === 'Enter' && handleSaveWalletName()}
-                              className="w-full bg-transparent border-0 rounded-none px-0 py-0 text-white/80 font-mono font-medium text-base tracking-[0.8px] outline-none placeholder:text-white/50"
-                              placeholder={DEFAULT_WALLET_NAME}
-                              autoFocus
-                            />
-                          ) : (
-                            <button
-                              onClick={() => { setWalletNameInput(walletName); setEditingWalletName(true); }}
-                              className="w-full flex items-center justify-between min-h-[2rem] opacity-80 hover:opacity-100 transition-opacity text-left"
-                            >
-                              <span className="font-mono font-medium text-base text-white/80 tracking-[0.8px]">{walletName}</span>
-                              <svg className="size-4 text-white/70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                              </svg>
-                            </button>
-                          )}
-                         </div>
-                         <div className="w-full border-t border-white/50 shrink-0" />
-                       </div>
-                     )}
-
-                     {/* Currency */}
-                     <button
-                       onClick={() => { setShowLanguageSelector(false); setShowCurrencySelector(true); }}
-                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
-                     >
-                       <img src="/assets/currency.svg" alt="" className="size-5 shrink-0 opacity-80" />
-                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.currency')}</span>
-                       <span className="ml-auto font-mono font-medium text-base text-white/50 tracking-[0.8px]">{preferredCurrency}</span>
-                     </button>
-
-                     {/* Language */}
-                     <button
-                       onClick={() => { setShowCurrencySelector(false); setShowLanguageSelector(true); }}
-                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
-                     >
-                       <img src="/assets/language.svg" alt="" className="size-5 shrink-0 opacity-80" />
-                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.language')}</span>
-                       <span className="ml-auto font-medium text-base text-white/50 tracking-[0.8px]">{languageName}</span>
-                     </button>
-
-                     {/* FAQ */}
-                     <button
-                       onClick={() => { setMenuClosing(true); setShowFAQ(true); }}
-                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
-                     >
-                       <svg className="size-5 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                         <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                       </svg>
-                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.faq')}</span>
-                     </button>
-
-                     <button
-                       onClick={() => { setMenuClosing(true); setShowTerms(true); }}
-                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
-                     >
-                       <svg className="size-5 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                       </svg>
-                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.terms')}</span>
-                     </button>
-
-                     <button
-                       onClick={() => { setMenuClosing(true); setShowPrivacy(true); }}
-                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
-                     >
-                       <svg className="size-5 shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                       </svg>
-                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.privacy')}</span>
-                     </button>
-
-                     <div className="w-full border-t border-white/30 shrink-0" />
-
-                     {/* Sign Out */}
-                     <button
-                       onClick={handleLogOut}
-                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
-                     >
-                       <img src="/assets/logout.svg" alt="" className="size-5 shrink-0 opacity-80" />
-                       <span className="font-medium text-base text-white/80 tracking-[0.8px]">{t('menu.signOut')}</span>
-                     </button>
-
-                     <div className="w-full border-t border-white/30 shrink-0" />
-
-                     {/* Principal ID + blurb */}
-                     {currentPrincipal && (
-                       <div className="flex flex-col gap-3">
-                         <p className="text-white/60 text-xs font-medium">{t('menu.yourPrincipalId')}</p>
-                         <div
-                           onClick={async () => {
-                             try {
-                               await navigator.clipboard.writeText(currentPrincipal);
-                               setPrincipalCopied(true);
-                               setTimeout(() => setPrincipalCopied(false), 2000);
-                             } catch {
-                               toast.error(t('common.failedToCopy'));
-                             }
-                           }}
-                           className="bg-zinc-900/90 p-3 cursor-pointer flex items-center justify-center relative"
-                         >
-                           <p className="text-white/80 font-mono text-sm font-medium text-center break-all leading-relaxed" style={{ letterSpacing: '0.32px', textWrap: 'balance' }}>
-                             {currentPrincipal}
-                           </p>
-                           {principalCopied && (
-                             <p className="absolute inset-0 flex items-center justify-center bg-zinc-900/90 text-white/80 font-sans text-sm font-medium">
-                               {t('common.copied')}
-                             </p>
-                           )}
-                         </div>
-<p className="text-white/50 text-xs leading-relaxed whitespace-pre-line">
-                          {t('menu.motoDescription')}
-                        </p>
-                       </div>
-                     )}
-
-                     {/* Wipe Canister & Sign Out */}
-                     <button
-                       onClick={handleWipeCanisterAndSignOut}
-                       disabled={signOutAndReset.isPending}
-                       className="flex gap-3 h-9 items-center w-full opacity-80 hover:opacity-100 transition-opacity text-left"
-                     >
-                       <img
-                         src="/assets/wipeout.svg"
-                         alt=""
-                         className="size-5 shrink-0"
-                         style={{ filter: 'brightness(0) saturate(100%) invert(27%) sepia(98%) saturate(1000%) hue-rotate(346deg) brightness(104%) contrast(97%)' }}
-                       />
-                       <span className="font-medium text-base text-red-500 tracking-[0.8px]">
-                         {signOutAndReset.isPending ? t('menu.wiping') : t('menu.wipeCanister')}
-                       </span>
-                     </button>
-
-                     {/* Divider below Wipe Canister & Sign Out */}
-                     <div className="w-full border-t border-white/30 shrink-0" />
+                     <MenuPanel {...menuPanelProps} />
                    </div>
                  </div>
                  </div>
@@ -809,20 +703,7 @@ export default function WalletDashboard() {
              )}
 
       {/* Transaction Details - card with swipe */}
-      {selectedTransaction && (walletAddress || walletAddressForTx) && (() => {
-        const sorted = [...displayTransactions].sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
-        const idx = sorted.findIndex((t) => t.id === selectedTransaction.id);
-        if (idx < 0) return null;
-        return (
-          <TransactionDetails
-            transactions={sorted}
-            selectedIndex={idx}
-            walletAddress={walletAddress ?? walletAddressForTx}
-            onClose={() => setSelectedTransaction(null)}
-            onSelectTransaction={(tx) => setSelectedTransaction(tx)}
-          />
-        );
-      })()}
+      {selectedTransactionDetails}
 
       <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
         <AlertDialogContent>

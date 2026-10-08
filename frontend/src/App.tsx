@@ -17,7 +17,7 @@ export default function App() {
         sessionStorage.removeItem(SKIP_SPLASH_KEY);
         return true;
       }
-    } catch {}
+    } catch { /* storage unavailable (private mode) */ }
     return false;
   });
   const { identity, isInitializing } = useInternetIdentity();

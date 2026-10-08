@@ -1,12 +1,22 @@
 /**
- * Font imports for MOTO Bitcoin Wallet
+ * Font imports for MOTO Bitcoin Wallet (self-hosted via @fontsource; no Google Fonts requests,
+ * so visitors' IPs aren't sent to a third party and the CSP needs no font origins)
  * Public Sans - Primary UI font (used everywhere except mono)
  * IBM Plex Mono - Numbers, currency, addresses
  */
 
 /* Public Sans - Primary UI Font */
-@import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&display=swap');
+@import '@fontsource/public-sans/400.css';
+@import '@fontsource/public-sans/400-italic.css';
+@import '@fontsource/public-sans/500.css';
+@import '@fontsource/public-sans/500-italic.css';
+@import '@fontsource/public-sans/700.css';
+@import '@fontsource/public-sans/700-italic.css';
 
 /* IBM Plex Mono - Numbers, Currency, Addresses */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&display=swap');
-
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/400-italic.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/500-italic.css';
+@import '@fontsource/ibm-plex-mono/700.css';
+@import '@fontsource/ibm-plex-mono/700-italic.css';

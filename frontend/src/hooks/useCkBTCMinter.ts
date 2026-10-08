@@ -1,7 +1,28 @@
 import { useState, useEffect, useCallback } from 'react';
 import { HttpAgent, Actor } from '@dfinity/agent';
 import { Principal } from '@dfinity/principal';
+import { toast } from 'sonner';
 import { useInternetIdentity } from './useInternetIdentity';
+import { IC_HOST } from '../lib/ic';
+import { depositNotices, type DepositNotice, type UpdateBalanceResult } from '../lib/depositNotices';
+import { useTranslation } from '../i18n';
+
+const SEEN_DEPOSIT_NOTICES_KEY = 'moto_seen_deposit_notices';
+
+/** Keys of deposit notices already shown this session (so balance refreshes don't repeat them). */
+function takeUnseenNotices(notices: DepositNotice[]): DepositNotice[] {
+  let seen: string[] = [];
+  try {
+    seen = JSON.parse(sessionStorage.getItem(SEEN_DEPOSIT_NOTICES_KEY) ?? '[]');
+  } catch { /* storage unavailable */ }
+  const fresh = notices.filter((n) => !seen.includes(n.key));
+  if (fresh.length > 0) {
+    try {
+      sessionStorage.setItem(SEEN_DEPOSIT_NOTICES_KEY, JSON.stringify([...seen, ...fresh.map((n) => n.key)]));
+    } catch { /* storage unavailable */ }
+  }
+  return fresh;
+}
 
 // Check if we should use testnet
 const USE_TESTNET = import.meta.env.VITE_USE_TESTNET === 'true';
@@ -43,8 +64,7 @@ const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
 const isLocal = envNetwork ? envNetwork === 'local' : isLocalhost;
 
 // Always use production host for ckBTC minter (it only exists on mainnet)
-// Localhost can call production canisters by using https://ic0.app
-const HOST = 'https://ic0.app';
+const HOST = IC_HOST;
 
 // ckBTC Minter interface
 // For optional values in Candid IDL.Opt(), the agent requires the field to be present
@@ -52,12 +72,16 @@ const HOST = 'https://ic0.app';
 // - For Some(value): pass [value] (wrapped in array)
 export interface CkBTCMinter {
   get_btc_address: (arg: { owner: [] | [Principal]; subaccount: [] | [Uint8Array] }) => Promise<string>;
-  update_balance: (arg: { owner: [] | [Principal]; subaccount: [] | [Uint8Array] }) => Promise<{ Ok?: unknown[]; Err?: unknown }>;
+  update_balance: (arg: { owner: [] | [Principal]; subaccount: [] | [Uint8Array] }) => Promise<UpdateBalanceResult>;
   get_minter_info: () => Promise<{ retrieve_btc_min_amount: bigint; min_confirmations: number; kyt_fee: bigint; deposit_btc_min_amount?: [] | [bigint] }>;
   retrieve_btc_with_approval: (arg: { address: string; amount: bigint; from_subaccount: [] | [Uint8Array] }) => Promise<
     | { Ok: { block_index: bigint } }
     | { Err: RetrieveBtcWithApprovalError }
   >;
+  estimate_withdrawal_fee: (arg: { amount: [] | [bigint] }) => Promise<{ bitcoin_fee: bigint; minter_fee: bigint }>;
+  retrieve_btc_status_v2_by_account: (
+    account: [] | [{ owner: Principal; subaccount: [] | [Uint8Array] }]
+  ) => Promise<Array<{ block_index: bigint; status_v2: [] | [unknown] }>>;
 }
 
 export type RetrieveBtcWithApprovalError =
@@ -195,12 +219,23 @@ const createCkBTCMinterIDL = () => {
       ),
       decode_ledger_memo: IDL.Func([DecodeLedgerMemoArgs], [DecodeLedgerMemoResult], ['query']),
       retrieve_btc_status_v2: IDL.Func([IDL.Record({ block_index: IDL.Nat64 })], [RetrieveBtcStatusV2], ['query']),
+      estimate_withdrawal_fee: IDL.Func(
+        [IDL.Record({ amount: IDL.Opt(IDL.Nat64) })],
+        [IDL.Record({ bitcoin_fee: IDL.Nat64, minter_fee: IDL.Nat64 })],
+        ['query']
+      ),
+      retrieve_btc_status_v2_by_account: IDL.Func(
+        [IDL.Opt(IDL.Record({ owner: IDL.Principal, subaccount: IDL.Opt(IDL.Vec(IDL.Nat8)) }))],
+        [IDL.Vec(IDL.Record({ block_index: IDL.Nat64, status_v2: IDL.Opt(RetrieveBtcStatusV2) }))],
+        ['query']
+      ),
     });
   };
 };
 
 export function useCkBTCMinter() {
   const { identity } = useInternetIdentity();
+  const { t } = useTranslation();
   const [address, setAddress] = useState<string | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -214,7 +249,7 @@ export function useCkBTCMinter() {
       return;
     }
 
-    // Note: We can call production ckBTC minter from localhost by using https://ic0.app as the host
+    // Note: We can call production ckBTC minter from localhost by using IC_HOST
     // The ckBTC minter only exists on mainnet, but we can access it from anywhere
     // On localhost, we'll still try to use ckBTC minter (it works from localhost)
 
@@ -360,23 +395,25 @@ export function useCkBTCMinter() {
         owner: [],
         subaccount: [],
       });
-      if (result?.Ok && Array.isArray(result.Ok) && result.Ok.length > 0) {
-        console.log('useCkBTCMinter: update_balance minted', result.Ok.length, 'UTXO(s) to ckBTC');
+      for (const notice of takeUnseenNotices(depositNotices(result))) {
+        const sats = notice.sats.toString();
+        if (notice.kind === 'pending') {
+          toast(t('deposit.pending', { sats, confirmations: String(notice.confirmations ?? 0), required: String(notice.required ?? 0) }));
+        } else if (notice.kind === 'minted') {
+          toast.success(t('deposit.minted', { sats }));
+        } else if (notice.kind === 'tooSmall') {
+          toast.error(t('deposit.tooSmall', { sats }), { duration: 15000 });
+        } else {
+          toast.error(t('deposit.flagged', { sats }), { duration: 15000 });
+        }
       }
-      if (result?.Err) {
-        const err = result.Err as { NoNewUtxos?: unknown; AlreadyProcessing?: null; [k: string]: unknown };
-        if (err.NoNewUtxos !== undefined) {
-          return; // No new UTXOs to process
-        }
-        if (err.AlreadyProcessing !== undefined) {
-          return; // Another update is in progress, skip logging
-        }
+      if ('Err' in result && !('NoNewUtxos' in result.Err) && !('AlreadyProcessing' in result.Err)) {
         console.warn('useCkBTCMinter: update_balance error', result.Err);
       }
     } catch (err) {
       console.warn('useCkBTCMinter: update_balance failed (non-fatal):', err);
     }
-  }, [identity, isLocal]);
+  }, [identity, isLocal, t]);
 
   return {
     address,

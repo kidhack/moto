@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { vibrateLight } from '../utils/haptics';
 import { useTranslation } from '../i18n';
+import BackCloseButton from './BackCloseButton';
 
 interface TransactionDetailsProps {
   transactions: Transaction[];
@@ -16,6 +17,11 @@ interface TransactionDetailsProps {
   walletAddress: string;
   onClose: () => void;
   onSelectTransaction: (tx: Transaction) => void;
+  /**
+   * 'overlay' (mobile, default): swipeable cards over the dashboard, portaled to <body>.
+   * 'panel' (desktop): the selected transaction alone, filling its container, no card styling.
+   */
+  variant?: 'overlay' | 'panel';
 }
 
 type CurrencyMode = 'BTC' | 'SATS' | string;
@@ -41,6 +47,8 @@ interface TxCardProps {
   preferredCurrency: string;
   marketPriceStale: boolean;
   t: (key: string, vars?: Record<string, string | number>) => string;
+  /** No card background/corners (desktop panel). */
+  flat?: boolean;
 }
 
 function TxCard({
@@ -64,6 +72,7 @@ function TxCard({
   preferredCurrency,
   marketPriceStale,
   t,
+  flat = false,
 }: TxCardProps) {
   const isSent = transaction.fromAddress === walletAddress;
   const txType = isSent ? 'sent' : (transaction.toAddress === walletAddress ? 'received' : 'added');
@@ -77,17 +86,11 @@ function TxCard({
   return (
     <div
       className="flex-shrink-0 w-full flex flex-col overflow-hidden"
-      style={{ backgroundColor: '#111111', minHeight: '100%', borderRadius: 2 }}
+      style={flat ? { backgroundColor: '#000', minHeight: '100%' } : { backgroundColor: '#111111', minHeight: '100%', borderRadius: 2 }}
     >
       {/* Header - 20px inner padding */}
       <header className="flex items-center justify-between h-8 shrink-0 px-5 mb-5" style={{ marginTop: 16 }}>
-        <button
-          onClick={onClose}
-          className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
-          aria-label={t('common.close')}
-        >
-          <img src="/assets/close.png" alt="" className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" />
-        </button>
+        <BackCloseButton onClose={onClose} />
         <p className="font-medium text-lg text-white tracking-[-0.22px] truncate">
           {txType === 'received' ? t('txDetails.received') : t('txDetails.sent')}
         </p>
@@ -178,7 +181,7 @@ function TxCard({
           <div className="flex gap-2 items-center text-base">
             <span className="text-white/80 shrink-0">{t('txDetails.price')}</span>
             <span className="font-mono text-white flex-1 text-right flex items-center justify-end gap-1">
-              {priceAtTimeLoading ? '…' : formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency)}
+              {priceAtTimeLoading ? '…' : BTC_PRICE_FIAT > 0 ? formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) : '—'}
               <StalePriceIndicator isStale={marketPriceStale} />
             </span>
           </div>
@@ -207,15 +210,21 @@ function TxCard({
   );
 }
 
-export default function TransactionDetails({
+export default function TransactionDetails(props: TransactionDetailsProps) {
+  // Guard outside the hook-using component so hooks always run in the same order.
+  if (!props.transactions[props.selectedIndex]) return null;
+  return <TransactionDetailsContent {...props} />;
+}
+
+function TransactionDetailsContent({
   transactions,
   selectedIndex,
   walletAddress,
   onClose,
   onSelectTransaction,
+  variant = 'overlay',
 }: TransactionDetailsProps) {
   const transaction = transactions[selectedIndex];
-  if (!transaction) return null;
 
   const { t } = useTranslation();
 
@@ -262,9 +271,10 @@ export default function TransactionDetails({
   const BTC_PRICE_FIAT = priceAtTxTime != null ? priceAtTxTime : getBTCPriceInCurrency(currentPrice, preferredCurrency);
   const marketPriceStale = priceAtTxTime == null && isPriceStale(currentPrice);
 
+  const hasFiatPrice = BTC_PRICE_FIAT > 0;
   const cycleCurrency = () => {
     if (currencyMode === 'BTC') setCurrencyMode('SATS');
-    else if (currencyMode === 'SATS') setCurrencyMode(preferredCurrency);
+    else if (currencyMode === 'SATS') setCurrencyMode(hasFiatPrice ? preferredCurrency : 'BTC');
     else setCurrencyMode('BTC');
   };
 
@@ -276,6 +286,7 @@ export default function TransactionDetails({
   const formatSats = (satoshis: bigint) => satoshis.toString();
 
   const getFiatValue = (satoshis: bigint) => {
+    if (!hasFiatPrice) return '—';
     const btc = Number(satoshis) / 100000000;
     return formatFiat(btc * BTC_PRICE_FIAT, preferredCurrency);
   };
@@ -283,6 +294,7 @@ export default function TransactionDetails({
   const formatAmount = (satoshis: bigint) => {
     if (currencyMode === 'BTC') return `${formatBTC(satoshis)} BTC`;
     if (currencyMode === 'SATS') return `${formatSats(satoshis)} sats`;
+    if (!hasFiatPrice) return '—';
     return formatFiat(Number(satoshis) / 100000000 * BTC_PRICE_FIAT, preferredCurrency);
   };
 
@@ -408,6 +420,36 @@ export default function TransactionDetails({
       </div>
     </div>
   );
+
+  if (variant === 'panel') {
+    return (
+      <div className="absolute inset-0 flex flex-col bg-black overflow-y-auto">
+        <TxCard
+          transaction={transaction}
+          walletAddress={walletAddress}
+          currencyMode={currencyMode}
+          onCycleCurrency={cycleCurrency}
+          onClose={onClose}
+          formatBTC={formatBTC}
+          formatSats={formatSats}
+          formatAmount={formatAmount}
+          formatDate={formatDate}
+          formatAddress={formatAddress}
+          getBlockExplorerUrl={getBlockExplorerUrl}
+          getStatusDisplay={getStatusDisplay}
+          getFiatValue={getFiatValue}
+          copiedField={copiedField}
+          copyToClipboard={copyToClipboard}
+          priceAtTimeLoading={priceAtTimeLoading}
+          BTC_PRICE_FIAT={BTC_PRICE_FIAT}
+          preferredCurrency={preferredCurrency}
+          marketPriceStale={marketPriceStale}
+          t={t}
+          flat
+        />
+      </div>
+    );
+  }
 
   return createPortal(content, document.body);
 }

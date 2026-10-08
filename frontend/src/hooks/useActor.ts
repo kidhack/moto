@@ -3,13 +3,14 @@ import { HttpAgent } from '@dfinity/agent';
 import { useInternetIdentity } from './useInternetIdentity';
 import type { BitcoinWalletActor } from '../backend';
 import { createActor as createMotoActor } from '../declarations/moto/index.js';
+import { IC_HOST } from '../lib/ic';
 
 // This should be set to your canister ID after deployment
 // For local development, you can use the dfx canister id command
 // Or set it via environment variable: VITE_CANISTER_ID_MOTO
 const CANISTER_ID = import.meta.env.VITE_CANISTER_ID_MOTO || '';
 
-// Local development uses localhost:4943, production uses ic0.app
+// Local development uses localhost:4943, production uses IC_HOST
 // Detect local by checking environment variable first, then hostname
 // Vite only exposes env vars prefixed with VITE_ to the client
 const envNetwork = import.meta.env.VITE_DFX_NETWORK;
@@ -24,7 +25,7 @@ const isLocal = isIc0App ? false : (envNetwork ? envNetwork === 'local' : isLoca
 
 const HOST = isLocal 
   ? 'http://localhost:4943'
-  : 'https://ic0.app';
+  : IC_HOST;
 
 const canisterIdLoggedRef = { current: false };
 

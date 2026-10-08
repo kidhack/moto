@@ -2,15 +2,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { Principal } from '@dfinity/principal';
 import { HttpAgent, Actor } from '@dfinity/agent';
-import { IcrcLedgerCanister } from '@dfinity/ledger-icrc';
+import { IcrcLedgerCanister, IcrcTransferError } from '@dfinity/ledger-icrc';
+import { computeAppFee, type WithdrawalFees } from '../lib/sendFees';
 import { useActor } from './useActor';
+import { IC_HOST } from '../lib/ic';
 import { useCkBTCMinter, createCkBTCMinterIDL, CKBTC_MINTER_CANISTER_ID, type CkBTCMinter } from './useCkBTCMinter';
 import { useCkBTCLedger, CKBTC_LEDGER_CANISTER_ID } from './useCkBTCLedger';
 import { useCkBTCTransactions } from './useCkBTCTransactions';
 import { useInternetIdentity } from './useInternetIdentity';
-import type { UserWallet, BitcoinAddress, TransactionId, Transaction } from '../backend';
+import type { UserWallet, CanisterWallet, BitcoinAddress, Transaction, BitcoinWalletActor } from '../backend';
 import { setSessionWithdrawal } from '../lib/sessionWithdrawalStore';
-import { isValidBitcoinAddress, isBech32AddressForStorage } from '../utils/addressValidation';
+import { isValidBitcoinAddress } from '../utils/addressValidation';
 import { checkPendingDeposits } from '../utils/bitcoinTestnetChecker';
 
 /** Which price sources contributed (for transparency / FAQ system status) */
@@ -47,7 +49,7 @@ function getStoredBtcPrice(): BTCPriceData | null {
         : undefined;
       return {
         prices: parsed.prices,
-        usd: parsed.prices.usd ?? FALLBACK_BTC_USD,
+        usd: parsed.prices.usd ?? 0,
         lastUpdated: parsed.lastUpdated,
         priceSourceStatus,
       };
@@ -84,23 +86,22 @@ export function isPriceStale(data: BTCPriceData | undefined): boolean {
 }
 
 // --- App fee (0.5%, max $100, no minimum) ---
-const FEE_PERCENT = Number(import.meta.env.VITE_FEE_PERCENT ?? 0.5);
-const FEE_CAP_USD = Number(import.meta.env.VITE_FEE_CAP_USD ?? 100);
-/** Treasury principal that receives app fees (ckBTC). Empty = no fee collected. */
+function envNumber(value: string | undefined, fallback: number): number {
+  const n = value === undefined || value.trim() === '' ? NaN : Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+const APP_FEE_CONFIG = {
+  percent: envNumber(import.meta.env.VITE_FEE_PERCENT, 0.5),
+  capUsd: envNumber(import.meta.env.VITE_FEE_CAP_USD, 100),
+};
+/** Treasury principal that receives app fees (ckBTC). */
 export const FEE_TREASURY_PRINCIPAL =
   (import.meta.env.VITE_FEE_TREASURY_PRINCIPAL as string)?.trim() ||
   'c65im-m2qxx-7nvqc-fl62p-4xqmt-emdce-tmtqf-fggqq-3zh4d-yhdre-2qe';
 
-/**
- * Compute app fee in satoshis: 0.5% of amount, capped at $100 USD equivalent, no minimum.
- * Fee never exceeds amount.
- */
-export function computeFeeSats(amountSats: bigint, btcPriceUsd: number): bigint {
-  if (amountSats <= 0n || btcPriceUsd <= 0) return 0n;
-  const percentFeeSats = (amountSats * BigInt(Math.round(FEE_PERCENT * 10))) / 1000n; // 0.5% = 5/1000
-  const capSats = BigInt(Math.floor((FEE_CAP_USD * 100_000_000) / btcPriceUsd));
-  const fee = percentFeeSats < capSats ? percentFeeSats : capSats;
-  return fee > amountSats ? amountSats : fee;
+/** App fee in sats for an amount (see computeAppFee). Pass null when no live price is available. */
+export function computeFeeSats(amountSats: bigint, btcPriceUsd: number | null | undefined): bigint {
+  return computeAppFee(amountSats, btcPriceUsd, APP_FEE_CONFIG);
 }
 
 export function useWalletInfo() {
@@ -182,46 +183,19 @@ export function useWalletInfo() {
       
       try {
         console.log('useWalletInfo: Fetching wallet info...');
-        let wallet: UserWallet | null = null;
+        let wallet: CanisterWallet | null = null;
         try {
           const raw = await actor.getWalletInfo();
           // Candid opt returns [value] for Some, [] for None in @dfinity/agent
-          wallet = Array.isArray(raw) ? (raw.length > 0 ? raw[0] as UserWallet : null) : (raw ?? null);
+          wallet = raw.length > 0 ? raw[0] ?? null : null;
         } catch (error) {
           // Wallet might not exist in custom canister yet - that's OK, we can still show balance from ledger
           console.log('useWalletInfo: Wallet not found in custom canister (this is OK if we have ledger balance)');
         }
         
-        // If we have a ckBTC balance from the ledger, use that instead of the canister balance
-        // The ledger has the real balance, the canister just stores metadata
-        // Use ledger balance even if it's 0 (it's the source of truth)
-        let finalBalance = BigInt(0);
-        if (ckbtcBalance !== null && ckbtcBalance !== undefined) {
-          finalBalance = ckbtcBalance;
-          // Sync canister balance with ledger so sendTransaction (which checks canister balance) succeeds
-          try {
-            await actor.syncBalanceFromLedger(ckbtcBalance);
-          } catch (syncErr) {
-            console.warn('useWalletInfo: syncBalanceFromLedger failed (non-fatal):', syncErr);
-          }
-        } else if (wallet?.balance) {
-          console.log('useWalletInfo: Using canister balance (ledger not available):', wallet.balance.toString());
-          finalBalance = wallet.balance;
-        } else {
-          console.log('useWalletInfo: No balance available from ledger or canister');
-        }
-        
-        // Sync canister's stored Bitcoin address whenever we have a wallet and a bech32 ckBTC address,
-        // so getPrincipalByBitcoinAddress works for other users (MOTO-to-MOTO). Use isBech32AddressForStorage
-        // so we store the address for both mainnet (bc1) and testnet (tb1) regardless of VITE_USE_TESTNET.
-        if (wallet && ckbtcAddress && isBech32AddressForStorage(ckbtcAddress)) {
-          try {
-            await actor.setBitcoinAddress(ckbtcAddress);
-          } catch (addrErr) {
-            console.warn('useWalletInfo: setBitcoinAddress failed (non-fatal):', addrErr);
-          }
-        }
-        
+        // The ckBTC ledger is the only balance source; the canister stores metadata only.
+        const finalBalance = ckbtcBalance ?? BigInt(0);
+
         // NEVER use fake address from custom canister - only use real ckBTC address
         const realBitcoinAddress = ckbtcAddress && isValidBitcoinAddress(ckbtcAddress) 
           ? ckbtcAddress 
@@ -269,10 +243,8 @@ export function useWalletInfo() {
           }
         }
         
-        // Merge transactions from custom canister and ckBTC ledger
-        // Deduplicate by transaction ID and sort by timestamp (newest first)
-        const canisterTransactions = wallet?.transactions || [];
-        const allTransactions: Transaction[] = [...canisterTransactions, ...ckbtcTransactions];
+        // Deduplicate ledger transactions by ID and sort by timestamp (newest first)
+        const allTransactions: Transaction[] = [...ckbtcTransactions];
         
         // Deduplicate transactions by ID
         const transactionMap = new Map<string, Transaction>();
@@ -287,18 +259,6 @@ export function useWalletInfo() {
         // Sort by timestamp (newest first)
         const mergedTransactions = Array.from(transactionMap.values())
           .sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
-        
-        console.log('useWalletInfo: ========================================');
-        console.log('useWalletInfo: Transaction merge summary:');
-        console.log('  - Canister transactions:', canisterTransactions.length);
-        console.log('  - ckBTC ledger transactions:', ckbtcTransactions.length);
-        console.log('  - Merged total:', mergedTransactions.length);
-        if (canisterTransactions.length > 0) {
-          console.log('useWalletInfo: Sample canister transaction:', canisterTransactions[0]);
-        }
-        if (ckbtcTransactions.length > 0) {
-          console.log('useWalletInfo: Sample ckBTC transaction:', ckbtcTransactions[0]);
-        }
         
         // If we have a balance from the ledger, create a wallet object even if custom canister doesn't have one
         // This ensures the balance is displayed even if the wallet hasn't been created in the custom canister yet
@@ -441,25 +401,31 @@ export function useEnsureWallet() {
           throw new Error('Actor not available. Cannot ensure wallet exists.');
         }
 
-        console.log('useEnsureWallet: Ensuring wallet exists in custom canister...');
-        const addressPromise = actor.ensureWalletExists();
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => {
-            reject(new Error('Wallet setup timed out after 30 seconds. Please check your connection and try again.'));
-          }, 30000);
-        });
+        const timeout = <T,>(promise: Promise<T>, label: string) =>
+          Promise.race([
+            promise,
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error(`${label} timed out after 30 seconds. Please check your connection and try again.`)), 30000)
+            ),
+          ]);
 
-        const address = await Promise.race([addressPromise, timeoutPromise]);
-        
-        if (!address || address.length === 0) {
-          throw new Error('Failed to create wallet: empty address returned');
+        await timeout(actor.ensureWalletExists(), 'Wallet setup');
+
+        // The canister asks the ckBTC minter for this principal's deposit address (never trusts the client),
+        // so other MOTO users sending to it get an instant ckBTC transfer. Non-fatal: without it, incoming
+        // sends from MOTO users fall back to a normal Bitcoin deposit.
+        let registered = '';
+        try {
+          registered = await timeout(actor.registerDepositAddress(), 'Address registration');
+        } catch (err) {
+          console.warn('useEnsureWallet: registerDepositAddress failed (non-fatal):', err);
         }
-        
-        const duration = Date.now() - startTime;
-        console.log(`useEnsureWallet: Wallet ensured in custom canister in ${duration}ms:`, address);
-        
-        // Return the canister address (ckBTC address is just for reference, wallet is in canister)
-        return address;
+        if (registered && ckbtcAddress && registered.toLowerCase() !== ckbtcAddress.toLowerCase()) {
+          // Backend minter config doesn't match this build's network (e.g. testnet vs mainnet).
+          console.error('useEnsureWallet: registered deposit address does not match minter address shown in app');
+        }
+        console.log(`useEnsureWallet: wallet ready in ${Date.now() - startTime}ms`);
+        return registered;
       } catch (error) {
         const duration = Date.now() - startTime;
         console.error(`useEnsureWallet: Error after ${duration}ms:`, error);
@@ -470,8 +436,7 @@ export function useEnsureWallet() {
         throw new Error(`Failed to ensure wallet exists: ${String(error)}`);
       }
     },
-    onSuccess: (address) => {
-      console.log('useEnsureWallet: onSuccess called with address:', address);
+    onSuccess: () => {
       // DO NOT cache the fake address from custom canister
       // Only the ckBTC minter provides real Bitcoin addresses
       // The custom canister address is only used internally for wallet setup
@@ -561,32 +526,26 @@ export function useSignOutAndReset() {
   });
 }
 
-export function useSendTransaction() {
-  const { actor } = useActor();
-  const queryClient = useQueryClient();
-
-  return useMutation<TransactionId, Error, { toAddress: BitcoinAddress; amount: bigint }>({
-    mutationFn: async ({ toAddress, amount }) => {
-      if (!actor) throw new Error('Actor not initialized');
-      try {
-        return await actor.sendTransaction(toAddress, amount);
-      } catch (error) {
-        console.error('Error sending transaction:', error);
-        throw error;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['walletInfo'] });
-    },
-    retry: 1,
-  });
-}
-
 /** Normalize Bitcoin address for lookup: bech32 (bc1/tb1) is case-insensitive, use lowercase to match canister. */
 function normalizeAddressForLookup(address: string): string {
   const t = address.trim();
   if (/^(bc1|tb1)/i.test(t)) return t.toLowerCase();
   return t;
+}
+
+function optPrincipalText(raw: [] | [Principal]): string | null {
+  return raw.length > 0 && raw[0] ? raw[0].toText() : null;
+}
+
+/**
+ * Re-check, with an update call (agreed on by the subnet rather than one replica), that a Bitcoin
+ * address still resolves to the principal the user confirmed. Throws if it doesn't.
+ */
+async function verifyRecipient(actor: BitcoinWalletActor, address: string, expectedPrincipal: string) {
+  const resolved = optPrincipalText(await actor.resolveRecipient(normalizeAddressForLookup(address)));
+  if (resolved !== expectedPrincipal) {
+    throw new Error('Recipient could not be verified. Please review the address and try again.');
+  }
 }
 
 /** Look up principal by Bitcoin address (for smart send: instant ckBTC vs withdraw to BTC). */
@@ -597,28 +556,9 @@ export function usePrincipalByBitcoinAddress(address: string | null) {
     queryKey: ['principalByBitcoinAddress', normalized || ''],
     queryFn: async () => {
       if (!actor || !normalized) return null;
-      console.log('getPrincipalByBitcoinAddress: looking up', normalized.slice(0, 14) + '...');
       try {
         const raw = await actor.getPrincipalByBitcoinAddress(normalized);
-        console.log('getPrincipalByBitcoinAddress: raw response', raw);
-        // Candid Opt returns [] for None, [value] for Some. Agent may also return null or Principal directly.
-        const principal = Array.isArray(raw) ? (raw.length > 0 ? raw[0] : null) : raw;
-        if (!principal) {
-          console.log('getPrincipalByBitcoinAddress: no MOTO user for this address');
-          return null;
-        }
-        const principalText =
-          typeof principal === 'string'
-            ? principal
-            : typeof principal?.toText === 'function'
-              ? principal.toText()
-              : String(principal);
-        if (principalText && principalText !== 'null' && principalText !== 'undefined') {
-          console.log('getPrincipalByBitcoinAddress: found MOTO user →', principalText.slice(0, 10) + '...');
-          return principalText;
-        }
-        console.log('getPrincipalByBitcoinAddress: could not extract principal text from', principal);
-        return null;
+        return optPrincipalText(raw);
       } catch (e) {
         console.warn('getPrincipalByBitcoinAddress: backend call failed', e);
         return null;
@@ -629,54 +569,134 @@ export function usePrincipalByBitcoinAddress(address: string | null) {
   });
 }
 
-/** Instant ckBTC transfer to another principal (ICRC-1; no minter approval). App fee (0.5%, max $100) is charged on top when configured. */
+/** How long the minter's ICRC-2 allowance stays valid for a withdrawal. */
+const WITHDRAW_APPROVAL_TTL_NS = 10n * 60n * 1_000_000_000n;
+
+/**
+ * created_at_time (ns) for one confirmed send. Create it once when the user reaches the confirm step
+ * and reuse it for every attempt: the ckBTC ledger rejects an identical call within 24h as Duplicate,
+ * so a retry after a timeout can't charge or pay twice.
+ */
+export function newSendTimestamp(): bigint {
+  return BigInt(Date.now() + networkTimeOffsetMs) * 1_000_000n;
+}
+
+/**
+ * IC network time minus device time. The ledger rejects created_at_time more than ~1 min in the
+ * future or over 24h old, so a wrong device clock would otherwise make every send fail.
+ */
+let networkTimeOffsetMs = 0;
+
+async function createSyncedAgent(identity?: unknown) {
+  const agent = await HttpAgent.create({ identity: identity as never, host: IC_HOST, shouldSyncTime: true });
+  const diff = agent.getTimeDiffMsecs();
+  if (Number.isFinite(diff) && diff !== 0) networkTimeOffsetMs = diff;
+  return agent;
+}
+
+async function createLedgerSession(identity: unknown) {
+  const agent = await createSyncedAgent(identity);
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  if (isLocal) {
+    try {
+      await agent.fetchRootKey();
+    } catch {
+      // ignore
+    }
+  }
+  const ledger = IcrcLedgerCanister.create({ agent, canisterId: Principal.fromText(CKBTC_LEDGER_CANISTER_ID) });
+  return { agent, ledger };
+}
+
+/** Run a ledger call; a Duplicate rejection means this exact call already succeeded, so return its block. */
+async function idempotentLedgerCall(call: () => Promise<bigint>): Promise<bigint> {
+  try {
+    return await call();
+  } catch (err) {
+    const errorType = err instanceof IcrcTransferError ? (err.errorType as Record<string, unknown>) : null;
+    if (errorType && typeof errorType === 'object' && 'Duplicate' in errorType) {
+      return (errorType.Duplicate as { duplicate_of: bigint }).duplicate_of;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Pay the app fee to the treasury. Runs only after the user's send succeeded, and never fails the send:
+ * the user's money already moved, so a failed fee transfer is our loss, not their error.
+ */
+async function collectAppFee(ledger: IcrcLedgerCanister, appFee: bigint, createdAt: bigint) {
+  if (!FEE_TREASURY_PRINCIPAL || appFee <= 0n) return;
+  try {
+    await idempotentLedgerCall(() =>
+      ledger.transfer({
+        to: { owner: Principal.fromText(FEE_TREASURY_PRINCIPAL), subaccount: [] },
+        amount: appFee,
+        created_at_time: createdAt,
+      })
+    );
+  } catch (err) {
+    console.error('App fee transfer failed (send itself succeeded):', err);
+  }
+}
+
+/**
+ * Instant ckBTC transfer to another principal. The send goes first; the app fee (computed by the
+ * caller, so it matches the confirm screen) is collected after it succeeds.
+ */
 export function useTransferCkBTC() {
   const { identity } = useInternetIdentity();
+  const { actor } = useActor();
   const queryClient = useQueryClient();
 
   return useMutation<
     { block_index: bigint },
     Error,
-    { toPrincipal: string; amount: bigint; btcPriceUsd: number }
+    {
+      toPrincipal: string;
+      amount: bigint;
+      appFee: bigint;
+      /** From newSendTimestamp(), reused across retries of the same send. */
+      createdAt: bigint;
+      /** The Bitcoin address the principal was looked up from (omit for a pasted principal). */
+      viaAddress?: string;
+    }
   >({
-    mutationFn: async ({ toPrincipal, amount, btcPriceUsd }) => {
+    mutationFn: async ({ toPrincipal, amount, appFee, createdAt, viaAddress }) => {
       if (!identity) throw new Error('Not authenticated');
-      const host = 'https://ic0.app';
-      const agent = new HttpAgent({ identity: identity as any, host });
-      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (isLocal) {
-        try {
-          await agent.fetchRootKey();
-        } catch {
-          // ignore
-        }
+      if (viaAddress) {
+        if (!actor) throw new Error('Not connected');
+        await verifyRecipient(actor, viaAddress, toPrincipal);
       }
-      const ledger = IcrcLedgerCanister.create({
-        agent,
-        canisterId: Principal.fromText(CKBTC_LEDGER_CANISTER_ID),
-      });
-      const feeSats = FEE_TREASURY_PRINCIPAL ? computeFeeSats(amount, btcPriceUsd) : 0n;
-
-      if (FEE_TREASURY_PRINCIPAL && feeSats > 0n) {
-        await ledger.transfer({
-          to: { owner: Principal.fromText(FEE_TREASURY_PRINCIPAL), subaccount: [] },
-          amount: feeSats,
-        });
-      }
-      const blockIndex = await ledger.transfer({
-        to: { owner: Principal.fromText(toPrincipal), subaccount: [] },
-        amount,
-      });
+      const { ledger } = await createLedgerSession(identity);
+      const blockIndex = await idempotentLedgerCall(() =>
+        ledger.transfer({
+          to: { owner: Principal.fromText(toPrincipal), subaccount: [] },
+          amount,
+          created_at_time: createdAt,
+        })
+      );
+      await collectAppFee(ledger, appFee, createdAt);
       return { block_index: blockIndex };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['walletInfo'] });
     },
-    retry: 1,
+    // Never auto-retry money movement. Re-tapping Confirm reuses createdAt, so the ledger dedups it.
+    retry: 0,
   });
 }
 
-/** Real ckBTC → BTC withdrawal: ICRC-2 approve then minter retrieve_btc_with_approval. App fee (0.5%, max $100) sent to treasury when configured. */
+async function listWithdrawalBlocks(minter: CkBTCMinter, owner: Principal): Promise<Set<string> | null> {
+  try {
+    const rows = await minter.retrieve_btc_status_v2_by_account([{ owner, subaccount: [] }]);
+    return new Set(rows.map((r) => r.block_index.toString()));
+  } catch {
+    return null;
+  }
+}
+
+/** ckBTC -> BTC withdrawal: ICRC-2 approve, then minter retrieve_btc_with_approval, then the app fee. */
 export function useRetrieveBtc() {
   const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
@@ -684,122 +704,145 @@ export function useRetrieveBtc() {
   return useMutation<
     { block_index: bigint },
     Error,
-    { toAddress: string; amount: bigint; btcPriceUsd: number }
+    { toAddress: string; amount: bigint; appFee: bigint; createdAt: bigint }
   >({
-    mutationFn: async ({ toAddress, amount, btcPriceUsd }) => {
+    mutationFn: async ({ toAddress, amount, appFee, createdAt }) => {
       if (!identity) throw new Error('Not authenticated');
-      const host = 'https://ic0.app';
-      const agent = new HttpAgent({ identity: identity as any, host });
-      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (isLocal) {
-        try {
-          await agent.fetchRootKey();
-        } catch {
-          // ignore
-        }
-      }
-      const ledger = IcrcLedgerCanister.create({
-        agent,
-        canisterId: Principal.fromText(CKBTC_LEDGER_CANISTER_ID),
-      });
-      const feeSats = FEE_TREASURY_PRINCIPAL ? computeFeeSats(amount, btcPriceUsd) : 0n;
-      if (FEE_TREASURY_PRINCIPAL && feeSats > 0n) {
-        await ledger.transfer({
-          to: { owner: Principal.fromText(FEE_TREASURY_PRINCIPAL), subaccount: [] },
-          amount: feeSats,
-        });
-      }
-      const minterPrincipal = Principal.fromText(CKBTC_MINTER_CANISTER_ID);
-      await ledger.approve({
-        amount,
-        spender: { owner: minterPrincipal, subaccount: [] },
-      });
-      const minterIDLFactory = createCkBTCMinterIDL();
-      const minterActor = Actor.createActor(minterIDLFactory, {
+      const { agent, ledger } = await createLedgerSession(identity);
+      const owner = (identity as { getPrincipal: () => Principal }).getPrincipal();
+      const minterActor = Actor.createActor(createCkBTCMinterIDL(), {
         agent,
         canisterId: CKBTC_MINTER_CANISTER_ID,
       }) as unknown as CkBTCMinter;
-      const result = await minterActor.retrieve_btc_with_approval({
-        address: toAddress,
-        amount,
-        from_subaccount: [],
-      });
+
+      const before = await listWithdrawalBlocks(minterActor, owner);
+
+      // Same createdAt/expires_at on every attempt: a repeat approve is a ledger Duplicate (no new
+      // allowance), so a retry can't let the minter burn twice.
+      await idempotentLedgerCall(() =>
+        ledger.approve({
+          amount,
+          spender: { owner: Principal.fromText(CKBTC_MINTER_CANISTER_ID), subaccount: [] },
+          created_at_time: createdAt,
+          expires_at: createdAt + WITHDRAW_APPROVAL_TTL_NS,
+        })
+      );
+
+      type RetrieveResult = Awaited<ReturnType<CkBTCMinter['retrieve_btc_with_approval']>>;
+      let result: RetrieveResult;
+      try {
+        result = await minterActor.retrieve_btc_with_approval({ address: toAddress, amount, from_subaccount: [] });
+      } catch {
+        // Network error / timeout: the request may still have gone through. Look before reporting failure.
+        const after = before ? await listWithdrawalBlocks(minterActor, owner) : null;
+        const added = after && before ? [...after].filter((b) => !before.has(b)) : [];
+        if (added.length !== 1) {
+          throw new Error('Could not confirm the withdrawal. Check your history before trying again.');
+        }
+        result = { Ok: { block_index: BigInt(added[0]) } };
+      }
+
       if ('Err' in result) {
-        const err = result.Err as import('./useCkBTCMinter').RetrieveBtcWithApprovalError;
+        const err = result.Err;
         if ('MalformedAddress' in err) throw new Error(`Invalid address: ${err.MalformedAddress}`);
         if ('AlreadyProcessing' in err) throw new Error('A withdrawal is already in progress. Please wait.');
         if ('AmountTooLow' in err) throw new Error(`Amount below minimum: ${err.AmountTooLow} satoshis`);
         if ('InsufficientFunds' in err) throw new Error(`Insufficient balance. Available: ${err.InsufficientFunds.balance} satoshis`);
-        if ('InsufficientAllowance' in err) throw new Error('Approval failed or expired. Please try again.');
+        if ('InsufficientAllowance' in err) {
+          // A repeat attempt reuses the original approve (ledger Duplicate), whose allowance an earlier
+          // successful attempt already used up.
+          throw new Error('This withdrawal may already have been submitted. Check your history before trying again.');
+        }
         if ('TemporarilyUnavailable' in err) throw new Error(err.TemporarilyUnavailable);
         if ('GenericError' in err) throw new Error(err.GenericError.error_message);
         throw new Error('Withdrawal failed');
       }
-      return { block_index: result.Ok.block_index };
+      const blockIndex = result.Ok.block_index;
+
+      await collectAppFee(ledger, appFee, createdAt);
+      return { block_index: blockIndex };
     },
     onSuccess: (data, variables) => {
       setSessionWithdrawal(data.block_index.toString(), variables.toAddress);
       queryClient.invalidateQueries({ queryKey: ['walletInfo'] });
     },
-    retry: 1,
+    retry: 0,
   });
 }
 
-export interface CkBTCWithdrawalInfo {
-  kytFee: bigint;
-  minConfirmations: number;
+/** Live ckBTC ledger transfer fee (icrc1_fee). */
+export function useLedgerFee() {
+  return useQuery<bigint>({
+    queryKey: ['ckbtcLedgerFee'],
+    queryFn: async () => {
+      // Also syncs the network clock offset before the user reaches Confirm.
+      const agent = await createSyncedAgent();
+      const ledger = IcrcLedgerCanister.create({ agent, canisterId: Principal.fromText(CKBTC_LEDGER_CANISTER_ID) });
+      return ledger.transactionFee({ certified: false });
+    },
+    staleTime: 60 * 60 * 1000,
+    retry: 2,
+  });
 }
 
-/** Live ckBTC withdrawal info from minter canister. */
-export function useCkBTCWithdrawalFee() {
-  return useQuery<CkBTCWithdrawalInfo>({
-    queryKey: ['ckbtcWithdrawalFee'],
+export interface WithdrawalInfo {
+  minAmount: bigint;
+  minConfirmations: number;
+  /** Minimum BTC deposit the minter will convert; smaller UTXOs are ignored. */
+  minDeposit: bigint | null;
+}
+
+function createMinterQueryActor(agent: HttpAgent) {
+  return Actor.createActor(createCkBTCMinterIDL(), {
+    agent,
+    canisterId: CKBTC_MINTER_CANISTER_ID,
+  }) as unknown as CkBTCMinter;
+}
+
+/** Minter parameters for withdrawals/deposits (live from the minter canister). */
+export function useWithdrawalInfo() {
+  return useQuery<WithdrawalInfo>({
+    queryKey: ['ckbtcMinterInfo'],
     queryFn: async () => {
-      const host = 'https://ic0.app';
-      const agent = new HttpAgent({ host });
-      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (isLocal) {
-        try {
-          await agent.fetchRootKey();
-        } catch {
-          // ignore
-        }
-      }
-      const minterIDLFactory = createCkBTCMinterIDL();
-      const minterActor = Actor.createActor(minterIDLFactory, {
-        agent,
-        canisterId: CKBTC_MINTER_CANISTER_ID,
-      }) as unknown as CkBTCMinter;
-      const info = await minterActor.get_minter_info();
+      const info = await createMinterQueryActor(await HttpAgent.create({ host: IC_HOST })).get_minter_info();
       return {
-        kytFee: info.kyt_fee,
+        minAmount: info.retrieve_btc_min_amount,
         minConfirmations: Number(info.min_confirmations),
+        minDeposit: info.deposit_btc_min_amount?.[0] ?? null,
       };
     },
-    staleTime: 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
     retry: 2,
     retryDelay: 1500,
-    // Keep current behavior if fetch fails; caller can apply fallback.
-    placeholderData: {
-      kytFee: 1000n,
-      minConfirmations: 3,
-    },
   });
 }
 
-const FALLBACK_BTC_USD = 101799;
+/** Fees the minter will deduct from a withdrawal of `amount` (estimate; set by the Bitcoin network). */
+export function useWithdrawalFeeEstimate(amount: bigint, enabled: boolean) {
+  return useQuery<WithdrawalFees>({
+    queryKey: ['ckbtcWithdrawalFee', amount.toString()],
+    queryFn: async () => {
+      const fee = await createMinterQueryActor(await HttpAgent.create({ host: IC_HOST })).estimate_withdrawal_fee({
+        amount: amount > 0n ? [amount] : [],
+      });
+      return { minterFee: fee.minter_fee, bitcoinFee: fee.bitcoin_fee };
+    },
+    enabled,
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
+    retry: 2,
+  });
+}
+
 
 import { LIVE_CURRENCY_CG_KEYS } from '../data/currencies';
 
-const USE_TESTNET = import.meta.env.VITE_USE_TESTNET === 'true';
 const ENABLE_PROXY_FALLBACK = import.meta.env.VITE_ENABLE_PROXY_FALLBACK === 'true';
 
 const COINGECKO_PRICE_URL =
   `https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=${LIVE_CURRENCY_CG_KEYS.join(',')}&include_last_updated_at=true`;
-const MEMPOOL_PRICE_URL = USE_TESTNET
-  ? 'https://mempool.space/testnet/api/v1/prices'
-  : 'https://mempool.space/api/v1/prices';
+// Test coins have no price of their own; testnet builds show the mainnet BTC price.
+const MEMPOOL_PRICE_URL = 'https://mempool.space/api/v1/prices';
 const COINDESK_PRICE_URL = 'https://api.coindesk.com/v1/bpi/currentprice.json';
 const BINANCE_PRICE_URL = 'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT';
 
@@ -809,9 +852,9 @@ const MEMPOOL_CURRENCY_KEYS = ['usd', 'eur', 'gbp', 'cad', 'chf', 'aud', 'jpy'] 
 const PRICE_AGREEMENT_THRESHOLD = 0.02;   // 2% max divergence
 const PRICE_SANITY_JUMP_THRESHOLD = 0.20; // 20% max jump from last good
 
+/** No price known: every fiat lookup returns 0 ("unavailable"). Never a made-up number. */
 function makeFallbackPriceData(): BTCPriceData {
-  // Mark synthetic fallback as stale so UI can show "price may be outdated".
-  return { prices: { usd: FALLBACK_BTC_USD }, usd: FALLBACK_BTC_USD, lastUpdated: 0 };
+  return { prices: {}, usd: 0, lastUpdated: 0 };
 }
 
 function isPriceValid(price: number): boolean {
@@ -837,7 +880,8 @@ async function fetchBtcPriceFromCoinGecko(url: string): Promise<BTCPriceData> {
       prices[key.toLowerCase()] = val as number;
     }
   }
-  const usd = prices.usd ?? FALLBACK_BTC_USD;
+  const usd = prices.usd;
+  if (usd === undefined) throw new Error('CoinGecko response has no USD price');
   const lastUpdated = data.bitcoin.last_updated_at ?? Date.now() / 1000;
   return { prices, usd, lastUpdated };
 }
@@ -855,7 +899,8 @@ async function fetchBtcPriceFromMempool(): Promise<{ usd: number; prices: Record
       prices[k] = val;
     }
   }
-  const usd = prices.usd ?? (typeof data.USD === 'number' && isPriceValid(data.USD) ? data.USD : FALLBACK_BTC_USD);
+  const usd = prices.usd;
+  if (usd === undefined) throw new Error('Mempool response has no USD price');
   return { usd, prices, lastUpdated };
 }
 
@@ -874,7 +919,8 @@ async function fetchBtcPriceFromCoinDesk(): Promise<{ usd: number; prices: Recor
       prices[code.toLowerCase()] = value;
     }
   }
-  const usd = prices.usd ?? FALLBACK_BTC_USD;
+  const usd = prices.usd;
+  if (usd === undefined) throw new Error('CoinDesk response has no USD price');
   const updatedIso = data?.time?.updatedISO;
   const parsedTs = typeof updatedIso === 'string' ? Date.parse(updatedIso) : NaN;
   const lastUpdated = Number.isFinite(parsedTs) ? parsedTs / 1000 : Date.now() / 1000;
@@ -997,11 +1043,13 @@ export function useBTCPrice() {
 }
 
 /** Get BTC price in a specific fiat currency from the price data. Falls back to USD conversion. */
+/**
+ * BTC price in a fiat currency, or 0 when unknown. Callers must treat 0 as "unavailable".
+ * Never substitutes another currency's price (a USD number shown as ¥ would be wildly wrong).
+ */
 export function getBTCPriceInCurrency(priceData: BTCPriceData | undefined, currencyCode: string): number {
-  if (!priceData) return FALLBACK_BTC_USD;
-  const key = currencyCode.toLowerCase();
-  if (priceData.prices[key] != null) return priceData.prices[key];
-  return priceData.usd;
+  const price = priceData?.prices[currencyCode.toLowerCase()];
+  return price != null && isPriceValid(price) ? price : 0;
 }
 
 /** BTC price at the time of a transaction. Uses CoinGecko market_chart/range and picks the closest point to the tx timestamp. */
@@ -1013,7 +1061,7 @@ export function useBTCPriceAtTime(timestampSeconds: number | bigint, currencyCod
   const vsCurrency = currencyCode.toLowerCase();
   const historicalUrl = `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range?vs_currency=${vsCurrency}&from=${from}&to=${to}`;
 
-  return useQuery<number>({
+  return useQuery<number | null>({
     queryKey: ['btcPriceAtTime', ts, vsCurrency],
     queryFn: async () => {
       const tryFetch = async (url: string): Promise<number> => {
@@ -1045,7 +1093,7 @@ export function useBTCPriceAtTime(timestampSeconds: number | bigint, currencyCod
             // fall through
           }
         }
-        return FALLBACK_BTC_USD;
+        return null; // caller falls back to the current price
       }
     },
     enabled: ts > 0,

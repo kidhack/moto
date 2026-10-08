@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { useKeypadKeys } from '../hooks/useKeypadKeys';
+import { trimTrailingZeros } from '../lib/utils';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import { useScreenTransitionGuard } from '../hooks/useScreenTransitionGuard';
 import { useBTCPrice, isPriceStale, getBTCPriceInCurrency } from '../hooks/useQueries';
 import { formatFiatCompact, getCurrencyMeta } from '../data/currencies';
 import StalePriceIndicator from './StalePriceIndicator';
 import { useTranslation } from '../i18n';
+import BackCloseButton from './BackCloseButton';
 
 interface SetAmountProps {
   address: string;
@@ -17,7 +20,7 @@ interface SetAmountProps {
 // Currency display mode: 'BTC' | 'SATS' | preferred currency code
 type CurrencyMode = 'BTC' | 'SATS' | string;
 
-export default function SetAmount({ address: _address, onConfirm, onClose, initialCurrency, initialAmount }: SetAmountProps) {
+export default function SetAmount({ onConfirm, onClose, initialCurrency, initialAmount }: SetAmountProps) {
   const { preferredCurrency } = usePreferredCurrency();
   const { t } = useTranslation();
   const { data: btcPriceData } = useBTCPrice();
@@ -35,6 +38,11 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
     if (isNaN(numValue)) return '0';
 
     let btcValue: number;
+    const isFiat = (c: CurrencyMode) => c !== 'BTC' && c !== 'SATS';
+    if ((isFiat(fromCurrency) && !(getBTCPriceInCurrency(btcPriceData, fromCurrency) > 0)) ||
+        (isFiat(toCurrency) && !(getBTCPriceInCurrency(btcPriceData, toCurrency) > 0))) {
+      return '0'; // no price for this currency
+    }
 
     // Convert from source currency to BTC
     if (fromCurrency === 'BTC') {
@@ -60,7 +68,7 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
       // Fiat currency — convert from BTC using that currency's price
       result = btcValue * getBTCPriceInCurrency(btcPriceData, toCurrency);
       const decimals = getCurrencyMeta(toCurrency).decimals;
-      return result.toFixed(decimals).replace(/\.?0+$/, '');
+      return trimTrailingZeros(result.toFixed(decimals));
     }
   };
 
@@ -72,7 +80,8 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
     if (currencyMode === 'BTC') {
       nextCurrency = 'SATS';
     } else if (currencyMode === 'SATS') {
-      nextCurrency = preferredCurrency;
+      // Skip fiat when there's no live price for it.
+      nextCurrency = BTC_PRICE_FIAT > 0 ? preferredCurrency : 'BTC';
     } else {
       nextCurrency = 'BTC';
     }
@@ -125,6 +134,8 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
     });
   };
 
+  useKeypadKeys(true, { onDigit: handleNumberPress, onBackspace: handleBackspace, onEnter: () => handleConfirm() });
+
   // Handle confirm — zero or empty clears the set amount
   const handleConfirm = () => {
     const cleanAmount = (amount || '').replace(/,/g, '');
@@ -144,17 +155,7 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
       {/* Main container - pt-4 matches dashboard/menu header */}
       <div className="flex flex-col pt-4 flex-1 min-h-0">
         <header className="flex items-center justify-between h-8 shrink-0 px-5">
-          <button
-            onClick={onClose}
-            className="h-8 w-8 flex items-center justify-center cursor-pointer transition-opacity"
-            aria-label={t('common.close')}
-          >
-            <img 
-              src="/assets/close.png" 
-              alt="" 
-              className="h-8 w-8 opacity-80 hover:opacity-100 transition-opacity" 
-            />
-          </button>
+          <BackCloseButton onClose={onClose} />
           <p className="font-medium text-xl text-white tracking-[-0.22px]">
             {t('setAmount.header')}
           </p>
@@ -182,10 +183,12 @@ export default function SetAmount({ address: _address, onConfirm, onClose, initi
                 {getCurrencyLabel()}
               </p>
             </div>
-            <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1" style={{ letterSpacing: '0.15px' }}>
-              {t('price.btcApprox', { price: formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) })}
-              <StalePriceIndicator isStale={priceIsStale} />
-            </p>
+            {BTC_PRICE_FIAT > 0 && (
+              <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1" style={{ letterSpacing: '0.15px' }}>
+                {t('price.btcApprox', { price: formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) })}
+                <StalePriceIndicator isStale={priceIsStale} />
+              </p>
+            )}
           </div>
 
           {/* Numeric Keypad */}

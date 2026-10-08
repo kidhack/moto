@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import type jsQRType from 'jsqr';
 import { useCamera, CameraConfig } from '../camera/useCamera';
 
-declare global {
-    interface Window {
-        jsQR: any;
-    }
-}
+// jsQR is bundled (lazy-loaded chunk), never fetched from a third-party CDN:
+// any script on this origin can act with the user's Internet Identity session.
+let jsQR: typeof jsQRType | null = null;
 
 export interface QRResult {
     data: string;
@@ -15,14 +14,12 @@ export interface QRResult {
 export interface QRScannerConfig extends CameraConfig {
     scanInterval?: number;
     maxResults?: number;
-    jsQRUrl?: string;
 }
 
 export const useQRScanner = (config: QRScannerConfig) => {
     const {
         scanInterval = 100,
         maxResults = 10,
-        jsQRUrl = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js',
         ...cameraConfig
     } = config;
 
@@ -37,26 +34,19 @@ export const useQRScanner = (config: QRScannerConfig) => {
     const camera = useCamera(cameraConfig);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-        if (window.jsQR) {
+        if (jsQR) {
             setJsQRLoaded(true);
             return;
         }
-        const script = document.createElement('script');
-        script.src = jsQRUrl;
-        script.onload = () => {
-            if (isMountedRef.current) {
-                setJsQRLoaded(true);
-            }
-        };
-        script.onerror = () => console.error('Failed to load jsQR library');
-        document.head.appendChild(script);
-        return () => {
-            if (document.head.contains(script)) {
-                document.head.removeChild(script);
-            }
-        };
-    }, [jsQRUrl]);
+        import('jsqr')
+            .then((mod) => {
+                jsQR = mod.default;
+                if (isMountedRef.current) {
+                    setJsQRLoaded(true);
+                }
+            })
+            .catch(() => console.error('Failed to load jsQR library'));
+    }, []);
 
     useEffect(() => {
         return () => {
@@ -68,7 +58,7 @@ export const useQRScanner = (config: QRScannerConfig) => {
     }, []);
 
     const scanQRCode = useCallback(() => {
-        if (!camera.videoRef.current || !camera.canvasRef.current || !jsQRLoaded || !window.jsQR) {
+        if (!camera.videoRef.current || !camera.canvasRef.current || !jsQRLoaded || !jsQR) {
             return;
         }
         const video = camera.videoRef.current;
@@ -81,7 +71,7 @@ export const useQRScanner = (config: QRScannerConfig) => {
         canvas.height = video.videoHeight;
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-        const code = window.jsQR(imageData.data, imageData.width, imageData.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
         if (code && code.data && code.data !== lastScanRef.current) {
             lastScanRef.current = code.data;
             const newResult: QRResult = {

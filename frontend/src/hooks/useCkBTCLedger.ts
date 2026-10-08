@@ -4,6 +4,7 @@ import { HttpAgent } from '@dfinity/agent';
 import { IcrcLedgerCanister } from '@dfinity/ledger-icrc';
 import { useInternetIdentity } from './useInternetIdentity';
 import { useCkBTCMinter } from './useCkBTCMinter';
+import { IC_HOST } from '../lib/ic';
 
 // Check if we should use testnet
 const USE_TESTNET = import.meta.env.VITE_USE_TESTNET === 'true';
@@ -37,7 +38,7 @@ if (envLedgerCanisterId) {
 }
 
 // Always use production host (both mainnet and testnet canisters are on mainnet)
-const HOST = 'https://ic0.app';
+const HOST = IC_HOST;
 
 
 export function useCkBTCLedger() {
@@ -131,7 +132,7 @@ export function useCkBTCLedger() {
         console.log('useCkBTCLedger: Querying balance for default subaccount (subaccount = undefined)...');
         
         // Use the library's balanceOf method
-        let balanceValue = await ledger.balance({
+        const balanceValue = await ledger.balance({
           owner: principal,
           // subaccount: undefined means default account
         });

@@ -3,8 +3,10 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
+  // Production builds drop log/debug/info calls (they printed principals and addresses); warn/error stay.
+  esbuild: command === 'build' ? { pure: ['console.log', 'console.debug', 'console.info'] } : undefined,
   define: {
     global: 'globalThis',
     'process.env.CANISTER_ID_MOTO': JSON.stringify(process.env.VITE_CANISTER_ID_MOTO || ''),
@@ -43,5 +45,4 @@ export default defineConfig({
       },
     },
   },
-});
-
+}));

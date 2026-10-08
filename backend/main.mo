@@ -2,39 +2,19 @@ import Principal "mo:base/Principal";
 import OrderedMap "mo:base/OrderedMap";
 import Iter "mo:base/Iter";
 import Debug "mo:base/Debug";
-import Array "mo:base/Array";
 import Time "mo:base/Time";
 import Text "mo:base/Text";
 import Char "mo:base/Char";
 persistent actor BitcoinWallet {
   transient let principalMap = OrderedMap.Make<Principal>(Principal.compare);
-
-  var userWallets : OrderedMap.Map<Principal, UserWallet> = principalMap.empty();
+  transient let textMap = OrderedMap.Make<Text>(Text.compare);
 
   type BitcoinAddress = Text;
-  type TransactionId = Text;
-
-  type Transaction = {
-    id : TransactionId;
-    amount : Int;
-    timestamp : Int;
-    status : TransactionStatus;
-    fromAddress : BitcoinAddress;
-    toAddress : BitcoinAddress;
-    fee : Int;
-  };
-
-  type TransactionStatus = {
-    #pending;
-    #confirmed;
-    #failed;
-  };
 
   type UserWallet = {
     principal : Principal;
+    /// ckBTC deposit address derived by the minter for this principal; "" until registerDepositAddress.
     bitcoinAddress : BitcoinAddress;
-    transactions : [Transaction];
-    balance : Int;
     onboardingComplete : Bool;
     walletName : Text;
     preferredCurrency : Text;
@@ -43,128 +23,57 @@ persistent actor BitcoinWallet {
     lastUpdated : Int;
   };
 
-  public shared ({ caller }) func ensureWalletExists() : async BitcoinAddress {
-    switch (principalMap.get(userWallets, caller)) {
-      case (?wallet) {
-        wallet.bitcoinAddress;
-      };
-      case null {
-        let newAddress = generateBitcoinAddress();
-        let timestamp = Time.now();
-        let newWallet : UserWallet = {
-          principal = caller;
-          bitcoinAddress = newAddress;
-          transactions = [];
-          balance = 0;
-          onboardingComplete = false;
-          walletName = "";
-          preferredCurrency = "";
-          preferredLanguage = "";
-          createdAt = timestamp;
-          lastUpdated = timestamp;
-        };
-        userWallets := principalMap.put(userWallets, caller, newWallet);
-        newAddress;
-      };
+  type Config = {
+    minterId : Text;
+    maxWallets : Nat;
+    walletCount : Nat;
+  };
+
+  type Minter = actor {
+    get_btc_address : shared { owner : ?Principal; subaccount : ?Blob } -> async Text;
+  };
+
+  transient let MAX_WALLET_NAME_CHARS = 32;
+  transient let MAX_PREFERENCE_CHARS = 8;
+  transient let MAX_INGRESS_ARG_BYTES = 1024;
+
+  var userWallets : OrderedMap.Map<Principal, UserWallet> = principalMap.empty();
+  /// Reverse index: deposit address -> owner. Only written by registerDepositAddress,
+  /// so an address can only ever map to the principal the minter derived it for.
+  var addressIndex : OrderedMap.Map<Text, Principal> = textMap.empty();
+  /// ckBTC minter used to derive deposit addresses. Testnet (ckTESTBTC) by default;
+  /// switch to mainnet (mqygn-kiaaa-aaaar-qaadq-cai) with setConfig at cutover.
+  var minterId : Text = "ml52i-qqaaa-aaaar-qaaba-cai";
+  /// Upper bound on wallets so free-to-create principals can't grow memory without limit.
+  var maxWallets : Nat = 100_000;
+
+  // Reject anonymous and oversized ingress before execution so junk calls cost almost nothing.
+  // (Not run for queries or inter-canister calls; methods still check the caller themselves.)
+  system func inspect({ caller : Principal; arg : Blob }) : Bool {
+    not Principal.isAnonymous(caller) and arg.size() <= MAX_INGRESS_ARG_BYTES;
+  };
+
+  func requireUser(caller : Principal) {
+    if (Principal.isAnonymous(caller)) {
+      Debug.trap("Anonymous principal not allowed");
     };
   };
 
-  public shared ({ caller }) func getBalance() : async Int {
-    switch (principalMap.get(userWallets, caller)) {
-      case (?wallet) {
-        wallet.balance;
-      };
-      case null {
-        Debug.trap("Wallet not found");
-      };
+  func requireController(caller : Principal) {
+    if (not Principal.isController(caller)) {
+      Debug.trap("Unauthorized: controller only");
     };
   };
 
-  // Sync the canister's stored balance with the ckBTC ledger balance so sendTransaction can succeed.
-  // The UI displays ledger balance but sendTransaction checks this canister's balance; call this when ledger balance is known.
-  public shared ({ caller }) func syncBalanceFromLedger(newBalance : Int) : async () {
+  func getWallet(caller : Principal) : UserWallet {
     switch (principalMap.get(userWallets, caller)) {
-      case (?wallet) {
-        if (newBalance < 0) { return };
-        let updatedWallet : UserWallet = {
-          principal = wallet.principal;
-          bitcoinAddress = wallet.bitcoinAddress;
-          transactions = wallet.transactions;
-          balance = newBalance;
-          onboardingComplete = wallet.onboardingComplete;
-          walletName = wallet.walletName;
-          preferredCurrency = wallet.preferredCurrency;
-          preferredLanguage = wallet.preferredLanguage;
-          createdAt = wallet.createdAt;
-          lastUpdated = Time.now();
-        };
-        userWallets := principalMap.put(userWallets, caller, updatedWallet);
-      };
-      case null {};
+      case (?wallet) { wallet };
+      case null { Debug.trap("Wallet not found") };
     };
   };
 
-  public shared ({ caller }) func getTransactionHistory() : async [Transaction] {
-    switch (principalMap.get(userWallets, caller)) {
-      case (?wallet) {
-        wallet.transactions;
-      };
-      case null {
-        Debug.trap("Wallet not found");
-      };
-    };
-  };
-
-  public shared ({ caller }) func sendTransaction(toAddress : BitcoinAddress, amount : Int) : async TransactionId {
-    switch (principalMap.get(userWallets, caller)) {
-      case (?wallet) {
-        if (amount > wallet.balance) {
-          Debug.trap("Insufficient balance");
-        };
-
-        let transactionId = generateTransactionId();
-        let newTransaction : Transaction = {
-          id = transactionId;
-          amount;
-          timestamp = Time.now();
-          status = #pending;
-          fromAddress = wallet.bitcoinAddress;
-          toAddress;
-          fee = 0;
-        };
-
-        let updatedTransactions = Array.append(wallet.transactions, [newTransaction]);
-        let updatedWallet : UserWallet = {
-          principal = wallet.principal;
-          bitcoinAddress = wallet.bitcoinAddress;
-          transactions = updatedTransactions;
-          balance = wallet.balance - amount;
-          onboardingComplete = wallet.onboardingComplete;
-          walletName = wallet.walletName;
-          preferredCurrency = wallet.preferredCurrency;
-          preferredLanguage = wallet.preferredLanguage;
-          createdAt = wallet.createdAt;
-          lastUpdated = Time.now();
-        };
-
-        userWallets := principalMap.put(userWallets, caller, updatedWallet);
-        transactionId;
-      };
-      case null {
-        Debug.trap("Wallet not found");
-      };
-    };
-  };
-
-  public shared ({ caller }) func getBitcoinAddress() : async BitcoinAddress {
-    switch (principalMap.get(userWallets, caller)) {
-      case (?wallet) {
-        wallet.bitcoinAddress;
-      };
-      case null {
-        Debug.trap("Wallet not found");
-      };
-    };
+  func putWallet(wallet : UserWallet) {
+    userWallets := principalMap.put(userWallets, wallet.principal, { wallet with lastUpdated = Time.now() });
   };
 
   /// Normalize bech32 (bc1/tb1) to lowercase so lookup matches regardless of input case.
@@ -176,193 +85,160 @@ persistent actor BitcoinWallet {
     } else { address }
   };
 
-  /// Updates the caller's stored Bitcoin address (e.g. to the ckBTC minter deposit address from get_btc_address).
-  /// Frontend should call this so getPrincipalByBitcoinAddress can resolve scanned addresses to principals.
-  public shared ({ caller }) func setBitcoinAddress(address : BitcoinAddress) : async () {
+  func truncate(text : Text, maxChars : Nat) : Text {
+    if (Text.size(text) <= maxChars) return text;
+    var acc = "";
+    var i = 0;
+    for (c in text.chars()) {
+      if (i < maxChars) { acc := acc # Char.toText(c) };
+      i += 1;
+    };
+    acc;
+  };
+
+  func lookupAddress(address : Text) : ?Principal {
+    textMap.get(addressIndex, normalizeBech32Address(address));
+  };
+
+  /// Returns the registered deposit address ("" until registerDepositAddress has run).
+  public shared ({ caller }) func ensureWalletExists() : async BitcoinAddress {
+    requireUser(caller);
     switch (principalMap.get(userWallets, caller)) {
-      case (?wallet) {
-        let storedAddress = normalizeBech32Address(address);
-        let updatedWallet : UserWallet = {
-          principal = wallet.principal;
-          bitcoinAddress = storedAddress;
-          transactions = wallet.transactions;
-          balance = wallet.balance;
-          onboardingComplete = wallet.onboardingComplete;
-          walletName = wallet.walletName;
-          preferredCurrency = wallet.preferredCurrency;
-          preferredLanguage = wallet.preferredLanguage;
-          createdAt = wallet.createdAt;
-          lastUpdated = Time.now();
-        };
-        userWallets := principalMap.put(userWallets, caller, updatedWallet);
-      };
+      case (?wallet) { wallet.bitcoinAddress };
       case null {
-        Debug.trap("Wallet not found");
+        if (principalMap.size(userWallets) >= maxWallets) {
+          Debug.trap("Wallet limit reached");
+        };
+        let now = Time.now();
+        userWallets := principalMap.put(userWallets, caller, {
+          principal = caller;
+          bitcoinAddress = "";
+          onboardingComplete = false;
+          walletName = "";
+          preferredCurrency = "";
+          preferredLanguage = "";
+          createdAt = now;
+          lastUpdated = now;
+        });
+        "";
       };
     };
   };
 
-  /// Returns the principal whose stored bitcoinAddress equals the given address, or null if none.
-  /// Used by the send flow to decide instant ckBTC transfer vs Bitcoin withdrawal.
-  /// Bech32 (bc1/tb1) is normalized to lowercase so pasted addresses match.
-  /// Query for fast (~200ms) lookups. The receiver's address is synced via setBitcoinAddress
-  /// well before the sender pastes it, so replica lag is not a practical concern.
-  public query func getPrincipalByBitcoinAddress(address : Text) : async ?Principal {
-    let normalized = normalizeBech32Address(address);
-    for ((principal, wallet) in principalMap.entries(userWallets)) {
-      if (wallet.bitcoinAddress == normalized) {
-        return ?principal;
-      };
+  /// Asks the ckBTC minter for the caller's deposit address and indexes it, so other MOTO users
+  /// sending to that address get an instant ckBTC transfer. The address is never taken from the client.
+  public shared ({ caller }) func registerDepositAddress() : async BitcoinAddress {
+    requireUser(caller);
+    let existing = getWallet(caller);
+    if (existing.bitcoinAddress != "") return existing.bitcoinAddress;
+
+    let minter : Minter = actor (minterId);
+    let address = normalizeBech32Address(await minter.get_btc_address({ owner = ?caller; subaccount = null }));
+
+    // Re-read after the await: the wallet may have been wiped or updated meanwhile.
+    let wallet = getWallet(caller);
+    if (wallet.bitcoinAddress != "" and wallet.bitcoinAddress != address) {
+      addressIndex := textMap.delete(addressIndex, wallet.bitcoinAddress);
     };
-    null;
+    putWallet({ wallet with bitcoinAddress = address });
+    addressIndex := textMap.put(addressIndex, address, caller);
+    address;
+  };
+
+  /// Fast lookup for the send screen's "Instant / Bitcoin" hint while typing.
+  /// Don't route funds on this alone — a query is answered by a single replica.
+  public query func getPrincipalByBitcoinAddress(address : Text) : async ?Principal {
+    lookupAddress(address);
+  };
+
+  /// Same lookup as an update call (agreed on by the subnet). The send flow uses this
+  /// result on confirm to decide where funds go.
+  public shared ({ caller }) func resolveRecipient(address : Text) : async ?Principal {
+    requireUser(caller);
+    lookupAddress(address);
   };
 
   public shared ({ caller }) func setWalletName(name : Text) : async () {
-    switch (principalMap.get(userWallets, caller)) {
-      case (?wallet) {
-        let trimmed = Text.trimStart(Text.trimEnd(name, #text " "), #text " ");
-        let bounded = if (Text.size(trimmed) > 32) {
-          var acc = "";
-          var i = 0;
-          for (c in trimmed.chars()) {
-            if (i < 32) { acc := acc # Char.toText(c) };
-            i += 1;
-          };
-          acc;
-        } else { trimmed };
-        let updatedWallet : UserWallet = {
-          principal = wallet.principal;
-          bitcoinAddress = wallet.bitcoinAddress;
-          transactions = wallet.transactions;
-          balance = wallet.balance;
-          onboardingComplete = wallet.onboardingComplete;
-          walletName = bounded;
-          preferredCurrency = wallet.preferredCurrency;
-          preferredLanguage = wallet.preferredLanguage;
-          createdAt = wallet.createdAt;
-          lastUpdated = Time.now();
-        };
-        userWallets := principalMap.put(userWallets, caller, updatedWallet);
-      };
-      case null {
-        Debug.trap("Wallet not found");
-      };
-    };
+    requireUser(caller);
+    let wallet = getWallet(caller);
+    let trimmed = Text.trimStart(Text.trimEnd(name, #text " "), #text " ");
+    putWallet({ wallet with walletName = truncate(trimmed, MAX_WALLET_NAME_CHARS) });
   };
 
   public shared ({ caller }) func setPreferences(currency : Text, language : Text) : async () {
-    switch (principalMap.get(userWallets, caller)) {
-      case (?wallet) {
-        let updatedWallet : UserWallet = {
-          principal = wallet.principal;
-          bitcoinAddress = wallet.bitcoinAddress;
-          transactions = wallet.transactions;
-          balance = wallet.balance;
-          onboardingComplete = wallet.onboardingComplete;
-          walletName = wallet.walletName;
-          preferredCurrency = currency;
-          preferredLanguage = language;
-          createdAt = wallet.createdAt;
-          lastUpdated = Time.now();
-        };
-        userWallets := principalMap.put(userWallets, caller, updatedWallet);
-      };
-      case null {
-        Debug.trap("Wallet not found");
-      };
+    requireUser(caller);
+    if (Text.size(currency) > MAX_PREFERENCE_CHARS or Text.size(language) > MAX_PREFERENCE_CHARS) {
+      Debug.trap("Invalid preference");
     };
+    let wallet = getWallet(caller);
+    putWallet({ wallet with preferredCurrency = currency; preferredLanguage = language });
   };
 
-  public shared ({ caller }) func getWalletInfo() : async ?UserWallet {
-    // Return optional wallet instead of trapping - allows frontend to handle missing wallet gracefully
+  public shared query ({ caller }) func getWalletInfo() : async ?UserWallet {
     principalMap.get(userWallets, caller);
   };
 
   public shared ({ caller }) func completeOnboarding() : async () {
-    switch (principalMap.get(userWallets, caller)) {
-      case (?wallet) {
-        let updatedWallet : UserWallet = {
-          principal = wallet.principal;
-          bitcoinAddress = wallet.bitcoinAddress;
-          transactions = wallet.transactions;
-          balance = wallet.balance;
-          onboardingComplete = true;
-          walletName = wallet.walletName;
-          preferredCurrency = wallet.preferredCurrency;
-          preferredLanguage = wallet.preferredLanguage;
-          createdAt = wallet.createdAt;
-          lastUpdated = Time.now();
-        };
-        userWallets := principalMap.put(userWallets, caller, updatedWallet);
-      };
-      case null {
-        Debug.trap("Wallet not found");
-      };
-    };
+    requireUser(caller);
+    let wallet = getWallet(caller);
+    putWallet({ wallet with onboardingComplete = true });
   };
 
-  public shared ({ caller }) func isOnboardingComplete() : async Bool {
+  public shared query ({ caller }) func isOnboardingComplete() : async Bool {
     switch (principalMap.get(userWallets, caller)) {
-      case (?wallet) {
-        wallet.onboardingComplete;
-      };
-      case null {
-        false;
-      };
+      case (?wallet) { wallet.onboardingComplete };
+      case null { false };
     };
   };
 
   public shared ({ caller }) func resetOnboarding() : async () {
-    switch (principalMap.get(userWallets, caller)) {
-      case (?wallet) {
-        let updatedWallet : UserWallet = {
-          principal = wallet.principal;
-          bitcoinAddress = wallet.bitcoinAddress;
-          transactions = wallet.transactions;
-          balance = wallet.balance;
-          onboardingComplete = false;
-          walletName = wallet.walletName;
-          preferredCurrency = wallet.preferredCurrency;
-          preferredLanguage = wallet.preferredLanguage;
-          createdAt = wallet.createdAt;
-          lastUpdated = Time.now();
-        };
-        userWallets := principalMap.put(userWallets, caller, updatedWallet);
-      };
-      case null {
-        Debug.trap("Wallet not found");
-      };
-    };
+    requireUser(caller);
+    let wallet = getWallet(caller);
+    putWallet({ wallet with onboardingComplete = false });
   };
 
+  /// Deletes the caller's name/preferences and address registration. Funds are untouched:
+  /// ckBTC belongs to the principal on the ledger, not to this canister.
   public shared ({ caller }) func signOutAndReset() : async () {
-    switch (principalMap.get(userWallets, caller)) {
-      case (?_wallet) {
-        userWallets := principalMap.delete(userWallets, caller);
-      };
-      case null {
-        Debug.trap("Wallet not found");
-      };
+    requireUser(caller);
+    let wallet = getWallet(caller);
+    if (wallet.bitcoinAddress != "") {
+      addressIndex := textMap.delete(addressIndex, wallet.bitcoinAddress);
     };
+    userWallets := principalMap.delete(userWallets, caller);
   };
 
   public shared ({ caller }) func getAllWallets() : async [UserWallet] {
-    if (not Principal.isController(caller)) {
-      Debug.trap("Unauthorized: only the canister controller can call getAllWallets");
-    };
+    requireController(caller);
     Iter.toArray(principalMap.vals(userWallets));
   };
 
-  func generateBitcoinAddress() : BitcoinAddress {
-    let principalText = Principal.toText(Principal.fromActor(BitcoinWallet));
-    let cleanedPrincipal = Text.map(principalText, func(c : Char) : Char { if (c == '-') { '_' } else { c } });
-    "bc1q" # cleanedPrincipal;
+  public shared ({ caller }) func getConfig() : async Config {
+    requireController(caller);
+    { minterId; maxWallets; walletCount = principalMap.size(userWallets) };
   };
 
-  func generateTransactionId() : TransactionId {
-    let principalText = Principal.toText(Principal.fromActor(BitcoinWallet));
-    let cleanedPrincipal = Text.map(principalText, func(c : Char) : Char { if (c == '-') { '_' } else { c } });
-    "tx_" # cleanedPrincipal;
+  /// Controller-only. Changing the minter (e.g. testnet -> mainnet cutover) clears every stored
+  /// deposit address, since they belong to the old minter; users re-register on next login.
+  public shared ({ caller }) func setConfig(newMinterId : ?Text, newMaxWallets : ?Nat) : async () {
+    requireController(caller);
+    switch (newMaxWallets) {
+      case (?n) { maxWallets := n };
+      case null {};
+    };
+    switch (newMinterId) {
+      case (?id) {
+        ignore Principal.fromText(id); // trap on malformed IDs
+        if (id != minterId) {
+          minterId := id;
+          addressIndex := textMap.empty();
+          userWallets := principalMap.map<UserWallet, UserWallet>(
+            userWallets,
+            func(_, wallet) { { wallet with bitcoinAddress = "" } },
+          );
+        };
+      };
+      case null {};
+    };
   };
 };
-

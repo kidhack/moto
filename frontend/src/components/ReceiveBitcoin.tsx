@@ -5,12 +5,11 @@ import { useScreenTransitionGuard } from '../hooks/useScreenTransitionGuard';
 import { vibrateLight } from '../utils/haptics';
 import { SlideFromRight } from './SlideFromRight';
 import SetAmount from './SetAmount';
-import { useBTCPrice, isPriceStale, getBTCPriceInCurrency } from '../hooks/useQueries';
+import { useBTCPrice, isPriceStale, getBTCPriceInCurrency, useWithdrawalInfo } from '../hooks/useQueries';
 import { formatFiatCompact } from '../data/currencies';
 import { usePreferredCurrency } from '../hooks/usePreferredCurrency';
 import StalePriceIndicator from './StalePriceIndicator';
-import { useActor } from '../hooks/useActor';
-import { isValidBitcoinAddress, isBech32AddressForStorage } from '../utils/addressValidation';
+import { isValidBitcoinAddress } from '../utils/addressValidation';
 import BackCloseButton from './BackCloseButton';
 import { useTranslation } from '../i18n';
 
@@ -24,8 +23,8 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
   const { t } = useTranslation();
   const [showSetAmount, setShowSetAmount] = useState(false);
   const { data: btcPriceData } = useBTCPrice();
+  const { data: minterInfo } = useWithdrawalInfo();
   const { preferredCurrency } = usePreferredCurrency();
-  const { actor } = useActor();
 
   // Validate address is real - NEVER display fake addresses
   useEffect(() => {
@@ -38,15 +37,11 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
     }
   }, [address, onClose]);
 
-  // Sync this address to the MOTO canister when user opens Receive, so getPrincipalByBitcoinAddress
-  // can resolve it for senders (MOTO-to-MOTO). Uses bech32 check so testnet (tb1) is stored too.
-  useEffect(() => {
-    if (!actor || !address || !isBech32AddressForStorage(address)) return;
-    actor
-      .setBitcoinAddress(address)
-      .then(() => console.log('ReceiveBitcoin: setBitcoinAddress synced for MOTO-to-MOTO'))
-      .catch((err) => console.warn('ReceiveBitcoin: setBitcoinAddress failed (wallet may not exist yet):', err));
-  }, [actor, address]);
+  // Hooks must run before the early return below (same hook order on every render).
+  // Store both amount and currency to properly display and convert
+  const [amountCurrency, setAmountCurrency] = useState<string>('BTC');
+  const [addressCopied, setAddressCopied] = useState(false);
+  const isGuardDisabled = useScreenTransitionGuard(500);
 
   // Don't render if address is invalid
   if (!address || !isValidBitcoinAddress(address)) {
@@ -64,8 +59,6 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
     );
   }
 
-  // Store both amount and currency to properly display and convert
-  const [amountCurrency, setAmountCurrency] = useState<string>('BTC');
 
   const BTC_PRICE_FIAT = getBTCPriceInCurrency(btcPriceData, preferredCurrency);
   const priceIsStale = isPriceStale(btcPriceData);
@@ -82,8 +75,9 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
     } else {
       // For fiat currencies, convert to BTC using live price
       const fiatAmount = parseFloat(amountValue.replace(/,/g, ''));
-      const btc = fiatAmount / getBTCPriceInCurrency(btcPriceData, currency);
-      return btc.toString();
+      const price = getBTCPriceInCurrency(btcPriceData, currency);
+      if (!(price > 0) || !Number.isFinite(fiatAmount)) return ''; // no price: QR without amount
+      return (fiatAmount / price).toFixed(8).replace(/\.?0+$/, '');
     }
   };
 
@@ -113,8 +107,6 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
     return value.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   };
 
-  const [addressCopied, setAddressCopied] = useState(false);
-  const isGuardDisabled = useScreenTransitionGuard(500);
 
   const copyAddress = async () => {
     try {
@@ -208,6 +200,12 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
                 </p>
               )}
             </button>
+            {minterInfo?.minDeposit != null && (
+              // Smaller deposits are ignored by the ckBTC minter and never show up in the balance.
+              <p className="text-white/50 text-xs text-center pt-2" style={{ letterSpacing: '0.15px' }}>
+                {t('receive.minDeposit', { sats: minterInfo.minDeposit.toString() })}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -218,10 +216,12 @@ export default function ReceiveBitcoin({ address, onClose }: ReceiveBitcoinProps
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <div className="flex flex-col pt-4 pb-4 gap-2">
-          <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1 pb-1" style={{ letterSpacing: '0.15px' }}>
-            {t('price.btcApprox', { price: formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) })}
-            <StalePriceIndicator isStale={priceIsStale} />
-          </p>
+          {BTC_PRICE_FIAT > 0 && (
+            <p className="font-normal text-xs text-center text-white/50 flex items-center justify-center gap-1 pb-1" style={{ letterSpacing: '0.15px' }}>
+              {t('price.btcApprox', { price: formatFiatCompact(BTC_PRICE_FIAT, preferredCurrency) })}
+              <StalePriceIndicator isStale={priceIsStale} />
+            </p>
+          )}
           {amount ? (
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-2 h-[22px]">
