@@ -26,6 +26,10 @@ interface TransactionDetailsProps {
 
 type CurrencyMode = 'BTC' | 'SATS' | string;
 
+/** Explorer page for a Bitcoin transaction on this build's network. */
+const bitcoinTxUrl = (txid: string) =>
+  `https://mempool.space${import.meta.env.VITE_USE_TESTNET === 'true' ? '/testnet4' : ''}/tx/${txid}`;
+
 interface TxCardProps {
   transaction: Transaction;
   walletAddress: string;
@@ -78,7 +82,8 @@ function TxCard({
   const txType = isSent ? 'sent' : (transaction.toAddress === walletAddress ? 'received' : 'added');
 
   const isTestnet = import.meta.env.VITE_USE_TESTNET === 'true';
-  const isMintOrBurn = transaction.id.startsWith('icrc1-mint-') || transaction.id.startsWith('icrc1-burn-');
+  const deposit = transaction.deposit;
+  const isMintOrBurn = !!deposit || transaction.id.startsWith('icrc1-mint-') || transaction.id.startsWith('icrc1-burn-');
   const network = isMintOrBurn
     ? (isTestnet ? 'BTC Testnet' : 'BTC')
     : (isTestnet ? 'ckTESTBTC' : 'ckBTC');
@@ -138,6 +143,12 @@ function TxCard({
           </div>
       </div>
 
+      {deposit?.problem && (
+        <p className="mx-auto mt-8 max-w-[320px] px-5 text-center text-sm leading-normal text-white/60">
+          {t(deposit.problem === 'tooSmall' ? 'deposit.tooSmall' : 'deposit.flagged', { sats: transaction.amount.toString() })}
+        </p>
+      )}
+
       {/* Detail rows pinned to bottom */}
       <div className="mt-auto shrink-0 px-5 pb-5">
         <div className="flex flex-col gap-2 w-full">
@@ -148,7 +159,7 @@ function TxCard({
           <div className="flex gap-2 items-center text-base">
             <span className="text-white/80 shrink-0">{txType === 'received' ? t('txDetails.from') : t('txDetails.to')}</span>
             {txType === 'received' && (transaction.sourceBitcoinAddress ?? transaction.fromAddress) === 'Bitcoin Network' ? (
-              <span className="font-mono text-white flex-1 text-right">{t('txDetails.pending')}</span>
+              <span className="font-mono text-white flex-1 text-right">{deposit?.problem ? '—' : t('txDetails.pending')}</span>
             ) : txType === 'sent' && transaction.toAddress === 'Bitcoin Network' ? (
               <span className="font-mono text-white flex-1 text-right">{t('txDetails.pending')}</span>
             ) : (
@@ -174,7 +185,8 @@ function TxCard({
             <div className="flex gap-2 items-center text-base">
               <span className="text-white/80 shrink-0">{t('txDetails.fee')}</span>
               <span className="font-mono text-white flex-1 text-right">
-                {currencyMode === 'BTC' ? `${formatBTC(transaction.fee)} BTC` : currencyMode === 'SATS' ? `${formatSats(transaction.fee)} sats` : getFiatValue(transaction.fee)}
+                {/* Fees are tiny fractions of a bitcoin, so BTC mode shows them in sats too. */}
+                {currencyMode === 'BTC' || currencyMode === 'SATS' ? `${formatSats(transaction.fee)} sats` : getFiatValue(transaction.fee)}
               </span>
             </div>
           )}
@@ -187,7 +199,16 @@ function TxCard({
           </div>
           <div className="flex gap-2 items-center text-base">
             <span className="text-white/80 shrink-0">{t('txDetails.tx')}</span>
-            {getBlockExplorerUrl(transaction.id) ? (
+            {deposit ? (
+              <a
+                href={bitcoinTxUrl(deposit.txid)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-white flex-1 text-right truncate hover:underline"
+              >
+                {formatAddress(deposit.txid)}
+              </a>
+            ) : getBlockExplorerUrl(transaction.id) ? (
               <a
                 href={getBlockExplorerUrl(transaction.id) ?? undefined}
                 target="_blank"
@@ -206,7 +227,13 @@ function TxCard({
           </div>
           <div className="flex gap-2 items-center text-base">
             <span className="text-white/80 shrink-0">{t('txDetails.status')}</span>
-            <span className="font-mono text-white flex-1 text-right capitalize">{getStatusDisplay(transaction.status)}</span>
+            <span className="font-mono text-white flex-1 text-right capitalize">
+              {deposit?.problem
+                ? t('txDetails.notCredited')
+                : deposit && deposit.confirmations != null && deposit.required
+                  ? `${getStatusDisplay(transaction.status)} · ${deposit.confirmations}/${deposit.required}`
+                  : getStatusDisplay(transaction.status)}
+            </span>
           </div>
         </div>
       </div>

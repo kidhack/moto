@@ -4,6 +4,7 @@ import { Principal } from '@dfinity/principal';
 import { HttpAgent, Actor } from '@dfinity/agent';
 import { IcrcLedgerCanister, IcrcTransferError } from '@dfinity/ledger-icrc';
 import { computeAppFee, type WithdrawalFees } from '../lib/sendFees';
+import { notifyLedgerChanged } from '../lib/ledgerEvents';
 import { useActor } from './useActor';
 import { IC_HOST } from '../lib/ic';
 import { useCkBTCMinter, createCkBTCMinterIDL, CKBTC_MINTER_CANISTER_ID, type CkBTCMinter } from './useCkBTCMinter';
@@ -136,13 +137,16 @@ export function useWalletInfo() {
     }
   }, [ckbtcBalance, actor, isFetching, isCkbtcBalanceFetching, queryClient]);
   
-  // Refetch wallet info when ckBTC transactions change
+  // Refetch wallet info when ckBTC transactions change (including a pending deposit's
+  // confirmation count, or one disappearing once it's credited)
+  const ckbtcTransactionsKey = ckbtcTransactions
+    .map((tx) => `${tx.id}:${tx.status}:${tx.deposit?.confirmations ?? ''}`)
+    .join('|');
   useEffect(() => {
-    if (ckbtcTransactions.length > 0 && actor && !isFetching) {
-      console.log('useWalletInfo: ckBTC transactions available, invalidating query to merge transactions...');
+    if (actor && !isFetching) {
       queryClient.invalidateQueries({ queryKey: ['walletInfo'] });
     }
-  }, [ckbtcTransactions.length, actor, isFetching, queryClient]);
+  }, [ckbtcTransactionsKey, actor, isFetching, queryClient]);
   
   // Debug logging
   useEffect(() => {
@@ -680,6 +684,7 @@ export function useTransferCkBTC() {
       return { block_index: blockIndex };
     },
     onSuccess: () => {
+      notifyLedgerChanged();
       queryClient.invalidateQueries({ queryKey: ['walletInfo'] });
     },
     // Never auto-retry money movement. Re-tapping Confirm reuses createdAt, so the ledger dedups it.
@@ -764,6 +769,7 @@ export function useRetrieveBtc() {
     },
     onSuccess: (data, variables) => {
       setSessionWithdrawal(data.block_index.toString(), variables.toAddress);
+      notifyLedgerChanged();
       queryClient.invalidateQueries({ queryKey: ['walletInfo'] });
     },
     retry: 0,

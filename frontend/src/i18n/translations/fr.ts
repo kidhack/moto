@@ -166,6 +166,8 @@ const fr: Record<string, string> = {
   'txDetails.status': 'Statut',
   'txDetails.complete': 'Terminé',
   'txDetails.failed': 'Échoué',
+  'txDetails.notCredited': 'Non crédité',
+  'txDetails.confirmations': '{{confirmations}}/{{required}} confirmations',
   'txDetails.sats': 'sats',
 
   'login.welcomeLine1': 'Bienvenue sur MOTO,',

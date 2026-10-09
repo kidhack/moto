@@ -34,8 +34,14 @@ export default function TransactionList({ isLoading, transactions, walletAddress
   }, [selectedId]);
 
   // Only exceptions get a label; completed rows stay clean.
-  const statusLabel = (status: TransactionStatus) =>
-    status === 'pending' ? t('txDetails.pending') : status === 'failed' ? t('txDetails.failed') : null;
+  const statusLabel = (tx: Transaction) => {
+    const d = tx.deposit;
+    if (d?.problem) return t('txDetails.notCredited');
+    if (d && d.confirmations != null && d.required) {
+      return `${t('txDetails.pending')} · ${t('txDetails.confirmations', { confirmations: d.confirmations, required: d.required })}`;
+    }
+    return tx.status === 'pending' ? t('txDetails.pending') : tx.status === 'failed' ? t('txDetails.failed') : null;
+  };
 
   return (
     <div className="flex flex-col" style={{ gap: 19 }}>
@@ -88,7 +94,7 @@ export default function TransactionList({ isLoading, transactions, walletAddress
                   </div>
                   {desktop && (
                     <p className="flex-1 min-w-0 truncate text-left text-sm text-white/60">
-                      {statusLabel(tx.status)}
+                      {statusLabel(tx)}
                     </p>
                   )}
                   <p className="font-mono text-[18px] font-normal text-white/50 whitespace-nowrap" style={{ letterSpacing: '-0.04em' }}>

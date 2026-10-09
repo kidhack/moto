@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useInternetIdentity } from './useInternetIdentity';
 import { IC_HOST } from '../lib/ic';
 import { depositNotices, type DepositNotice, type UpdateBalanceResult } from '../lib/depositNotices';
+import { recordUpdateBalance } from '../lib/pendingDeposits';
 import { useTranslation } from '../i18n';
 
 const SEEN_DEPOSIT_NOTICES_KEY = 'moto_seen_deposit_notices';
@@ -395,6 +396,7 @@ export function useCkBTCMinter() {
         owner: [],
         subaccount: [],
       });
+      recordUpdateBalance(result);
       for (const notice of takeUnseenNotices(depositNotices(result))) {
         const sats = notice.sats.toString();
         if (notice.kind === 'pending') {
