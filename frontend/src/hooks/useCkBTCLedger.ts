@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Principal } from '@dfinity/principal';
 import { HttpAgent } from '@dfinity/agent';
 import { IcrcLedgerCanister } from '@dfinity/ledger-icrc';
 import { useInternetIdentity } from './useInternetIdentity';
 import { useCkBTCMinter } from './useCkBTCMinter';
 import { IC_HOST } from '../lib/ic';
+import { notifyLedgerChanged } from '../lib/ledgerEvents';
 
 // Check if we should use testnet
 const USE_TESTNET = import.meta.env.VITE_USE_TESTNET === 'true';
@@ -45,6 +46,7 @@ export function useCkBTCLedger() {
   const { identity } = useInternetIdentity();
   const { updateBalance } = useCkBTCMinter();
   const [balance, setBalance] = useState<bigint | null>(null);
+  const lastBalanceRef = useRef<bigint | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [principalUsed, setPrincipalUsed] = useState<string | null>(null);
@@ -195,6 +197,9 @@ export function useCkBTCLedger() {
           console.log('');
         }
         
+        // A changed balance means new ledger activity: refresh the history now.
+        if (lastBalanceRef.current !== null && lastBalanceRef.current !== balanceValue) notifyLedgerChanged();
+        lastBalanceRef.current = balanceValue;
         setBalance(balanceValue);
       } catch (err) {
         console.error('useCkBTCLedger: Error getting balance:', err);

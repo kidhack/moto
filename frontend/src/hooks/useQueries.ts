@@ -4,6 +4,7 @@ import { Principal } from '@dfinity/principal';
 import { HttpAgent, Actor } from '@dfinity/agent';
 import { IcrcLedgerCanister, IcrcTransferError } from '@dfinity/ledger-icrc';
 import { computeAppFee, type WithdrawalFees } from '../lib/sendFees';
+import { notifyLedgerChanged } from '../lib/ledgerEvents';
 import { useActor } from './useActor';
 import { IC_HOST } from '../lib/ic';
 import { useCkBTCMinter, createCkBTCMinterIDL, CKBTC_MINTER_CANISTER_ID, type CkBTCMinter } from './useCkBTCMinter';
@@ -683,6 +684,7 @@ export function useTransferCkBTC() {
       return { block_index: blockIndex };
     },
     onSuccess: () => {
+      notifyLedgerChanged();
       queryClient.invalidateQueries({ queryKey: ['walletInfo'] });
     },
     // Never auto-retry money movement. Re-tapping Confirm reuses createdAt, so the ledger dedups it.
@@ -767,6 +769,7 @@ export function useRetrieveBtc() {
     },
     onSuccess: (data, variables) => {
       setSessionWithdrawal(data.block_index.toString(), variables.toAddress);
+      notifyLedgerChanged();
       queryClient.invalidateQueries({ queryKey: ['walletInfo'] });
     },
     retry: 0,

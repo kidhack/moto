@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { createCkBTCMinterIDL, CKBTC_MINTER_CANISTER_ID, type CkBTCMinter } from './useCkBTCMinter';
 import { getSessionWithdrawal } from '../lib/sessionWithdrawalStore';
 import { withdrawalStatus } from '../lib/withdrawalStatus';
+import { onLedgerChanged } from '../lib/ledgerEvents';
 import { clearPendingDeposits, getPendingDeposits, subscribePendingDeposits } from '../lib/pendingDeposits';
 import type { Transaction, TransactionStatus } from '../backend';
 import { IC_HOST } from '../lib/ic';
@@ -789,7 +790,20 @@ export function useCkBTCTransactions(userBitcoinAddress: string) {
       }
     }, 30000);
 
-    return () => clearInterval(interval);
+    // Refresh right away when the balance changes or a send completes; again a few seconds later,
+    // since the index canister can trail the ledger briefly.
+    let followUp: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = onLedgerChanged(() => {
+      getTransactions();
+      clearTimeout(followUp);
+      followUp = setTimeout(getTransactions, 4000);
+    });
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(followUp);
+      unsubscribe();
+    };
   }, [identity, userBitcoinAddress]);
 
   // Deposits the minter has seen but not credited yet, as pending (or not-credited) rows.
