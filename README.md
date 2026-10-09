@@ -9,8 +9,6 @@
   <a href="https://motowallet.app"><strong>motowallet.app</strong></a>
 </p>
 
-> **Status:** MOTO is in public testing with test bitcoin (ckTESTBTC, backed by Bitcoin testnet4). Test coins have no value. Mainnet is coming soon.
-
 ## Why MOTO
 
 - **Non-custodial.** MOTO never holds your keys. Your bitcoin is recorded on public ledgers under your own identity.
