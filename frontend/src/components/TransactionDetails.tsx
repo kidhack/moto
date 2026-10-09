@@ -185,7 +185,8 @@ function TxCard({
             <div className="flex gap-2 items-center text-base">
               <span className="text-white/80 shrink-0">{t('txDetails.fee')}</span>
               <span className="font-mono text-white flex-1 text-right">
-                {currencyMode === 'BTC' ? `${formatBTC(transaction.fee)} BTC` : currencyMode === 'SATS' ? `${formatSats(transaction.fee)} sats` : getFiatValue(transaction.fee)}
+                {/* Fees are tiny fractions of a bitcoin, so BTC mode shows them in sats too. */}
+                {currencyMode === 'BTC' || currencyMode === 'SATS' ? `${formatSats(transaction.fee)} sats` : getFiatValue(transaction.fee)}
               </span>
             </div>
           )}
