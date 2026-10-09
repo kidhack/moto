@@ -21,6 +21,13 @@ export interface Transaction {
   mintMemo?: number[];
   /** Optional: raw burn memo bytes from index, used to decode destination Bitcoin address. */
   burnMemo?: number[];
+  /** Optional: a Bitcoin deposit the minter has seen but not credited yet (see lib/pendingDeposits). */
+  deposit?: {
+    txid: string;
+    confirmations?: number;
+    required?: number;
+    problem?: 'tooSmall' | 'flagged';
+  };
 }
 
 /** Wallet record stored in the MOTO canister (metadata only; funds live on the ckBTC ledger). */

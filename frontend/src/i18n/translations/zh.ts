@@ -166,6 +166,8 @@ const zh: Record<string, string> = {
   'txDetails.status': '状态',
   'txDetails.complete': '已完成',
   'txDetails.failed': '失败',
+  'txDetails.notCredited': '未入账',
+  'txDetails.confirmations': '{{confirmations}}/{{required}} 次确认',
   'txDetails.sats': '聪',
 
   'login.welcomeLine1': '欢迎使用 MOTO，',

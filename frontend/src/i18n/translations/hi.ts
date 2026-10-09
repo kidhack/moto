@@ -166,6 +166,8 @@ const hi: Record<string, string> = {
   'txDetails.status': 'स्थिति',
   'txDetails.complete': 'पूर्ण',
   'txDetails.failed': 'विफल',
+  'txDetails.notCredited': 'जमा नहीं हुआ',
+  'txDetails.confirmations': '{{confirmations}}/{{required}} पुष्टियाँ',
   'txDetails.sats': 'सैट्स',
 
   'login.welcomeLine1': 'MOTO में आपका स्वागत है,',

@@ -172,6 +172,8 @@ const en: Record<string, string> = {
   'txDetails.status': 'Status',
   'txDetails.complete': 'Complete',
   'txDetails.failed': 'Failed',
+  'txDetails.notCredited': 'Not credited',
+  'txDetails.confirmations': '{{confirmations}}/{{required}} confirmations',
   'txDetails.sats': 'sats',
 
   // Login
